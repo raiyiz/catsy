@@ -473,3 +473,365 @@ def test_laser_pulse():
 
     plt.tight_layout()
     plt.show()
+
+
+def test_kerr_state():
+
+    # =====================================================================
+    # 1. SETUP: Start im Vakuum (Hilbertraum)
+    # =====================================================================
+    N_cutoff = (
+        35  # Höherer Cutoff wichtig, da Kerr-Zustände breite Fock-Verteilungen haben!
+    )
+    rho_0 = qt.ket2dm(qt.fock(N_cutoff, 0))  # Start im reinen Vakuum
+
+    a = qt.destroy(N_cutoff)
+
+    # =====================================================================
+    # 2. DEFINITION DER KERR-DYNAMIK & LASERPULS
+    # =====================================================================
+    K = 0.5  # Stärke der Kerr-Nichtlinearität (massiver Effekt)
+    pulse_amplitude = 4.0  # Laser-Stärke
+
+    # Laser-Pulsform: Ein schneller, starker Puls zu Beginn, um die Kavität zu laden
+    def pulse_shape(t, args):
+        return args["amp"] * np.exp(-((t - args["t0"]) ** 2) / (2 * args["sigma"] ** 2))
+
+    # Konstruktion des zeitabhängigen Hamiltonoperators [source: 1.3.8]
+    # H = H_Kerr + Omega(t) * (a + a^dagger)
+    H_kerr = K * a.dag() * a.dag() * a * a  # Statischer Kerr-Term [source: 1.2.1]
+    H_drive = a + a.dag()  # Zeitabhängiger Laser-Treiber
+
+    H_total = [H_kerr, [H_drive, pulse_shape]]
+    pulse_args = {"amp": pulse_amplitude, "t0": 2.0, "sigma": 0.8}
+
+    # Minimale Kavitäten-Dämpfung (Katzen-Zustände sind extrem empfindlich gegen Verlust!) [source: 1.2.5, 1.2.8]
+    kappa = 0.02
+    c_ops = [np.sqrt(kappa) * a]
+
+    # Zeitgitter: Wir simulieren bis t = 6.0, um das Laden und die Kerr-Evolution zu sehen
+    tlist = np.linspace(0, 6, 200)
+
+    print("🚀 Simuliere Kerr-induzierte Schrödinger-Katzen-Präparation...")
+    result = qt.mesolve(H_total, rho_0, tlist, c_ops=c_ops, args=pulse_args)
+
+    # Wir greifen uns drei markante Zeitpunkte aus der Evolution ab
+    # 1. Nach dem Puls (Zustand ist geladen und kohärent)
+    # 2. Mittendrin (Squeezing und Verbiegung)
+    # 3. Das mathematische Kerr-Cat-Maximum (Selbst-Interferenz)
+    rho_t1 = result.states[60]  # t ~ 1.8 (kurz nach dem Puls)
+    rho_t2 = result.states[110]  # t ~ 3.3 (Kerr fängt an zu verzerren)
+    rho_t3 = result.states[-1]  # t = 6.0 (Kollision -> Katze!)
+
+    # =====================================================================
+    # 3. MULTI-PANEL PLOT DER KERR-EVOLUTION
+    # =====================================================================
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    xvec = np.linspace(-5, 5, 200)
+
+    # Zeitschritt 1: Der Laser hat ein verschobenes "Gauß-Blob" (Coherent State) erzeugt
+    W1 = qt.wigner(rho_t1, xvec, xvec)
+    axes[0].contourf(xvec, xvec, W1, 100, cmap="RdBu_r")
+    axes[0].set_title(r"t = 1.8: Kohärenter Laser-Puls")
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("p")
+    axes[0].axis("equal")
+
+    # Zeitschritt 2: Die Kerr-Nichtlinearität verbiegt den Zustand zu einer Banane
+    W2 = qt.wigner(rho_t2, xvec, xvec)
+    axes[1].contourf(xvec, xvec, W2, 100, cmap="RdBu_r")
+    axes[1].set_title(r"t = 3.3: Kerr-Squeezing & Verbiegung")
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("p")
+    axes[1].axis("equal")
+
+    # Zeitschritt 3: DIE SCHRÖDINGER KATZE (Interferenz im Phasenraum)
+    W3 = qt.wigner(rho_t3, xvec, xvec)
+    # vmin/vmax symmetrisch für die Quanten-Interferenzstreifen
+    cont = axes[2].contourf(xvec, xvec, W3, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
+    fig.colorbar(cont, ax=axes[2], label="Wigner-Dichte")
+    axes[2].set_title(r"t = 6.0: Kerr-Cat State")
+    axes[2].set_xlabel("x")
+    axes[2].set_ylabel("p")
+    axes[2].axis("equal")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def test_cat_in_mzi():
+
+    # =====================================================================
+    # 1. PREPARATION: Den exakten Kerr-Cat-Zustand erzeugen
+    # =====================================================================
+    # (Wir nehmen die Katze aus unserem vorherigen Schritt direkt im Hilbertraum auf)
+    N_cutoff = 22  # Dimension pro Mode im Interferometer
+    a = qt.destroy(N_cutoff)
+
+    # Wir bauen uns eine reine, ungedämpfte Katze analytisch im Hilbertraum,
+    # um numerisch sauber und schnell zu bleiben: |cat> = N * (|alpha> + |-alpha>)
+    alpha = 2
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+
+    # =====================================================================
+    # 2. DAS ZWEI-MODEN-MZI IM HILBERTRAUM DEFINIEREN
+    # =====================================================================
+    # Wir haben zwei Pfade im Interferometer: Mode 1 (Arm A) und Mode 2 (Arm B)
+    a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
+    a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
+
+    # Der 50:50 Strahlteiler-Operator zwischen den beiden Armen
+    # U_BS = exp(i * pi/4 * (a1^dagger * a2 + a1 * a2^dagger))
+    H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
+    U_BS = H_BS.expm()
+
+    # Eingangs-Zustand des MZI: Katze auf Port 1, Vakuum auf Port 2
+    psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
+
+    # --- SCHRITT A: Erster Strahlteiler (BS1) ---
+    # Erzeugt massive Verschränkung zwischen den beiden Pfaden!
+    psi_after_BS1 = U_BS * psi_in
+
+    # --- SCHRITT B: Phasenverschiebung theta im oberen Arm (Arm 1) ---
+    # Wir wählen eine Verschiebung von theta = pi/2 (90 Grad) für maximale Interferenzänderung
+    theta = np.pi / 4
+    U_phase = (1j * theta * a1.dag() * a1).expm()
+    psi_after_phase = U_phase * psi_after_BS1
+
+    # --- SCHRITT C: Zweiter Strahlteiler (BS2) ---
+    # Rekombination der Pfade
+    psi_out = U_BS * psi_after_phase
+
+    # =====================================================================
+    # 3. AUSWERTUNG & PARTIAL TRACE AN DEN AUSGANGS-PORTS
+    # =====================================================================
+    # Wir schauen uns an, was aus Ausgangsport 1 und Ausgangsport 2 herauskommt
+    rho_out_port1 = qt.ptrace(psi_out, 0)
+    rho_out_port2 = qt.ptrace(psi_out, 1)
+
+    # =====================================================================
+    # 4. VISUALISIERUNG DER INTERFERENZ
+    # =====================================================================
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    xvec = np.linspace(-4, 4, 200)
+
+    # Port 1 Wigner-Funktion
+    W_port1 = qt.wigner(rho_out_port1, xvec, xvec)
+    axes[0].contourf(xvec, xvec, W_port1, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
+    axes[0].set_title("MZI Ausgangsport 1\n(Verschobene Katze bei $\\theta=\\pi/2$)")
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("p")
+    axes[0].axis("equal")
+
+    # Port 2 Wigner-Funktion
+    W_port2 = qt.wigner(rho_out_port2, xvec, xvec)
+    axes[1].contourf(xvec, xvec, W_port2, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
+    axes[1].set_title("MZI Ausgangsport 2\n(Gegenphasige Interferenz)")
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("p")
+    axes[1].axis("equal")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def test_time_cat_mzi():
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import qutip as qt
+
+    # =====================================================================
+    # 1. SETUP: Katze und Operatoren im Hilbertraum definieren
+    # =====================================================================
+    N_cutoff = 22  # Hilbertraum-Dimension pro Mode
+    a = qt.destroy(N_cutoff)
+
+    # Eine reine Katze vorbereiten: |cat> = N * (|alpha> + |-alpha>)
+    alpha = 4.0 + 2j
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+
+    # Zwei-Moden-Operatoren im Gesamtraum aufbauen
+    a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
+    a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
+
+    # Teilchenzahl-Operatoren für die Ausgänge
+    n1_op = a1.dag() * a1
+    n2_op = a2.dag() * a2
+
+    # Paritäts-Operator für Port 1: P = exp(i * pi * a1^dagger * a1)
+    # Er misst, ob die Photonenzahl gerade (+1) oder ungerade (-1) ist
+    parity1_op = (1j * np.pi * n1_op).expm()
+
+    # Der 50:50 Strahlteiler-Operator (BS)
+    H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
+    U_BS = H_BS.expm()
+
+    # Eingangszustand: Katze auf Port 1, Vakuum auf Port 2
+    psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
+
+    # =====================================================================
+    # 2. PHASENSCHLEIFE (Der Phasen-Scan von 0 bis 2*pi)
+    # =====================================================================
+    theta_list = np.linspace(0, 2 * np.pi, 200)
+
+    # Listen für die Messergebnisse
+    mean_n1 = []
+    mean_n2 = []
+    parity_port1 = []
+
+    # Erster Strahlteiler ist fix für alle Phasen (Verschränkung im MZI)
+    psi_after_BS1 = U_BS * psi_in
+
+    print("🔄 Scanne Phase theta von 0 bis 2pi...")
+    for theta in theta_list:
+        # 1. Phasenverschiebung im oberen Arm anwenden
+        U_phase = (1j * theta * a1.dag() * a1).expm()
+        psi_after_phase = U_phase * psi_after_BS1
+
+        # 2. Zweiter Strahlteiler (Rekombination)
+        psi_out = U_BS * psi_after_phase
+
+        # 3. Erwartungswerte für diesen Phasenwert berechnen [source: 1.2.3]
+        mean_n1.append(qt.expect(n1_op, psi_out))
+        mean_n2.append(qt.expect(n2_op, psi_out))
+        parity_port1.append(qt.expect(parity1_op, psi_out).real)
+
+    print("✅ Scan beendet. Generiere Diagramme...")
+
+    # =====================================================================
+    # 3. VISUALISIERUNG DER INTERFERENZ-FRANSEN
+    # =====================================================================
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+    # Plot A: Klassische Intensitäten (Photonenzahlen) an den Ausgängen
+    ax1.plot(
+        theta_list / np.pi, mean_n1, label="Ausgangs-Port 1", color="darkblue", lw=2
+    )
+    ax1.plot(
+        theta_list / np.pi,
+        mean_n2,
+        label="Ausgangs-Port 2",
+        color="crimson",
+        lw=2,
+        ls="--",
+    )
+    ax1.set_ylabel(r"Mittlere Photonenzahl $\langle n \rangle$")
+    ax1.set_title("Mach-Zehnder Interferenz-Fransen (Intensität)")
+    ax1.grid(True, ls="--")
+    ax1.legend()
+
+    # Plot B: Quanten-Parität am Ausgang 1
+    # Das zeigt die Verschiebung der mikroskopischen Interferenzstreifen
+    ax2.plot(
+        theta_list / np.pi, parity_port1, label="Parität Port 1", color="purple", lw=2.5
+    )
+    ax2.axhline(0, color="black", lw=0.5, ls="-")
+    ax2.set_xlabel(r"Phasenverschiebung $\theta$ ($\times \pi$)")
+    ax2.set_ylabel("Erwartungswert der Parität")
+    ax2.set_title("Quanten-Paritäts-Oszillation (Super-Auflösung)")
+    ax2.grid(True, ls="--")
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+
+def test_decoherence_mzi():
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import qutip as qt
+
+    # =====================================================================
+    # 1. SETUP: Zustände und MZI-Operatoren im Hilbertraum
+    # =====================================================================
+    N_cutoff = 15
+    a = qt.destroy(N_cutoff)
+
+    # Eine reine Katze vorbereiten: |cat> = N * (|alpha> + |-alpha>)
+    alpha = 2.0
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+
+    # Zwei-Moden-Operatoren im MZI
+    a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
+    a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
+
+    n1_op = a1.dag() * a1
+    parity1_op = (1j * np.pi * n1_op).expm()  # Paritäts-Messoperator
+
+    # Der 50:50 Strahlteiler (BS)
+    H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
+    U_BS = H_BS.expm()
+
+    # Eingangszustand: Katze auf Port 1, Vakuum auf Port 2
+    psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
+    psi_after_BS1 = U_BS * psi_in
+
+    # =====================================================================
+    # 2. PHASENSCHLEIFE MIT/OHNE VERLUST
+    # =====================================================================
+    theta_list = np.linspace(0, 2 * np.pi, 120)
+
+    parity_perfect = []
+    parity_noisy = []
+
+    # Verlustrate im oberen MZI-Arm definieren (Dämpfung)
+    kappa = 0.25
+    c_ops = [np.sqrt(kappa) * a1]  # Verlust wirkt NUR auf Arm 1 [1]
+
+    print("🔄 Scanne Phase theta und berechne Dekohärenz-Effekte...")
+    for theta in theta_list:
+
+        # --- SZENARIO A: Perfektes MZI (Verlustfrei) ---
+        U_phase = (1j * theta * a1.dag() * a1).expm()
+        psi_out_perfect = U_BS * U_phase * psi_after_BS1
+        parity_perfect.append(qt.expect(parity1_op, psi_out_perfect).real)
+
+        # --- SZENARIO B: Noisy MZI (Zeitabhängiger Verlust via Master Equation) ---
+        # Die Phase 'theta' wird hier als effektive Zeitentwicklung simuliert.
+        # H = a1^dagger * a1 sorgt für die Phasenverschiebung über die Dauer t = theta
+        H_phase = a1.dag() * a1
+
+        # Wir lösen die Dynamik IM ARM für die Dauer t = theta unter Verlusten [1]
+        t_span = [0, theta] if theta > 0 else [0, 1e-9]  # Nullzeit-Abfang
+
+        # sim_res = qt.mesolve(H_phase, psi_after_BS1, t_span, c_ops=c_ops) [1]
+        sim_res = qt.mesolve(H_phase, psi_after_BS1, t_span, c_ops=c_ops)
+        # sim_res = sim.states[1]
+        rho_after_arm_with_loss = sim_res.states[-1]  # Zustand nach dem Arm
+
+        # Rekombination am zweiten Strahlteiler
+        rho_out_noisy = U_BS * rho_after_arm_with_loss * U_BS.dag()
+        parity_noisy.append(qt.expect(parity1_op, rho_out_noisy).real)
+
+    print("✅ Simulation beendet.")
+
+    # =====================================================================
+    # 3. PLOT: Perfekte vs. Zerstörte Quanten-Interferenz
+    # =====================================================================
+    plt.figure(figsize=(10, 5))
+    plt.plot(
+        theta_list / np.pi,
+        parity_perfect,
+        label="Perfektes MZI (Kein Verlust)",
+        color="purple",
+        lw=2,
+    )
+    plt.plot(
+        theta_list / np.pi,
+        parity_noisy,
+        label=r"Verlustbehaftetes MZI ($\kappa = 0.25$)",
+        color="crimson",
+        lw=2.5,
+        ls="--",
+    )
+
+    plt.axhline(0, color="black", lw=0.5, ls="-")
+    plt.xlabel(r"Phasenverschiebung $\theta$ ($\times \pi$)")
+    plt.ylabel("Erwartungswert der Parität")
+    plt.title("Dekohärenz im QBS-Simulator: Kollaps der Katzen-Interferenz")
+    plt.grid(True, ls="--")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
