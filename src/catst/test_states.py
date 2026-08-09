@@ -2,7 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 
-from .states import GaussianOperations, QBSChannels
+from .states import (
+    GaussianCircuit,
+    GaussianMeasurements,
+    GaussianOperations,
+    QBSChannels,
+)
 
 
 def test_covariance_tmsv():
@@ -18,45 +23,122 @@ def test_covariance_tmsv():
     print(np.round(state.covariance, 3))
 
     # 3. Beide Moden auf den 50:50 Beam Splitter schicken (eta = 0.5)
-    state = GaussianOperations.apply_beam_splitter(state, mode_a="a", mode_b="b", eta=0.5)
+    state = GaussianOperations.apply_beam_splitter(
+        state, mode_a="a", mode_b="b", eta=0.5
+    )
 
     print("\nKovarianz V nach dem Beam Splitter (Verschränkung ist entstanden!):")
     print(np.round(state.covariance, 3))
 
     # 4. Plotten der resultierenden Kovarianzmatrix
-    state.plot_covariance(do_plot=False)
+    state.plot_covariance()
+
 
 def test_cv_chan_to_fock():
 
     # 1. Erzeuge einen verschränkten Zustand mit Rauschen im CV-Formalismus
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
     state = GaussianOperations.apply_squeezing(state, mode="a", r=0.5)
-    state = GaussianOperations.apply_squeezing(state, mode="b", r=0.5, theta=np.pi/2)
-    state = GaussianOperations.apply_beam_splitter(state, mode_a="a", mode_b="b", eta=0.5)
-    
+    state = GaussianOperations.apply_squeezing(state, mode="b", r=0.5, theta=np.pi / 2)
+    state = GaussianOperations.apply_beam_splitter(
+        state, mode_a="a", mode_b="b", eta=0.5
+    )
+
     # Füge etwas thermischen Verlust hinzu (Kanal aus dem vorherigen Schritt)
     loss = QBSChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2)
     noisy_cv_state = loss.apply(state)
-    
+
     # 2. KONVERTIERUNG IN QUTIP
     # Wir nutzen N_cutoff = 12 (reicht für r=0.5 dicke aus)
     rho_qutip = noisy_cv_state.to_qutip(N_cutoff=12)
-    
+
     print("--- QuTiP Konvertierung erfolgreich ---")
     print(f"Typ des Objekts: {type(rho_qutip)}")
     print(f"Dimensionen im Hilbertraum: {rho_qutip.dims}")
-    
+
     # 3. Physikalischen Test machen: Berechne Verschränkungs-Entropie in QuTiP
     rho_a = rho_qutip.ptrace(0)
     entropy = qt.entropy_vn(rho_a)
     print(f"Von-Neumann-Entropie der Mode A (berechnet via QuTiP): {entropy:.4f}")
-    
+
     # 4. Plot der Wigner-Funktion direkt aus dem konvertierten QuTiP Qobj
     xvec = np.linspace(-3, 3, 100)
     W = qt.wigner(rho_a, xvec, xvec)
-    
+
     plt.figure(figsize=(5, 4))
     plt.contourf(xvec, xvec, W, 100, cmap="RdBu_r")
     plt.colorbar()
     plt.title("Wigner-Funktion (Mode A) aus konvertiertem QuTiP Objekt")
-    plt.show()
+    # plt.show()
+
+
+def test_qo_epr():
+
+    # 1. Circuit definieren und Moden anmelden
+    circuit = GaussianCircuit()
+    circuit.add_mode("a")
+    circuit.add_mode("b")
+
+    # 2. Pipeline deklarativ aufbauen (Method Chaining)
+    circuit.squeeze(mode="a", r=0.6, theta=0.0).squeeze(
+        mode="b", r=0.6, theta=np.pi / 2
+    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5).thermal_loss(
+        mode="b", eta=0.7, n_thermal=0.3
+    )  # Verlust auf dem Transportweg von Mode b
+
+    # 3. Compiler triggern und Zustand berechnen
+    final_cv_state = circuit.compile_and_run()
+
+    # 4. Kovarianz-Ergebnis im Continuous-Variable Raum plotten
+    final_cv_state.plot_covariance()
+
+    # 5. Voller quantenmechanischer Test: Konvertierung in QuTiP Hilbertraum
+    # dank deines Williamson-Theorems!
+    print("\n--- Analysiere Endzustand in QuTiP ---")
+    rho_qutip = final_cv_state.to_qutip(N_cutoff=15)
+
+    # Berechne Reinheit (Purity) des Gesamtzustands tr(rho^2)
+    # Durch den thermischen Kanal sollte das System nicht mehr rein (=1) sein
+    purity = (rho_qutip * rho_qutip).tr()
+    print(
+        f"Reinheit des Gesamtsystems nach Verlusten: {purity.real:.4f} (< 1.0 "
+        "bedeutet gemischter Zustand)"
+    )
+
+    # Zeige, dass Mode a und b immer noch Korrelationen besitzen
+    entropy_a = qt.entropy_vn(rho_qutip.ptrace(0))
+    print(f"Von-Neumann-Entropie Subsystem A: {entropy_a:.4f}")
+
+
+def test_measure_homodyne():
+
+    # 1. Erzeuge verschränkten EPR-Zustand über unseren Circuit
+    circuit = GaussianCircuit()
+    circuit.add_mode("a").add_mode("b")
+    circuit.squeeze(mode="a", r=1.0).squeeze(
+        mode="b", r=1.0, theta=np.pi / 2
+    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5)
+
+    epr_state = circuit.compile_and_run()
+
+    print(f"Ursprünglicher d-Vektor: {epr_state.displacement} (Beide im Ursprung)")
+
+    # 2. Wir simulieren eine Homodyn-Messung auf Mode 'a' (phi=0 bedeutet x-Messung)
+    # Wir erzwingen ein extremes Messergebnis von x = +2.5 (Standard wäre um die 0)
+    val, collapsed_state = GaussianMeasurements.homodyne_measurement(
+        epr_state, measured_mode="a", phi=0.0, outcome=2.5
+    )
+
+    print("\n--- MESSUNG AUSGEFÜHRT ---")
+    print(f"Gemessener Wert auf Mode 'a': {val}")
+    print(f"Verbleibende Moden im System: {collapsed_state.modes}")
+    print(f"Neuer d-Vektor von Mode 'b': {np.round(collapsed_state.displacement, 3)}")
+
+    # 3. Zum Vergleich: Was passiert, wenn wir x = -2.5 gemessen hätten?
+    _, collapsed_state_neg = GaussianMeasurements.homodyne_measurement(
+        epr_state, measured_mode="a", phi=0.0, outcome=-2.5
+    )
+    print(
+        "Neuer d-Vektor von Mode 'b' bei negativem Messergebnis: "
+        f"{np.round(collapsed_state_neg.displacement, 3)}"
+    )

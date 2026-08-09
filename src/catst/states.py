@@ -11,43 +11,52 @@ class GaussianState:
     modes: tuple[str, ...]
     displacement: np.ndarray
     covariance: np.ndarray
-    
+
     def __post_init__(self):
         n_modes = len(self.modes)
         expected_dim = 2 * n_modes
-        assert self.displacement.shape == (expected_dim,), f"Displacement muss Länge {expected_dim} haben."
-        assert self.covariance.shape == (expected_dim, expected_dim), f"Covariance muss {expected_dim}x{expected_dim} sein."
+        assert self.displacement.shape == (
+            expected_dim,
+        ), f"Displacement muss Länge {expected_dim} haben."
+        assert self.covariance.shape == (
+            expected_dim,
+            expected_dim,
+        ), f"Covariance muss {expected_dim}x{expected_dim} sein."
 
     def get_mode_index(self, mode_name: str) -> int:
         if mode_name not in self.modes:
-            raise ValueError(f"Mode '{mode_name}' ist in diesem Zustand nicht vorhanden.")
+            raise ValueError(
+                f"Mode '{mode_name}' ist in diesem Zustand nicht vorhanden."
+            )
         return self.modes.index(mode_name) * 2
 
     def to_qutip(self, N_cutoff: int = 15) -> qt.Qobj:
         """
-        Konvertiert die Kovarianzmatrix V und den d-Vektor exakt in ein QuTiP Qobj (Dichtematrix rho).
-        Nutzt das Williamson-Theorem zur Zersetzung in thermische Zustände + unitäre Transformationen.
+        Konvertiert die Kovarianzmatrix V und den d-Vektor exakt in ein QuTiP
+        Qobj (Dichtematrix rho). Nutzt das Williamson-Theorem zur Zersetzung in
+        thermische Zustände + unitäre Transformationen.
         """
         n_modes = len(self.modes)
-        
+
         # 1. Konstruiere die fundamentale symplektische Matrix Omega (J)
         # Omega = \bigoplus_{i=1}^n [[0, 1], [-1, 0]]
         omega_1 = np.array([[0, 1], [-1, 0]])
         Omega = scipy.linalg.block_diag(*[omega_1 for _ in range(n_modes)])
-        
+
         # 2. Berechne die symplektischen Eigenwerte über die Matrix: i * Omega * V
         # Die Eigenwerte dieses Operators kommen paarweise als (+- nu_k) vor
         M = 1j * Omega @ self.covariance
         eigvals = np.linalg.eigvals(M)
-        
+
         # Nur die positiven Imaginärteile extrahieren und sortieren
-        nu = sorted(np.abs(eigvals.real)[::2]) 
-        
+        nu = sorted(np.abs(eigvals.real)[::2])
+
         # 3. Thermische Zustände (Basis-Zustand rho_0) im Hilbertraum aufbauen
-        # Ein reiner Vakuumzustand hat nu_k = 0.5. Größere Werte bedeuten thermisches Rauschen.
+        # Ein reiner Vakuumzustand hat nu_k = 0.5. Größere Werte bedeuten
+        # thermisches Rauschen.
         rho_list = []
         for nu_k in nu:
-            if nu_k < 0.499: # Numerischer Sanity-Check
+            if nu_k < 0.499:  # Numerischer Sanity-Check
                 nu_k = 0.5
             n_thermal = nu_k - 0.5
             if n_thermal < 1e-6:
@@ -56,50 +65,53 @@ class GaussianState:
             else:
                 # Thermischer Zustand
                 rho_list.append(qt.thermal_dm(N_cutoff, n_thermal))
-        
+
         rho_0 = qt.tensor(*rho_list)  # Gesamter unkorrelierter Ausgangszustand
-        
+
         # 4. Standard-Kanonische Operatoren (a, x, p) im kombinierten Hilbertraum bauen
         a_ops = []
         for i in range(n_modes):
             op_list = [qt.qeye(N_cutoff)] * n_modes
             op_list[i] = qt.destroy(N_cutoff)
             a_ops.append(qt.tensor(*op_list))
-            
+
         r_ops = []
         for a in a_ops:
             x = (a + a.dag()) / np.sqrt(2)
             p = (a - a.dag()) / (1j * np.sqrt(2))
             r_ops.extend([x, p])
-            
+
         # 5. Berechnung der symplektischen Transformation S im Phasenraum
         # Wir finden die Matrix S, so dass S * V_diag * S^T = V.
-        # Da QuTiP Operatoren exponentiell generiert, nutzen wir den quadratischen Generator G:
-        # S = exp(Omega * G). G bestimmt den Hamiltonoperator für das Squeezing/Mischen.
+        # Da QuTiP Operatoren exponentiell generiert, nutzen wir den
+        # quadratischen Generator G: S = exp(Omega * G). G bestimmt den
+        # Hamiltonoperator für das Squeezing/Mischen.
         V_diag = scipy.linalg.block_diag(*[nu_k * np.eye(2) for nu_k in nu])
-        
-        # Numerische Berechnung des Generators der Transformation über Matrix-Logarithmus
-        # Da V positiv definit ist, können wir über Matrixwurzeln arbeiten
+
+        # Numerische Berechnung des Generators der Transformation über
+        # Matrix-Logarithmus. Da V positiv definit ist, können wir über
+        # Matrixwurzeln arbeiten
         V_diag_inv_sqrt = scipy.linalg.inv(scipy.linalg.sqrtm(V_diag))
         X_mat = V_diag_inv_sqrt @ self.covariance @ V_diag_inv_sqrt
-        
+
         # Symplektische Matrix S bestimmen
         S = scipy.linalg.sqrtm(self.covariance @ np.linalg.inv(V_diag)).real
-        
+
         # Generator H_quad extrahieren: S = exp(Omega * G) -> G = -Omega * logm(S)
         G = -Omega @ scipy.linalg.logm(S).real
-        
-        # Baue den zugehörigen quantenmechanischen Hamiltonoperator aus G_ij * r_i * r_j
+
+        # Baue den zugehörigen quantenmechanischen
+        # Hamiltonoperator aus G_ij * r_i * r_j
         H_cv = 0
         for i in range(2 * n_modes):
             for j in range(2 * n_modes):
                 if np.abs(G[i, j]) > 1e-9:
                     H_cv += 0.5 * G[i, j] * r_ops[i] * r_ops[j]
-                    
+
         # Wende die unitäre Transformation (Squeezing/Beamsplitting) auf rho_0 an
         U_cv = (-1j * H_cv).expm()
         rho_transformed = U_cv * rho_0 * U_cv.dag()
-        
+
         # 6. Verschiebung (Displacement d) anwenden
         # D(alpha) = exp(alpha * a^dagger - alpha^* * a)
         # In Quadraturen ausgedrückt: exp(-i * (d_p * x - d_x * p))
@@ -109,77 +121,17 @@ class GaussianState:
             d_p = self.displacement[2 * i + 1]
             if np.abs(d_x) > 1e-9 or np.abs(d_p) > 1e-9:
                 # Korrekte konventionelle Verschiebung über die x und p Operatoren
-                H_disp += (d_p * r_ops[2 * i] - d_x * r_ops[2 * i + 1])
-                
+                H_disp += d_p * r_ops[2 * i] - d_x * r_ops[2 * i + 1]
+
         if H_disp != 0:
             D_cv = (-1j * H_disp).expm()
             rho_final = D_cv * rho_transformed * D_cv.dag()
         else:
             rho_final = rho_transformed
-            
-        return rho_final
-# # 
-# @dataclass
-# class GaussianState:
-#     modes: tuple[str, ...]  # Registrierte Moden-Namen, z.B. ("a", "b")
-#     displacement: np.ndarray  # d-Vektor (Länge 2 * N_modes)
-#     covariance: np.ndarray  # V-Matrix (Dimension 2N_modes x 2N_modes)
-# 
-#     def __post_init__(self):
-#         # Validierung der Dimensionen (2 Quadraturen pro Mode: x und p)
-#         n_modes = len(self.modes)
-#         expected_dim = 2 * n_modes
-#         assert self.displacement.shape == (
-#             expected_dim,
-#         ), f"Displacement muss Länge {expected_dim} haben."
-#         assert self.covariance.shape == (
-#             expected_dim,
-#             expected_dim,
-#         ), f"Covariance muss {expected_dim}x{expected_dim} sein."
-# 
-#     def get_mode_index(self, mode_name: str) -> int:
-#         """Gibt den Start-Index (für x) einer Mode im globalen Vektor zurück."""
-#         if mode_name not in self.modes:
-#             raise ValueError(
-#                 f"Mode '{mode_name}' ist in diesem Zustand nicht vorhanden."
-#             )
-#         return self.modes.index(mode_name) * 2
-# 
-#     def to_qutip(self, N_cutoff: int = 15) -> qt.Qobj:
-#         """
-#         Konvertiert den Gaußschen Zustand bei Bedarf in eine QuTiP-Dichtematrix (Fock-Basis).
-#         Nutzt die Weyl-Operator / charakteristische Funktion Methode.
-#         """
-#         n_modes = len(self.modes)
-#         # Erstelle Vakuum im kombinierten Hilbertraum
-#         vac_list = [qt.fock(N_cutoff, 0) for _ in range(n_modes)]
-#         rho = qt.ket2dm(qt.tensor(*vac_list))
-# 
-#         # Vernichter im Gesamtraum bauen
-#         a_ops = []
-#         for i in range(n_modes):
-#             op_list = [qt.qeye(N_cutoff)] * n_modes
-#             op_list[i] = qt.destroy(N_cutoff)
-#             a_ops.append(qt.tensor(*op_list))
-# 
-#         # Konstruiere Quadratur-Operatoren basierend auf deiner Konvention:
-#         # x = (a + a^dagger)/sqrt(2), p = (a - a^dagger)/(i*sqrt(2))
-#         r_ops = []
-#         for a in a_ops:
-#             x = (a + a.dag()) / np.sqrt(2)
-#             p = (a - a.dag()) / (1j * np.sqrt(2))
-#             r_ops.extend([x, p])
-# 
-#         # Da wir eine allgemeine Covariance-Matrix in QuTiP konvertieren wollen,
-#         # ist der sauberste Weg die thermische/Squeezing-Transformation im Phasenraum.
-#         # Für Demonstrationszwecke bauen wir hier den Zustand über eine Verschiebung und Squeezing.
-#         # (Hinweis: Für ein volles Produktionstool würde man hier über die charakteristische Funktion gehen)
-#         raise NotImplementedError(
-#             "Ausfaltung beliebiger korrelierter Matrizen in die Fock-Basis "
-#             "erfordert charakteristische Integration. Nutze reduzierte QuTiP-Zustände für Standard-Plots."
-#         )
 
-    def plot_covariance(self, do_plot=True):
+        return rho_final
+
+    def plot_covariance(self):
         """Visualisiert die Korrelationen zwischen allen registrierten Moden."""
         plt.figure(figsize=(6, 5))
         ticks = []
@@ -191,8 +143,6 @@ class GaussianState:
         plt.xticks(range(len(ticks)), ticks)
         plt.yticks(range(len(ticks)), ticks)
         plt.title("QBS Multi-Mode Kovarianzmatrix V")
-        if do_plot:
-            plt.show()
 
 
 class GaussianOperations:
@@ -215,7 +165,12 @@ class GaussianOperations:
         # Lokale Squeezing-Matrix bauen
         S_local = np.array([[np.exp(-r), 0], [0, np.exp(r)]])
         # Rotation für die Phase theta
-        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        R = np.array(
+            [
+                [np.cos(theta), -np.sin(theta)],
+                [np.sin(theta), np.cos(theta)],
+            ]
+        )
         S_local = R @ S_local @ R.T
 
         # Symplektische Gesamt-Transformationsmatrix S bauen
@@ -225,7 +180,11 @@ class GaussianOperations:
         # Zustand updaten nach d' = S*d und V' = S*V*S^T
         new_d = S_global @ state.displacement
         new_V = S_global @ state.covariance @ S_global.T
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return GaussianState(
+            modes=state.modes,
+            displacement=new_d,
+            covariance=new_V,
+        )
 
     @staticmethod
     def apply_beam_splitter(
@@ -255,7 +214,11 @@ class GaussianOperations:
         # Transformation ausführen
         new_d = S_BS @ state.displacement
         new_V = S_BS @ state.covariance @ S_BS.T
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return GaussianState(
+            modes=state.modes,
+            displacement=new_d,
+            covariance=new_V,
+        )
 
     @staticmethod
     def apply_loss(state: GaussianState, mode: str, eta: float) -> GaussianState:
@@ -292,8 +255,12 @@ class GaussianChannel:
 
     def __post_init__(self):
         dim = 2 * len(self.target_modes)
-        assert self.X.shape == (dim, dim), f"X-Matrix muss Dimension {dim}x{dim} haben."
-        assert self.Y.shape == (dim, dim), f"Y-Matrix muss Dimension {dim}x{dim} haben."
+        assert self.X.shape == (dim, dim), (
+            f"X-Matrix muss Dimension {dim}x{dim} haben.",
+        )
+        assert self.Y.shape == (dim, dim), (
+            f"Y-Matrix muss Dimension {dim}x{dim} haben.",
+        )
         assert self.d0.shape == (dim,), f"d0-Vektor muss Länge {dim} haben."
 
     def apply(self, state: GaussianState) -> GaussianState:
@@ -363,11 +330,14 @@ class QBSChannels:
     def classical_phase_jitter(mode: str, sigma_phi: float) -> GaussianChannel:
         """
         Simuliert Phasenfluktuationen (Jitter) auf einer Faser/einem Spiegel.
-        Führt im Zeitmittel zu einer Dekohärenz (Vergrößerung der p-Varianz im rotierenden Bezugssystem).
+        Führt im Zeitmittel zu einer Dekohärenz (Vergrößerung der p-Varianz im
+                                                   rotierenden Bezugssystem).
         """
-        # Für kleine Fluktuationen approximieren wir das als zusätzliches Rauschen in der Phase
+        # Für kleine Fluktuationen approximieren wir das als zusätzliches
+        # Rauschen in der Phase
         X = np.eye(2)
-        # Erzeugt zusätzliches Phasenrauschen proportional zur Varianz des Jitters
+        # Erzeugt zusätzliches Phasenrauschen proportional zur Varianz des
+        # Jitters
         Y = np.array([[0, sigma_phi**2]])
         d0 = np.zeros(2)
         return GaussianChannel(target_modes=(mode,), X=X, Y=Y, d0=d0)
@@ -378,7 +348,8 @@ class QBSChannels:
     ) -> GaussianChannel:
         """
         Erzeugt korreliertes thermisches Rauschen auf zwei Moden parallel.
-        Nützlich, wenn zwei Kanäle thermisch an dieselbe Umgebung koppeln (z.B. im selben Faserstrang).
+        Nützlich, wenn zwei Kanäle thermisch an dieselbe Umgebung koppeln
+        (z.B. im selben Faserstrang).
         """
         X = np.sqrt(eta) * np.eye(4)
 
@@ -389,3 +360,235 @@ class QBSChannels:
         Y = np.block([[V_diag, V_cross], [V_cross.T, V_diag]])
         d0 = np.zeros(4)
         return GaussianChannel(target_modes=(mode_a, mode_b), X=X, Y=Y, d0=d0)
+
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class CircuitOperation:
+    """Repräsentiert ein abstraktes optisches Element oder einen Kanal im Circuit."""
+
+    name: str
+    modes: tuple[str, ...]
+    kwargs: dict[str, Any]
+    # Die tatsächliche Funktion aus GaussianOperations oder QBSChannels
+    func: Callable[..., GaussianState] | Callable[..., GaussianChannel]
+
+
+@dataclass
+class GaussianCircuit:
+    """
+    Kompiliert und sequenziert eine Kette von Gaußschen Operationen (Gatter & Kanäle)
+    und wendet sie auf ein registriertes Moden-Set an.
+    """
+
+    modes: tuple[str, ...] = field(default_factory=tuple)
+    _operations: list[CircuitOperation] = field(default_factory=list, init=False)
+
+    def add_mode(self, mode_name: str):
+        """Fügt dem Circuit eine neue optische Mode hinzu."""
+        if mode_name in self.modes:
+            raise ValueError(f"Mode '{mode_name}' ist bereits im Circuit registriert.")
+        self.modes = self.modes + (mode_name,)
+        return self
+
+    def squeeze(self, mode: str, r: float, theta: float = 0.0):
+        """Fügt ein Single-Mode Squeezing-Gatter hinzu."""
+        self._operations.append(
+            CircuitOperation(
+                name="Squeezing",
+                modes=(mode,),
+                kwargs={"r": r, "theta": theta},
+                func=GaussianOperations.apply_squeezing,
+            )
+        )
+        return self  # Erlaubt Method Chaining (.squeeze().beam_splitter())
+
+    def beam_splitter(self, mode_a: str, mode_b: str, eta: float):
+        """Fügt einen Beamsplitter hinzu."""
+        self._operations.append(
+            CircuitOperation(
+                name="BeamSplitter",
+                modes=(mode_a, mode_b),
+                kwargs={"eta": eta},
+                func=GaussianOperations.apply_beam_splitter,
+            )
+        )
+        return self
+
+    def loss(self, mode: str, eta: float):
+        """Fügt reinen Vakuum-Verlust hinzu."""
+        self._operations.append(
+            CircuitOperation(
+                name="Loss",
+                modes=(mode,),
+                kwargs={"eta": eta},
+                func=GaussianOperations.apply_loss,
+            )
+        )
+        return self
+
+    def thermal_loss(self, mode: str, eta: float, n_thermal: float):
+        """Fügt einen allgemeinen thermischen Rauschkanal hinzu."""
+        # Da dies ein Kanal ist, nutzen wir die Fabrik aus QBSChannels
+        self._operations.append(
+            CircuitOperation(
+                name="ThermalLossChannel",
+                modes=(mode,),
+                kwargs={"eta": eta, "n_thermal": n_thermal},
+                func=QBSChannels.thermal_loss,
+            )
+        )
+        return self
+
+    def compile_and_run(self, initial_state: GaussianState = None) -> GaussianState:
+        """
+        Validiert alle Operationen gegen die registrierten Moden
+        und führt die gesamte Kette sequenziell aus.
+        """
+        if not self.modes:
+            raise ValueError("Der Circuit enthält keine registrierten Moden.")
+
+        # Wenn kein Anfangszustand übergeben wurde, starten wir im globalen Vakuum
+        if initial_state is None:
+            current_state = GaussianOperations.create_vacuum(self.modes)
+        else:
+            # Sicherstellen, dass die Moden des Zustands mit dem Circuit übereinstimmen
+            assert set(initial_state.modes) == set(
+                self.modes
+            ), "Moden des Initialzustands passen nicht zum Circuit."
+            current_state = initial_state
+
+        print(f"🚀 Starte QBS-Circuit Execution für Moden: {self.modes}")
+        print(f"Anzahl geplanter Operationen: {len(self._operations)}\n")
+
+        for idx, op in enumerate(self._operations):
+            # Validierung: Prüfen, ob alle Zielmoden im Circuit existieren
+            for m in op.modes:
+                if m not in self.modes:
+                    raise ValueError(
+                        f"Fehler bei Op #{idx} ({op.name}): Mode '{m}' ist "
+                        "nicht im Circuit registriert!"
+                    )
+
+            # Ausführen je nach Typ der Funktion
+            if op.name.endswith("Channel"):
+                # Wenn es ein eigenständiger GaussianChannel ist, instanziieren
+                # wir ihn und wenden ihn an
+                channel_instance = op.func(mode=op.modes[0], **op.kwargs)
+                current_state = channel_instance.apply(current_state)
+                print(
+                    f" [{idx+1}/{len(self._operations)}] Angewendet: "
+                    f"{op.name} auf {op.modes}"
+                )
+            else:
+                # Standard-Gatter (In-Place Transformation)
+                if len(op.modes) == 1:
+                    current_state = op.func(
+                        current_state, mode=op.modes[0], **op.kwargs
+                    )
+                elif len(op.modes) == 2:
+                    current_state = op.func(
+                        current_state,
+                        mode_a=op.modes[0],
+                        mode_b=op.modes[1],
+                        **op.kwargs,
+                    )
+                print(
+                    f" [{idx+1}/{len(self._operations)}] Ausgeführt: "
+                    f"{op.name} auf {op.modes}"
+                )
+
+        print("\n Execution erfolgreich beendet.")
+        return current_state
+
+
+class GaussianMeasurements:
+    @staticmethod
+    def homodyne_measurement(
+        state: GaussianState, measured_mode: str, phi: float, outcome: float = None
+    ) -> tuple[float, GaussianState]:
+        """
+        Führt eine Homodyn-Messung auf einer bestimmten Mode durch.
+
+        Parameters:
+        -----------
+        state : GaussianState
+            Der aktuelle globale Multi-Moden-Zustand.
+        measured_mode : str
+            Die Mode, die gemessen wird (z.B. 'a').
+        phi : float
+            Die Phase des Lokaloszillators (0 = misst x/q, pi/2 = misst p).
+        outcome : float, optional
+            Falls vorgegeben, wird dieses Messergebnis erzwungen.
+            Falls None, wird das Ergebnis statistisch korrekt aus der
+            Wahrscheinlichkeitsverteilung gewürfelt.
+
+        Returns:
+        --------
+        measured_value : float
+            Das (gewürfelte oder übergebene) reelle Messergebnis.
+        conditional_state : GaussianState
+            Der kollabierte Zustand der verbleibenden Moden nach der Messung.
+        """
+        n_modes = len(state.modes)
+        idx_m = state.get_mode_index(measured_mode)
+
+        # 1. Rotiere den Zustand temporär, damit die gemessene Quadratur auf 'x' liegt
+        # Das vereinfacht die Mathematik (wir messen immer 'x' nach der Rotation)
+        R_local = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+        R_global = np.eye(2 * n_modes)
+        R_global[idx_m : idx_m + 2, idx_m : idx_m + 2] = R_local
+
+        d_rot = R_global @ state.displacement
+        V_rot = R_global @ state.covariance @ R_global.T
+
+        # 2. Partitioniere d_rot und V_rot in gemessene Mode (M) und
+        # verbleibende Moden (R)
+        # Indizes für die gemessene x-Quadratur
+        idx_x = idx_m
+        # Alle anderen Indizes (verbleibende Quadraturen)
+        remaining_indices = [
+            i for i in range(2 * n_modes) if i != idx_x and i != idx_m + 1
+        ]
+
+        # Kovarianz-Blöcke extrahieren
+        V_MM = V_rot[idx_x, idx_x]  # Varianz der gemessenen Quadratur (Skalar)
+        V_MR = V_rot[idx_x, remaining_indices]  # Spaltenvektor (Beziehung M zu R)
+        V_RM = V_rot[remaining_indices, idx_x]  # Zeilenvektor
+        V_RR = V_rot[
+            np.ix_(remaining_indices, remaining_indices)
+        ]  # Verbleibende Kovarianz
+
+        # Displacements extrahieren
+        d_M = d_rot[idx_x]
+        d_R = d_rot[remaining_indices]
+
+        # 3. Messergebnis bestimmen (falls nicht vorgegeben, aus Gaußverteilung würfeln)
+        if outcome is None:
+            # Standardabweichung ist die Wurzel aus der Varianz V_MM
+            sigma = np.sqrt(V_MM)
+            measured_value = np.random.normal(loc=d_M, scale=sigma)
+        else:
+            measured_value = outcome
+
+        # 4. Kollaps-Gleichungen (Schur-Komplement) anwenden
+        # Der verbleibende d-Vektor verschiebt sich basierend auf dem Messergebnis!
+        # d_cond = d_R + V_RM * (1/V_MM) * (measured_value - d_M)
+        d_cond_rot = d_R + V_RM * (1.0 / V_MM) * (measured_value - d_M)
+
+        # Die neue Kovarianzmatrix schrumpft (Squeezing durch Messung!)
+        # V_cond = V_RR - V_RM * (1/V_MM) * V_MR
+        V_cond_rot = V_RR - np.outer(V_RM, V_MR) / V_MM
+
+        # 5. Zurück-Rotation der verbleibenden Moden ist nicht nötig, da wir
+        # sie nicht angefasst haben.
+        # Wir müssen nur die gemessene Mode aus der Liste der aktiven Moden löschen.
+        remaining_modes = tuple(m for m in state.modes if m != measured_mode)
+
+        return measured_value, GaussianState(
+            modes=remaining_modes, displacement=d_cond_rot, covariance=V_cond_rot
+        )
