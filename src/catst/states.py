@@ -740,3 +740,208 @@ class NonGaussianOperations:
         rho_added = adag_global * rho_fock * adag_global.dag()
 
         return rho_added / rho_added.tr()
+
+
+class QBSSimulator:
+    """
+    Die zentrale Simulations-Schnittstelle des QBS für zeitabhängige Mastergleichungen,
+    Nicht-Gaußsche Zustandsmanipulation und interferometerbasierte Messungen.
+    """
+
+    @staticmethod
+    def run_cavity_with_pulse(
+        rho_init: qt.Qobj,
+        tlist: np.ndarray,
+        K: float,
+        kappa: float,
+        amp: float,
+        t0: float,
+        sigma: float,
+        N_cutoff: int,
+    ) -> list[qt.Qobj]:
+        """
+        Simuliert eine dissipative Kavität mit Kerr-Nichtlinearität und einem zeitabhängigen Gauß-Laserpuls.
+
+        Parameters:
+            rho_init: Start-Dichtematrix im Hilbertraum (aus to_qutip() generiert)
+            tlist: Zeitgitter für den ODE-Solver
+            K: Stärke der Kerr-Nichtlinearität (K * adag^2 * a^2)
+            kappa: Photonenverlustrate der Kavitätenspiegel
+            amp, t0, sigma: Parameter der Gaußschen Pulsform
+            N_cutoff: Dimension des Hilbertraums
+        """
+        a = qt.destroy(N_cutoff)
+        H_kerr = K * a.dag() * a.dag() * a * a
+
+        # Zeitabhängige Pulsform-Einhüllende
+        def pulse_shape(t, args):
+            return args["amp"] * np.exp(
+                -((t - args["t0"]) ** 2) / (2 * args["sigma"] ** 2)
+            )
+
+        H_total = [H_kerr, [a + a.dag(), pulse_shape]]
+        c_ops = [np.sqrt(kappa) * a] if kappa > 0 else []
+        args = {"amp": amp, "t0": t0, "sigma": sigma}
+
+        # Aufruf des nativen QuTiP Master-Equation-Solvers
+        res = qt.mesolve(H_total, rho_init, tlist, c_ops=c_ops, args=args)
+        return res.states
+
+    @staticmethod
+    def photon_subtraction(
+        rho: qt.Qobj, mode_idx: int = 0, N_cutoff: int = 20
+    ) -> qt.Qobj:
+        """Nicht-Gaußsche Operation: Subtrahiert ein Photon aus einer bestimmten Mode."""
+        # rho.dims[0] gibt die Liste der Dimensionen des Ket-Vektors an.
+        # Bei einer Single-Mode steht dort z.B. [25] -> Länge ist 1.
+        # Bei einer Multi-Mode steht dort z.B. [25, 25] -> Länge ist 2.
+        n_modes_in_rho = len(rho.dims[0])
+
+        if n_modes_in_rho == 1:
+            a_op = qt.destroy(N_cutoff)
+        else:
+            op_list = [qt.qeye(N_cutoff)] * n_modes_in_rho
+            op_list[mode_idx] = qt.destroy(N_cutoff)
+            a_op = qt.tensor(*op_list)
+
+        rho_sub = a_op * rho * a_op.dag()
+        trace_val = rho_sub.tr()
+        if trace_val < 1e-11:
+            raise ValueError(
+                "Fehler: Die Erfolgswahrscheinlichkeit für den Photonenabzug ist numerisch null."
+            )
+        return rho_sub / trace_val
+
+    @staticmethod
+    def photon_addition(rho: qt.Qobj, mode_idx: int = 0, N_cutoff: int = 20) -> qt.Qobj:
+        """Nicht-Gaußsche Operation: Addiert ein diskretes Photon in einer Mode."""
+        n_modes_in_rho = len(rho.dims[0])
+
+        if n_modes_in_rho == 1:
+            adag_op = qt.create(N_cutoff)
+        else:
+            op_list = [qt.qeye(N_cutoff)] * n_modes_in_rho
+            op_list[mode_idx] = qt.create(N_cutoff)
+            adag_op = qt.tensor(*op_list)
+
+        rho_add = adag_op * rho * adag_op.dag()
+        return rho_add / rho_add.tr()
+
+    # @staticmethod
+    # def photon_subtraction(rho: qt.Qobj, mode_idx: int = 0, N_cutoff: int = 20) -> qt.Qobj:
+    #     """
+    #     Nicht-Gaußsche Operation: Subtrahiert (vernichtet) ein Photon aus einer bestimmten Mode.
+    #     Triggert im Experiment die Entstehung von Schrödinger-Katzenzuständen.
+    #     """
+    #     if len(rho.dims) == 1:
+    #         a_op = qt.destroy(N_cutoff)
+    #     else:
+    #         op_list = [qt.qeye(N_cutoff)] * len(rho.dims)
+    #         op_list[mode_idx] = qt.destroy(N_cutoff)
+    #         a_op = qt.tensor(*op_list)
+    #
+    #     print(f"{rho.shape=}")
+    #     print(f"{a_op.shape=}")
+    #
+    #     rho_sub = a_op * rho * a_op.dag()
+    #     trace_val = rho_sub.tr()
+    #     if trace_val < 1e-11:
+    #         raise ValueError("Fehler: Die Erfolgswahrscheinlichkeit für den Photonenabzug ist numerisch null.")
+    #     return rho_sub / trace_val
+    #
+    # @staticmethod
+    # def photon_addition(rho: qt.Qobj, mode_idx: int = 0, N_cutoff: int = 20) -> qt.Qobj:
+    #     """
+    #     Nicht-Gaußsche Operation: Addiert (erzeugt) ein diskretes Photon in einer Mode.
+    #     """
+    #     if len(rho.dims) == 1:
+    #         adag_op = qt.create(N_cutoff)
+    #     else:
+    #         op_list = [qt.qeye(N_cutoff)] * len(rho.dims)
+    #         op_list[mode_idx] = qt.create(N_cutoff)
+    #         adag_op = qt.tensor(*op_list)
+    #
+    #     rho_add = adag_op * rho * adag_op.dag()
+    #     return rho_add / rho_add.tr()
+
+    @staticmethod
+    def homodyne_measurement(
+        state: GaussianState, measured_mode: str, phi: float, outcome: float = None
+    ) -> tuple[float, GaussianState]:
+        """
+        Führt eine stochastisch korrekte Homodyn-Projektionsmessung auf einer reinen CV-Mode durch.
+        Berechnet den Phasenraum-Kollaps der verbleibenden Moden via Schur-Komplement.
+        """
+        n_modes = len(state.modes)
+        idx_m = state.get_mode_index(measured_mode)
+
+        R_local = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+        R_g = np.eye(2 * n_modes)
+        R_g[idx_m : idx_m + 2, idx_m : idx_m + 2] = R_local
+
+        d_rot = R_g @ state.displacement
+        V_rot = R_g @ state.covariance @ R_g.T
+
+        rem_idx = [i for i in range(2 * n_modes) if i != idx_m and i != idx_m + 1]
+
+        V_MM = V_rot[idx_m, idx_m]
+        V_MR = V_rot[idx_m, rem_idx]
+        V_RM = V_rot[rem_idx, idx_m]
+        V_RR = V_rot[np.ix_(rem_idx, rem_idx)]
+
+        d_M = d_rot[idx_m]
+        d_R = d_rot[rem_idx]
+
+        measured_value = (
+            np.random.normal(loc=d_M, scale=np.sqrt(V_MM))
+            if outcome is None
+            else outcome
+        )
+        d_cond = d_R + V_RM * (1.0 / V_MM) * (measured_value - d_M)
+        V_cond = V_RR - np.outer(V_RM, V_MR) / V_MM
+
+        remaining_modes = tuple(m for m in state.modes if m != measured_mode)
+        return measured_value, GaussianState(remaining_modes, d_cond, V_cond)
+
+    @staticmethod
+    def scan_mzi_with_loss(
+        psi_cat_single: qt.Qobj, theta_list: np.ndarray, kappa: float, N_cutoff: int
+    ) -> dict:
+        """
+        Simuliert die vollständige Pipeline eines rauschbehafteten Mach-Zehnder-Interferometers für eine Katze.
+        Berechnet Intensitäten und die sensitive Quanten-Parität am Ausgang als Funktion von theta.
+        """
+        a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
+        a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
+
+        n1_op = a1.dag() * a1
+        n2_op = a2.dag() * a2
+        parity1_op = (1j * np.pi * n1_op).expm()
+
+        # 50:50 Beamsplitter
+        U_BS = ((1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())).expm()
+
+        # Eingangszustand: Katze an Port 1, Vakuum an Port 2
+        psi_in = qt.tensor(psi_cat_single, qt.fock(N_cutoff, 0))
+        psi_after_BS1 = U_BS * psi_in
+
+        # Speicherstrukturen für den Scan
+        results = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
+        c_ops = [np.sqrt(kappa) * a1] if kappa > 0 else []
+        H_phase = a1.dag() * a1
+
+        for theta in theta_list:
+            # Dynamische Phasenentwicklung + Verlust in Arm 1 simulierbar über mesolve Zeitdauer
+            t_span = [0, theta] if theta > 0 else [0, 1e-9]
+            sim = qt.mesolve(H_phase, psi_after_BS1, t_span, c_ops=c_ops)
+            rho_arm = sim.states[-1]
+
+            # Rekombination am BS2
+            rho_out = U_BS * rho_arm * U_BS.dag()
+
+            # Messergebnisse sichern
+            results["n1"].append(qt.expect(n1_op, rho_out))
+            results["n2"].append(qt.expect(n2_op, rho_out))
+            results["parity1"].append(qt.expect(parity1_op, rho_out).real)
+
+        return results

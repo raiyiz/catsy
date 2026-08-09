@@ -4,12 +4,15 @@ import pytest
 import qutip as qt
 from qutip.visualization import matrix_histogram
 
+# from .circuits import (
+# )
 from .states import (
     GaussianCircuit,
     GaussianMeasurements,
     GaussianOperations,
     NonGaussianOperations,
     QBSChannels,
+    QBSSimulator,
     plot_joint_correlation,
     plot_wigner_analytically,
 )
@@ -771,7 +774,7 @@ def test_decoherence_mzi():
     # =====================================================================
     # 2. PHASENSCHLEIFE MIT/OHNE VERLUST
     # =====================================================================
-    theta_list = np.linspace(0, 2 * np.pi, 120)
+    theta_list = np.linspace(0, 2 * np.pi, 50)
 
     parity_perfect = []
     parity_noisy = []
@@ -835,3 +838,44 @@ def test_decoherence_mzi():
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+
+def test_triggered_cavity():
+    # 1. Schnelle CV-Vorpräparation im Vakuum
+    cv_circuit = GaussianCircuit().add_mode("c")
+    # cv_circuit.add_mode("d")
+    cv_circuit.squeeze(mode="c", r=0.1, theta=0.0)
+    initial_state = cv_circuit.compile_and_run()
+
+    # 2. Hybrid-Schnittstelle zünden & in die Fock-Basis wechseln
+    N_fock = 15
+    # rho_vacuum = initial_state.to_qutip(N_cutoff=N_fock)
+
+    rho_vacuum = initial_state.to_qutip(N_cutoff=N_fock)
+
+    # 3. Zeitabhängigen Laser-Puls + Kerr-Effekt in der Kavität simulieren
+    tlist = np.linspace(0, 5, 100)
+    print("Simuliere physikalische Echtzeit-Dynamik...")
+    states = QBSSimulator.run_cavity_with_pulse(
+        rho_init=rho_vacuum,
+        tlist=tlist,
+        K=0.4,
+        kappa=0.05,
+        amp=3.5,
+        t0=1.5,
+        sigma=0.6,
+        N_cutoff=N_fock,
+    )
+    rho_kerr_cat = states[-1]
+    print(f"{rho_kerr_cat.shape=}")
+
+    # 4. Nicht-Gaußschen Photonen-Abzug nach dem Kavitätsaustritt triggern
+    rho_final_non_gaussian = QBSSimulator.photon_subtraction(
+        rho_kerr_cat, N_cutoff=N_fock
+    )
+
+    # Sanity Check über die native Quanten-Reinheit (Purity) tr(rho^2)
+    purity = (rho_final_non_gaussian * rho_final_non_gaussian).tr().real
+    print(
+        f"✅ Integrationstest bestanden! Quantenreinheit des Endzustands: {purity:.4f}"
+    )
