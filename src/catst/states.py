@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -362,11 +364,6 @@ class QBSChannels:
         return GaussianChannel(target_modes=(mode_a, mode_b), X=X, Y=Y, d0=d0)
 
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any
-
-
 @dataclass
 class CircuitOperation:
     """Repräsentiert ein abstraktes optisches Element oder einen Kanal im Circuit."""
@@ -688,3 +685,58 @@ def plot_joint_correlation(
     plt.ylabel(f"x_{mode_b}")
     plt.axis("equal")
     plt.show()
+
+
+class NonGaussianOperations:
+    @staticmethod
+    def photon_subtraction(
+        state: GaussianState, mode_name: str, N_cutoff: int = 20
+    ) -> qt.Qobj:
+        """
+        Subtrahiert (vernichtet) ein einzelnes Photon aus einer bestimmten Mode.
+        Wendet den Vernichtungsoperator 'a' an: rho -> a * rho * a^dagger (danach normiert).
+        """
+        # 1. Konvertiere den Gaußschen Zustand in den QuTiP Hilbertraum
+        rho_fock = state.to_qutip(N_cutoff=N_cutoff)
+
+        # 2. Konstruiere den Vernichtungsoperator für die Zielmode im Gesamtraum
+        n_modes = len(state.modes)
+        idx = state.modes.index(mode_name)
+
+        op_list = [qt.qeye(N_cutoff)] * n_modes
+        op_list[idx] = qt.destroy(N_cutoff)  # Der Vernichtungsoperator 'a'
+        a_global = qt.tensor(*op_list)
+
+        # 3. Operation anwenden: a * rho * a^dagger (Probabilistisches Heralding)
+        rho_subtracted = a_global * rho_fock * a_global.dag()
+
+        # 4. Zustand re-normieren (da ein Photon abziehen die Wahrscheinlichkeit dämpft)
+        trace_val = rho_subtracted.tr()
+        if trace_val < 1e-10:
+            raise ValueError(
+                "Erfolgswahrscheinlichkeit zu gering. Zustand enthält kaum Photonen."
+            )
+
+        return rho_subtracted / trace_val
+
+    @staticmethod
+    def photon_addition(
+        state: GaussianState, mode_name: str, N_cutoff: int = 20
+    ) -> qt.Qobj:
+        """
+        Addiert (erzeugt) ein einzelnes Photon in einer bestimmten Mode.
+        Wendet den Erzeugungsoperator 'a^dagger' an: rho -> a^dagger * rho * a (danach normiert).
+        """
+        rho_fock = state.to_qutip(N_cutoff=N_cutoff)
+
+        n_modes = len(state.modes)
+        idx = state.modes.index(mode_name)
+
+        op_list = [qt.qeye(N_cutoff)] * n_modes
+        op_list[idx] = qt.create(N_cutoff)  # Der Erzeugungsoperator 'a^dagger'
+        adag_global = qt.tensor(*op_list)
+
+        # Operation anwenden: a^dagger * rho * a
+        rho_added = adag_global * rho_fock * adag_global.dag()
+
+        return rho_added / rho_added.tr()

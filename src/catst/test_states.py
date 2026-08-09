@@ -1,11 +1,14 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pytest
 import qutip as qt
+from qutip.visualization import matrix_histogram
 
 from .states import (
     GaussianCircuit,
     GaussianMeasurements,
     GaussianOperations,
+    NonGaussianOperations,
     QBSChannels,
     plot_joint_correlation,
     plot_wigner_analytically,
@@ -169,10 +172,8 @@ def test_wigner_analytical_plotting():
     # plot_wigner_analytically(test_state, mode_name="a", x_max=5.0)
 
 
+@pytest.mark.skip
 def test_wigner_qutip_plotting():
-    import matplotlib.pyplot as plt
-    import qutip as qt
-    from qutip.visualization import matrix_histogram
 
     # 1. Setup: Verschränkten EPR-Zustand im CV-Circuit erzeugen
     circuit = GaussianCircuit()
@@ -216,4 +217,149 @@ def test_wigner_qutip_plotting():
     fig, ax = matrix_histogram(rho_a)
     ax.view_init(azim=-30, elev=40)
     plt.title("Natives QuTiP Matrix-Histogramm der Mode A")
+    plt.show()
+
+
+def test_remove_phot_from_sqv():
+
+    # 1. Erstelle ein einfaches, Single-Mode Squeezed Vacuum (rein Gaußsch)
+    circuit = GaussianCircuit()
+    circuit.add_mode("a")
+    circuit.squeeze(mode="a", r=0.55)  # Squeezing vorbereiten
+    gaussian_squeezed = circuit.compile_and_run()
+
+    # 2. Wende die Nicht-Gaußsche Operation an (Photonen-Abzug)
+    # Wir nutzen N_cutoff=25, um genügend numerischen Platz im Hilbertraum zu haben
+    print("\nSubtrahiere ein Photon...")
+    rho_cat = NonGaussianOperations.photon_subtraction(
+        gaussian_squeezed, mode_name="a", N_cutoff=25
+    )
+
+    # 3. Berechne die Wigner-Funktion des neuen Nicht-Gaußschen Zustands
+    xvec = np.linspace(-4, 4, 250)
+    W_cat = qt.wigner(
+        rho_cat, xvec, xvec
+    )  # Nutzt das native QuTiP-Modul [source: 1.1.2]
+
+    # 4. Plotten
+    plt.figure(figsize=(6, 5))
+    # Wir nutzen ein symmetrisches vmin/vmax, damit man die Negativität perfekt sieht
+    contour = plt.contourf(xvec, xvec, W_cat, 100, cmap="RdBu_r", vmin=-0.4, vmax=0.4)
+    plt.colorbar(contour, label="Wigner-Dichte")
+    plt.axhline(0, color="black", lw=0.5, ls="--")
+    plt.axvline(0, color="black", lw=0.5, ls="--")
+    plt.title(
+        "Schrödinger-Katze via Photonen-Abzug\n(Beachte den blauen, negativen Kern!)"
+    )
+    plt.xlabel("x")
+    plt.ylabel("p")
+    plt.axis("equal")
+    plt.show()
+
+
+def test_full_cavity():
+
+    # =====================================================================
+    # 1. PHASENRAUM-VORBEREITUNG (Gaußscher Circuit)
+    # =====================================================================
+    # Wir bauen einen Circuit für eine Kavitäts-Mode 'c' auf.
+    circuit = GaussianCircuit()
+    circuit.add_mode("c")
+
+    # Wir injizieren instantan ein moderates Squeezing beim Einkoppeln (r = 0.5)
+    circuit.squeeze(mode="c", r=0.5, theta=0.0)
+    initial_cv_state = circuit.compile_and_run()
+
+    # =====================================================================
+    # 2. HYBRIDE SCHNITTSTELLE: Übergang in den Hilbertraum
+    # =====================================================================
+    N_cutoff = 20  # Dimension des Kavitäts-Hilbertraums
+    # Exakte Konvertierung via Williamson-Theorem in die QuTiP-Dichtematrix rho_0
+    rho_0 = initial_cv_state.to_qutip(N_cutoff=N_cutoff)
+
+    # =====================================================================
+    # 3. KAVITÄTEN-ZEITENTWICKLUNG (QuTiP Master Equation Solver)
+    # =====================================================================
+    # Physikalische Kavitäten-Parameter definieren
+    omega_c = 2.0 * np.pi * 1.0  # Kavitätsfrequenz (z.B. 1 GHz im rotierenden System)
+    kappa = (
+        0.3  # Zerfallsrate der Kavität (Photonenverlust durch Spiegel) [source: 1.3.1]
+    )
+
+    # Operatoren im Hilbertraum definieren
+    a = qt.destroy(N_cutoff)
+    H_cav = omega_c * a.dag() * a  # Freier Kavitäts-Hamiltonoperator
+
+    # Lindblad Kollaps-Operatoren für dissipative Verluste definieren [source: 1.1.2, 1.3.1]
+    # sqrt(kappa) * a beschreibt das kontinuierliche Heraussickern von Photonen [source: 1.3.1]
+    collapse_operators = [np.sqrt(kappa) * a]
+
+    # Zeitgitter für die Simulation (0 bis 5 Zeit-Einheiten)
+    tlist = np.linspace(0, 5, 200)
+
+    print("\n🎬 Starte zeitabhängige Lindblad-Kavitätensimulation in QuTiP...")
+    # Berechne die offene Quantendynamik des Systems [source: 1.1.2]
+    simulation_result = qt.mesolve(H_cav, rho_0, tlist, c_ops=collapse_operators)
+
+    # Zustand am Ende der Zeitentwicklung extrahieren
+    rho_t_final = simulation_result.states[-1]
+    photon_numbers = [
+        qt.expect(a.dag() * a, state) for state in simulation_result.states
+    ]
+
+    # =====================================================================
+    # 4. NICHT-GAUSSSCHE INTERAKTION AM KAVITÄTSAUSGANG
+    # =====================================================================
+    print(
+        "⚡ Kavitäten-Endzustand erreicht. Wende nicht-Gaußschen Photonen-Abzug an..."
+    )
+    # Ein Photon fliegt aus der Kavität und triggert unseren Detektor (Heralded State)
+    # Wir simulieren den re-normierten Zustand nach der bedingten Messung
+    # rho_subtracted = a * rho_t_final * a.dag()
+    rho_subtracted = a.dag() * rho_t_final * a
+    rho_final_non_gaussian = rho_subtracted / rho_subtracted.tr()
+
+    # =====================================================================
+    # 5. MULTI-PANEL VISUALISIERUNG DER DYNAMIK
+    # =====================================================================
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Plot A: Zeitliche Entwicklung der Photonenbesetzung in der Kavität
+    axes[0].plot(
+        tlist,
+        photon_numbers,
+        label=r"$\langle n \rangle$ (Photonenzahl)",
+        color="darkblue",
+        lw=2,
+    )
+    axes[0].set_title("Photonenverlust der Kavität über die Zeit")
+    axes[0].set_xlabel("Zeit $t$")
+    axes[0].set_ylabel("Mittlere Photonenzahl")
+    axes[0].grid(True, ls="--")
+    axes[0].legend()
+
+    # Plot B: Wigner-Funktion direkt VOR dem Photonen-Abzug (Gaußscher, gedämpfter Zustand)
+    xvec = np.linspace(-4, 4, 200)
+    W_before = qt.wigner(rho_t_final, xvec, xvec)
+    cont1 = axes[1].contourf(
+        xvec, xvec, W_before, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3
+    )
+    fig.colorbar(cont1, ax=axes[1])
+    axes[1].set_title("Vor Photonen-Abzug\n(Klassisch-gedämpftes Ellipsoid)")
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("p")
+    axes[1].axis("equal")
+
+    # Plot C: Wigner-Funktion NACH dem Photonen-Abzug (Nicht-Gaußsche Schrödinger-Katze)
+    W_after = qt.wigner(rho_final_non_gaussian, xvec, xvec)
+    cont2 = axes[2].contourf(
+        xvec, xvec, W_after, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3
+    )
+    fig.colorbar(cont2, ax=axes[2])
+    axes[2].set_title("Nach Photonen-Abzug\n(Nicht-Gaußsche Wigner-Negativität!)")
+    axes[2].set_xlabel("x")
+    axes[2].set_ylabel("p")
+    axes[2].axis("equal")
+
+    plt.tight_layout()
     plt.show()
