@@ -152,7 +152,6 @@ def test_measure_homodyne():
 
 
 def test_wigner_analytical_plotting():
-
     # 1. Setup: Ein Circuit mit extremem Squeezing und einer Verschiebung
     circuit = GaussianCircuit()
     circuit.add_mode("a")
@@ -221,7 +220,6 @@ def test_wigner_qutip_plotting():
 
 
 def test_remove_phot_from_sqv():
-
     # 1. Erstelle ein einfaches, Single-Mode Squeezed Vacuum (rein Gaußsch)
     circuit = GaussianCircuit()
     circuit.add_mode("a")
@@ -258,7 +256,6 @@ def test_remove_phot_from_sqv():
 
 
 def test_full_cavity():
-
     # =====================================================================
     # 1. PHASENRAUM-VORBEREITUNG (Gaußscher Circuit)
     # =====================================================================
@@ -360,6 +357,119 @@ def test_full_cavity():
     axes[2].set_xlabel("x")
     axes[2].set_ylabel("p")
     axes[2].axis("equal")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def test_laser_pulse():
+    # =====================================================================
+    # 1. INITIALISIERUNG (Gaußscher Startzustand via venv-Circuit)
+    # =====================================================================
+    circuit = GaussianCircuit()
+    circuit.add_mode("c")
+    circuit.squeeze(mode="c", r=0.5, theta=0.0)
+    # Wir starten dieses Mal im reinen Vakuum, um zu sehen, wie der Laser die Kavität füllt!
+    initial_cv_state = circuit.compile_and_run()
+
+    N_cutoff = 30  # Höherer Cutoff, da der Laser viele Photonen reinpumpt!
+    rho_0 = initial_cv_state.to_qutip(N_cutoff=N_cutoff)
+
+    # =====================================================================
+    # 2. DEFINITION DES ZEITABHÄNGIGEN LASERPULSES
+    # =====================================================================
+    # Parameter für den Gaußschen Laserpuls
+    pulse_amplitude = 2.5  # Maximale Stärke des Pulses (Rabi-Frequenz)
+    pulse_center = 4.0  # Peak des Pulses bei t = 4.0
+    pulse_width = 1.0  # Zeitliche Breite (Standardabweichung sigma)
+
+    # Python-Funktion für die zeitabhängige Amplitude Omega(t) [source: 1.2.7]
+    def laser_pulse_shape(t, args):
+        amp = args["amplitude"]
+        t0 = args["center"]
+        sigma = args["width"]
+        return amp * np.exp(-((t - t0) ** 2) / (2 * sigma**2))
+
+    # =====================================================================
+    # 3. HAMILTONOPERATOR & MULTI-KOMPONENTEN SIMULATION
+    # =====================================================================
+    omega_c = 0.0  # Wir arbeiten im rotierenden Bezugssystem des Lasers (Resonanz)
+    kappa = 0.4  # Verlustrate der Kavität (Photonen-Dämpfung) [source: 1.3.1]
+
+    a = qt.destroy(N_cutoff)
+
+    # Statischer Teil des Hamiltonoperators (freie Energie der Mode)
+    H_0 = omega_c * a.dag() * a
+
+    # Zeitabhängiger Teil: H = H_0 + Omega(t) * (a + a^dagger)
+    # QuTiP-Format für zeitabhängige Operatoren: [Operator, Funktion/String] [source: 1.2.7]
+    H_drive_op = a + a.dag()
+    H_total = [H_0, [H_drive_op, laser_pulse_shape]]
+
+    # Parameter-Dictionary an QuTiP übergeben [source: 1.2.7]
+    pulse_args = {
+        "amplitude": pulse_amplitude,
+        "center": pulse_center,
+        "width": pulse_width,
+    }
+
+    # Kollaps-Operatoren für die Verlust-Dynamik [source: 1.1.4, 1.3.1]
+    c_ops = [np.sqrt(kappa) * a]
+
+    # Zeitgitter definieren (Von t=0 bis t=12)
+    tlist = np.linspace(0, 12, 300)
+
+    print("\n⚡ Starte zeitabhängige Laserpuls-Simulation (Master Equation)...")
+    # Wichtig: Wir tracken die mittlere Photonenzahl (a.dag()*a) und die Quadratur <x> [source: 1.2.3]
+    x_op = (a + a.dag()) / np.sqrt(2)
+    result = qt.mesolve(H_total, rho_0, tlist, c_ops=c_ops, args=pulse_args)
+    # e_ops=[a.dag() * a, x_op], args=pulse_args)
+
+    photon_numbers = [qt.expect(a.dag() * a, state) for state in result.states]
+    x_pect = [qt.expect(x_op, state) for state in result.states]
+
+    # =====================================================================
+    # 4. VISUALISIERUNG DER PULS-DYNAMIK
+    # =====================================================================
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Plot 1: Pulsform vs. Photonenanzahl in der Kavität
+    pulse_values = [laser_pulse_shape(t, pulse_args) for t in tlist]
+    axes[0].plot(
+        tlist,
+        pulse_values,
+        label=r"Laserpuls-Einhüllende $\Omega(t)$",
+        color="orange",
+        lw=2,
+        ls="--",
+    )
+    axes[0].plot(
+        tlist,
+        photon_numbers,
+        label=r"Kavitäts-Besetzung $\langle n(t) \rangle$",
+        color="darkblue",
+        lw=2.5,
+    )
+    axes[0].set_title("Einkopplung des Laserpulses in die Kavität")
+    axes[0].set_xlabel("Zeit $t$")
+    axes[0].set_ylabel("Amplitude / Photonenzahl")
+    axes[0].grid(True, ls="--")
+    axes[0].legend()
+
+    # Plot 2: Phasenraum-Trajektorie des Displacements <x(t)>
+    # Da wir eine reine Verschiebung treiben, bewegt sich der Zustand im Phasenraum
+    axes[1].plot(
+        tlist,
+        x_pect,
+        label=r"Feldamplitude $\langle x(t) \rangle$",
+        color="crimson",
+        lw=2,
+    )
+    axes[1].set_title("Reaktion der Feld-Quadratur $\\langle x \\rangle$")
+    axes[1].set_xlabel("Zeit $t$")
+    axes[1].set_ylabel("Erwartungswert")
+    axes[1].grid(True, ls="--")
+    axes[1].legend()
 
     plt.tight_layout()
     plt.show()
