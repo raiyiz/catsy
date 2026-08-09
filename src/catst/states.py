@@ -592,3 +592,99 @@ class GaussianMeasurements:
         return measured_value, GaussianState(
             modes=remaining_modes, displacement=d_cond_rot, covariance=V_cond_rot
         )
+
+
+def plot_wigner_analytically(
+    state: GaussianState, mode_name: str, x_max: float = 4.0, num_points: int = 150
+):
+    """
+    Berechnet und plottet die Wigner-Funktion einer einzelnen Mode
+    rein analytisch aus d und V, komplett ohne QuTiP-Hilbertraum.
+    """
+    # 1. Extrahiere das 2x2 Subsystem für die gewünschte Mode
+    idx = state.get_mode_index(mode_name)
+
+    d_mode = state.displacement[idx : idx + 2]  # [d_x, d_p]
+    V_mode = state.covariance[idx : idx + 2, idx : idx + 2]  # 2x2 Kovarianzmatrix
+
+    # 2. Erzeuge das 2D-Gitter für den Phasenraum
+    xvec = np.linspace(-x_max, x_max, num_points)
+    pvec = np.linspace(-x_max, x_max, num_points)
+    X, P = np.meshgrid(xvec, pvec)
+
+    # 3. Berechne die Wigner-Funktion punktweise (vektorisiert für Performance)
+    det_V = np.linalg.det(V_mode)
+    inv_V = np.linalg.inv(V_mode)
+
+    # Verschiebung berechnen (Zentrieren um den d-Vektor)
+    dX = X - d_mode[0]
+    dP = P - d_mode[1]
+
+    # Den Exponenten der Gauß-Verteilung bestimmen: r^T * V^-1 * r
+    # Da inv_V eine 2x2 Matrix [[G00, G01], [G10, G11]] ist:
+    exponent = (
+        dX * inv_V[0, 0] * dX
+        + dX * inv_V[0, 1] * dP
+        + dP * inv_V[1, 0] * dX
+        + dP * inv_V[1, 1] * dP
+    )
+
+    # Gaußsche Wigner-Funktion zusammensetzen
+    W = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
+
+    # 4. Plotten
+    plt.figure(figsize=(6, 5))
+    contour = plt.contourf(X, P, W, 100, cmap="RdBu_r")
+    plt.colorbar(contour, label="Wigner-Wahrscheinlichkeitsdichte")
+    plt.axhline(0, color="black", lw=0.5, ls="--")
+    plt.axvline(0, color="black", lw=0.5, ls="--")
+    plt.title(f"Analytische Wigner-Funktion für Mode '{mode_name}'")
+    plt.xlabel("x (Ort / In-Phase Quadratur)")
+    plt.ylabel("p (Impuls / Quadraturphase)")
+    plt.axis("equal")
+    plt.show()
+
+
+def plot_joint_correlation(
+    state: GaussianState, mode_a: str, mode_b: str, x_max: float = 3.0
+):
+    """Plottet die Wahrscheinlichkeitsverteilung von x_a vs x_b (EPR-Korrelation) im CV-Raum."""
+    idx_a = state.get_mode_index(mode_a)
+    idx_b = state.get_mode_index(mode_b)
+
+    # Extrahiere die relevanten Sub-Kovarianzen für x_a und x_b
+    # r = [x_a, p_a, x_b, p_b] -> x_a ist Index 0, x_b ist Index 2 im lokalen Verbund
+    V_sub = np.array(
+        [
+            [state.covariance[idx_a, idx_a], state.covariance[idx_a, idx_b]],
+            [state.covariance[idx_b, idx_a], state.covariance[idx_b, idx_b]],
+        ]
+    )
+    d_sub = np.array([state.displacement[idx_a], state.displacement[idx_b]])
+
+    # Gitter bauen
+    xvec = np.linspace(-x_max, x_max, 150)
+    X_a, X_b = np.meshgrid(xvec, xvec)
+
+    # 2D-Gauß-Verteilung berechnen
+    det_V = np.linalg.det(V_sub)
+    inv_V = np.linalg.inv(V_sub)
+
+    dX_a = X_a - d_sub[0]
+    dX_b = X_b - d_sub[1]
+
+    exponent = (
+        inv_V[0, 0] * dX_a**2
+        + (inv_V[0, 1] + inv_V[1, 0]) * dX_a * dX_b
+        + inv_V[1, 1] * dX_b**2
+    )
+    P = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
+
+    plt.figure(figsize=(6, 5))
+    plt.contourf(X_a, X_b, P, 100, cmap="viridis")
+    plt.colorbar(label="Wahrscheinlichkeitsdichte")
+    plt.title(f"EPR-Korrelation: Quadratur $x_{mode_a}$ vs $x_{mode_b}$")
+    plt.xlabel(f"x_{mode_a}")
+    plt.ylabel(f"x_{mode_b}")
+    plt.axis("equal")
+    plt.show()
