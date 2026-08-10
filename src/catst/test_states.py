@@ -1,11 +1,11 @@
+from time import perf_counter
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import qutip as qt
 from qutip.visualization import matrix_histogram
 
-# from .circuits import (
-# )
 from .states import (
     GaussianCircuit,
     GaussianMeasurements,
@@ -17,6 +17,7 @@ from .states import (
     plot_wigner_analytically,
 )
 
+PLOT = False
 
 def test_covariance_tmsv():
     # 1. Erstelle ein leeres System mit zwei Moden "a" und "b"
@@ -38,9 +39,8 @@ def test_covariance_tmsv():
     print("\nKovarianz V nach dem Beam Splitter (Verschränkung ist entstanden!):")
     print(np.round(state.covariance, 3))
 
-    # 4. Plotten der resultierenden Kovarianzmatrix
-    # state.plot_covariance()
-    print("SKIPPING PLOT")
+    if PLOT:
+        state.plot_covariance()
 
 
 def test_cv_chan_to_fock():
@@ -71,14 +71,15 @@ def test_cv_chan_to_fock():
     print(f"Von-Neumann-Entropie der Mode A (berechnet via QuTiP): {entropy:.4f}")
 
     # 4. Plot der Wigner-Funktion direkt aus dem konvertierten QuTiP Qobj
-    xvec = np.linspace(-3, 3, 100)
-    W = qt.wigner(rho_a, xvec, xvec)
+    if PLOT:
+        xvec = np.linspace(-3, 3, 100)
+        W = qt.wigner(rho_a, xvec, xvec)
 
-    plt.figure(figsize=(5, 4))
-    plt.contourf(xvec, xvec, W, 100, cmap="RdBu_r")
-    plt.colorbar()
-    plt.title("Wigner-Funktion (Mode A) aus konvertiertem QuTiP Objekt")
-    # plt.show()
+        plt.figure(figsize=(5, 4))
+        plt.contourf(xvec, xvec, W, 100, cmap="RdBu_r")
+        plt.colorbar()
+        plt.title("Wigner-Funktion (Mode A) aus konvertiertem QuTiP Objekt")
+        plt.show()
 
 
 def test_qo_epr():
@@ -99,8 +100,8 @@ def test_qo_epr():
     final_cv_state = circuit.compile_and_run()
 
     # 4. Kovarianz-Ergebnis im Continuous-Variable Raum plotten
-    print("SKIPPING PLOT")
-    # final_cv_state.plot_covariance()
+    if PLOT:
+        final_cv_state.plot_covariance()
 
     # 5. Voller quantenmechanischer Test: Konvertierung in QuTiP Hilbertraum
     # dank deines Williamson-Theorems!
@@ -169,12 +170,10 @@ def test_wigner_analytical_plotting():
     test_state.displacement[1] = 1.0  # d_p
 
     # 2. Plot aufrufen
-    print("Generiere Wigner-Plot instantan...")
-    print("SKIPPING PLOT")
-    # plot_wigner_analytically(test_state, mode_name="a", x_max=5.0)
+    if PLOT:
+        plot_wigner_analytically(test_state, mode_name="a", x_max=5.0)
 
 
-@pytest.mark.skip
 def test_wigner_qutip_plotting():
 
     # 1. Setup: Verschränkten EPR-Zustand im CV-Circuit erzeugen
@@ -187,8 +186,9 @@ def test_wigner_qutip_plotting():
     cv_state = circuit.compile_and_run()
 
     # --- ANSATZ 1: Die CV-Korrelation direkt plotten ---
-    plot_joint_correlation(cv_state, "a", "b")
-    plt.show()
+    if PLOT:
+        plot_joint_correlation(cv_state, "a", "b")
+        plt.show()
 
     # =====================================================================
     # --- ANSATZ 2: Konvertierung und native QuTiP-Plots nutzen ---
@@ -211,7 +211,8 @@ def test_wigner_qutip_plotting():
     ax.set_title("Native QuTiP Wigner-Funktion (Mode A)")
     ax.set_xlabel("x")
     ax.set_ylabel("p")
-    plt.show()
+    if PLOT:
+        plt.show()
 
     # --- B) Natives QuTiP Matrix-Histogramm (Fock-Besetzung) ---
     # Zeigt die Amplituden der Dichtematrix in der Teilchenzahl-Basis an [source: 1.1.1, 1.1.6]
@@ -219,7 +220,8 @@ def test_wigner_qutip_plotting():
     fig, ax = matrix_histogram(rho_a)
     ax.view_init(azim=-30, elev=40)
     plt.title("Natives QuTiP Matrix-Histogramm der Mode A")
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_remove_phot_from_sqv():
@@ -255,7 +257,8 @@ def test_remove_phot_from_sqv():
     plt.xlabel("x")
     plt.ylabel("p")
     plt.axis("equal")
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_full_cavity():
@@ -362,7 +365,8 @@ def test_full_cavity():
     axes[2].axis("equal")
 
     plt.tight_layout()
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_laser_pulse():
@@ -475,7 +479,8 @@ def test_laser_pulse():
     axes[1].legend()
 
     plt.tight_layout()
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_kerr_state():
@@ -559,7 +564,8 @@ def test_kerr_state():
     axes[2].axis("equal")
 
     plt.tight_layout()
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_cat_in_mzi():
@@ -635,7 +641,8 @@ def test_cat_in_mzi():
     axes[1].axis("equal")
 
     plt.tight_layout()
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_time_cat_mzi():
@@ -737,19 +744,17 @@ def test_time_cat_mzi():
     ax2.legend()
 
     plt.tight_layout()
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_decoherence_mzi():
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import qutip as qt
+    start_time = perf_counter()
 
     # =====================================================================
     # 1. SETUP: Zustände und MZI-Operatoren im Hilbertraum
     # =====================================================================
-    N_cutoff = 15
+    N_cutoff = 12
     a = qt.destroy(N_cutoff)
 
     # Eine reine Katze vorbereiten: |cat> = N * (|alpha> + |-alpha>)
@@ -774,7 +779,8 @@ def test_decoherence_mzi():
     # =====================================================================
     # 2. PHASENSCHLEIFE MIT/OHNE VERLUST
     # =====================================================================
-    theta_list = np.linspace(0, 2 * np.pi, 50)
+    divisions = 120
+    theta_list = np.linspace(0, 2 * np.pi, divisions)
 
     parity_perfect = []
     parity_noisy = []
@@ -808,7 +814,11 @@ def test_decoherence_mzi():
         rho_out_noisy = U_BS * rho_after_arm_with_loss * U_BS.dag()
         parity_noisy.append(qt.expect(parity1_op, rho_out_noisy).real)
 
-    print("✅ Simulation beendet.")
+    stop_time = perf_counter()
+    print(f"✅ Simulation beendet, Laufzeit: [{stop_time - start_time}]\n"
+          f"Parameter: <{N_cutoff=}> \t <{divisions=}>"
+          )
+
 
     # =====================================================================
     # 3. PLOT: Perfekte vs. Zerstörte Quanten-Interferenz
@@ -837,7 +847,8 @@ def test_decoherence_mzi():
     plt.grid(True, ls="--")
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    if PLOT:
+        plt.show()
 
 
 def test_triggered_cavity():
