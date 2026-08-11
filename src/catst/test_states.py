@@ -413,10 +413,10 @@ def test_homodyne_measurement_is_reproducible_with_seeded_rng():
 def test_wigner_analytical_matches_gaussian_normalization():
     circuit = GaussianCircuit()
     circuit.add_mode("a")
-    circuit.squeeze(mode="a", r=1.0, theta=0.0)
+    circuit.squeeze(mode="a", r=1.1, theta=30.0)
     test_state = circuit.compile_and_run()
     test_state.displacement[0] = 2.0
-    test_state.displacement[1] = 1.0
+    test_state.displacement[1] = 3.0
 
     W, X, P = compute_wigner_analytically(
         test_state, mode_name="a", x_max=8.0, num_points=200

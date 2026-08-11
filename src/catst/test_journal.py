@@ -22,9 +22,7 @@ def test_log_run_requires_exactly_one_hardware_reference():
     with pytest.raises(ValueError):
         entry.log_run("run")
     with pytest.raises(ValueError):
-        entry.log_run(
-            "run", circuit=GaussianCircuit(), setup_layout_file="layout.json"
-        )
+        entry.log_run("run", circuit=GaussianCircuit(), setup_layout_file="layout.json")
 
 
 def test_log_run_with_inline_circuit_embeds_full_definition():
