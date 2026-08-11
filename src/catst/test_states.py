@@ -24,7 +24,7 @@ from .states import (
     plot_wigner,
 )
 
-PLOT = 1  # flip on locally to pop up matplotlib windows while developing
+PLOT = 0  # flip on locally to pop up matplotlib windows while developing
 
 RNG = np.random.default_rng(1234)  # shared, seeded RNG -> reproducible test outcomes
 
@@ -310,7 +310,9 @@ def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
 
     original_result = circuit.compile_and_run()
     restored_result = restored.compile_and_run()
-    np.testing.assert_allclose(restored_result.displacement, original_result.displacement)
+    np.testing.assert_allclose(
+        restored_result.displacement, original_result.displacement
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -455,8 +457,12 @@ def test_joint_correlation_x_correlated_p_anticorrelated_for_epr_pair():
     # would see on screen.
     epr = GaussianOperations.create_epr_pair("a", "b", r=1.0)
 
-    P_x, Xa_x, Xb_x = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="x")
-    P_p, Xa_p, Xb_p = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="p")
+    P_x, Xa_x, Xb_x = compute_joint_correlation(
+        epr, "a", "b", x_max=6.0, quadrature="x"
+    )
+    P_p, Xa_p, Xb_p = compute_joint_correlation(
+        epr, "a", "b", x_max=6.0, quadrature="p"
+    )
     dx = Xa_x[0, 1] - Xa_x[0, 0]
 
     # Means are zero, so this is directly the covariance Integral[x_a*x_b*P].
@@ -591,7 +597,9 @@ def test_epr_pair_entanglement_visualization_demo():
         ),
     ]
     for state, quad, ax, title in panels:
-        P, X_a, X_b = compute_joint_correlation(state, "a", "b", x_max=6.0, quadrature=quad)
+        P, X_a, X_b = compute_joint_correlation(
+            state, "a", "b", x_max=6.0, quadrature=quad
+        )
         ax.contourf(X_a, X_b, P, 100, cmap="viridis")
         ax.set_title(title)
         ax.set_xlabel(f"{quad}_a")
@@ -899,7 +907,9 @@ def test_kerr_cat_state_generation():
     # state. Routed through QBSSimulator.run_cavity_with_pulse rather than
     # hand-rolled here, so this test and test_triggered_cavity_end_to_end
     # exercise the exact same code path the rest of the suite relies on.
-    N_cutoff = 35  # Kerr cat states have wide Fock-number support -> needs a high cutoff.
+    N_cutoff = (
+        35  # Kerr cat states have wide Fock-number support -> needs a high cutoff.
+    )
     rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     tlist = np.linspace(0, 6, 200)
 
@@ -1021,7 +1031,9 @@ def test_cat_mzi_phase_scan_fringes():
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-    ax1.plot(theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2)
+    ax1.plot(
+        theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2
+    )
     ax1.plot(
         theta_list / np.pi,
         results["n2"],
@@ -1035,7 +1047,13 @@ def test_cat_mzi_phase_scan_fringes():
     ax1.grid(True, ls="--")
     ax1.legend()
 
-    ax2.plot(theta_list / np.pi, results["parity1"], label="Parity, port 1", color="purple", lw=2.5)
+    ax2.plot(
+        theta_list / np.pi,
+        results["parity1"],
+        label="Parity, port 1",
+        color="purple",
+        lw=2.5,
+    )
     ax2.axhline(0, color="black", lw=0.5, ls="-")
     ax2.set_xlabel(r"Phase shift $\theta$ ($\times \pi$)")
     ax2.set_ylabel("Parity expectation value")

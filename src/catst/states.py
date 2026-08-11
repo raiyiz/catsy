@@ -86,6 +86,9 @@ class GaussianState:
     covariance: np.ndarray
 
     def __post_init__(self):
+        self._validate()
+
+    def _validate(self):
         n_modes = len(self.modes)
         if len(set(self.modes)) != n_modes:
             raise ValueError(f"Duplicate mode names in {self.modes!r}.")
@@ -756,8 +759,7 @@ class GaussianCircuit:
     def from_dict(cls, data: dict[str, Any]) -> GaussianCircuit:
         circuit = cls(modes=tuple(data["modes"]))
         circuit._initial_alphas = {
-            m: complex(re, im)
-            for m, (re, im) in data.get("initial_alphas", {}).items()
+            m: complex(re, im) for m, (re, im) in data.get("initial_alphas", {}).items()
         }
         for op in data["operations"]:
             if op["name"] not in OPERATION_REGISTRY:
@@ -1012,9 +1014,7 @@ def compute_duan_inseparability(
 
     var_x_diff = V[idx_a, idx_a] + V[idx_b, idx_b] - 2 * V[idx_a, idx_b]
     var_p_sum = (
-        V[idx_a + 1, idx_a + 1]
-        + V[idx_b + 1, idx_b + 1]
-        + 2 * V[idx_a + 1, idx_b + 1]
+        V[idx_a + 1, idx_a + 1] + V[idx_b + 1, idx_b + 1] + 2 * V[idx_a + 1, idx_b + 1]
     )
     return var_x_diff + var_p_sum
 
