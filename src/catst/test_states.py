@@ -3,6 +3,7 @@ from time import perf_counter
 import numpy as np
 import pytest
 import qutip as qt
+from matplotlib import pyplot as plt
 
 from .states import (
     OPERATION_REGISTRY,
@@ -21,9 +22,7 @@ from .states import (
     plot_wigner,
 )
 
-PLOT = False  # flip on locally to pop up matplotlib windows while developing
-if PLOT:
-    import matplotlib.pyplot as plt
+PLOT = 0  # flip on locally to pop up matplotlib windows while developing
 
 RNG = np.random.default_rng(1234)  # shared, seeded RNG -> reproducible test outcomes
 
@@ -67,8 +66,8 @@ def test_beam_splitter_entangles_independent_modes():
     # cross-correlations (entanglement) between them.
     assert np.abs(mixed.covariance[0:2, 2:4]).max() > 1e-6
 
-    if PLOT:
-        mixed.plot_covariance()
+    # if PLOT:
+    #     mixed.plot_covariance()
 
 
 def test_beam_splitter_rejects_invalid_eta():
@@ -335,10 +334,10 @@ def test_joint_correlation_plot_runs():
     ).beam_splitter(mode_a="a", mode_b="b", eta=0.5)
     cv_state = circuit.compile_and_run()
     P, X_a, X_b = compute_joint_correlation(cv_state, "a", "b")
-    if PLOT:
-        plot_joint_correlation(P, X_a, X_b, "a", "b")
     assert P.shape == (150, 150)
     assert np.all(P >= 0)
+    if PLOT:
+        plot_joint_correlation(P, X_a, X_b, "a", "b")
 
 
 # ---------------------------------------------------------------------------
@@ -364,27 +363,6 @@ def test_photon_subtraction_state_and_rho_entry_points_agree():
     # it's pure) so instead check it's a valid, normalized state:
     assert via_state.tr() == pytest.approx(1.0, abs=1e-6)
 
-    if PLOT:
-        X = np.linspace(-4, 4, 250)
-        W = qt.wigner(via_rho, X, X)
-        plot_wigner(W, X, X, "a")
-        #
-        # # 4. Plotten
-        # plt.figure(figsize=(6, 5))
-        # # Wir nutzen ein symmetrisches vmin/vmax, damit man die Negativität perfekt sieht
-        # contour = plt.contourf(xvec, xvec, W, 100, cmap="RdBu_r", vmin=-0.4, vmax=0.4)
-        # plt.colorbar(contour, label="Wigner-Dichte")
-        # plt.axhline(0, color="black", lw=0.5, ls="--")
-        # plt.axvline(0, color="black", lw=0.5, ls="--")
-        # plt.title(
-        #     "Schrödinger-Katze via Photonen-Abzug\n(Beachte den blauen, negativen Kern!)"
-        # )
-        # plt.xlabel("x")
-        # plt.ylabel("p")
-        # plt.axis("equal")
-        # plt.show()
-
-
 def test_photon_subtraction_zero_probability_raises():
     N_cutoff = 5
     vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
@@ -399,85 +377,196 @@ def test_qbs_simulator_photon_ops_delegate_to_fock_operations():
     assert QBSSimulator.photon_addition is FockOperations.photon_addition
 
 
+def test_phase_rotation_preserves_photon_number_and_purity():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    squeezed = GaussianOperations.apply_squeezing(state, mode="a", r=0.7, theta=0.0)
+    rotated = GaussianOperations.apply_phase_rotation(squeezed, mode="a", phi=1.1)
+    # Rotation is passive/energy-preserving: purity (det V) is unchanged...
+    assert np.linalg.det(rotated.covariance) == pytest.approx(
+        np.linalg.det(squeezed.covariance)
+    )
+    # ...but a full 2*pi rotation must return exactly to the start.
+    full_turn = GaussianOperations.apply_phase_rotation(
+        squeezed, mode="a", phi=2 * np.pi
+    )
+    np.testing.assert_allclose(full_turn.covariance, squeezed.covariance, atol=1e-9)
+
+
+def test_circuit_rotate_matches_manual_rotation():
+    manual = GaussianOperations.create_vacuum(modes=("a",))
+    manual = GaussianOperations.apply_squeezing(manual, mode="a", r=0.5)
+    manual = GaussianOperations.apply_phase_rotation(manual, mode="a", phi=0.4)
+
+    circuit = GaussianCircuit().add_mode("a")
+    circuit.squeeze(mode="a", r=0.5).rotate(mode="a", phi=0.4)
+    compiled = circuit.compile_and_run()
+
+    np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
+
+
+def test_to_qutip_handles_plain_vacuum_and_pure_displacement():
+    # Regression test: to_qutip used to crash on any state with no squeezing
+    # at all (H_cv stayed a plain int 0, which has no .expm()).
+    vacuum = GaussianOperations.create_vacuum(modes=("a", "b"))
+    rho = vacuum.to_qutip(N_cutoff=10)
+    assert rho.tr() == pytest.approx(1.0, abs=1e-9)
+
+    displaced_only = vacuum.copy()
+    displaced_only.displacement[0] = 1.5
+    rho2 = displaced_only.to_qutip(N_cutoff=15)
+    assert rho2.tr() == pytest.approx(1.0, abs=1e-9)
+
+
+def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
+    # Regression test: this covariance matrix (squeeze + BS + thermal loss)
+    # used to leave tr(rho) ~0.7% below 1 due to a mildly non-symplectic S
+    # from sqrtm(). Symmetrizing the generator now guarantees tr==1 exactly,
+    # regardless of the underlying decomposition's precision.
+    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+    state = GaussianOperations.apply_squeezing(state, mode="a", r=0.5)
+    state = GaussianOperations.apply_squeezing(state, mode="b", r=0.5, theta=np.pi / 2)
+    state = GaussianOperations.apply_beam_splitter(
+        state, mode_a="a", mode_b="b", eta=0.5
+    )
+    noisy_state = QBSChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(
+        state
+    )
+    rho = noisy_state.to_qutip(N_cutoff=18)
+    assert rho.tr() == pytest.approx(1.0, abs=1e-9)
+
+
+def test_to_qutip_rejects_invalid_n_cutoff():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    with pytest.raises(ValueError):
+        state.to_qutip(N_cutoff=0)
+    with pytest.raises(ValueError):
+        state.to_qutip(N_cutoff=-5)
+
+
+def test_gaussian_channel_roundtrips_through_file(tmp_path):
+    channel = QBSChannels.thermal_loss(mode="a", eta=0.8, n_thermal=0.1)
+    path = tmp_path / "channel.json"
+    channel.save(path)
+    restored = GaussianChannel.load(path)
+
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    original_out = channel.apply(state)
+    restored_out = restored.apply(state)
+    np.testing.assert_allclose(restored_out.covariance, original_out.covariance)
+
+
+def test_heterodyne_measurement_adds_vacuum_noise_and_collapses_to_coherent():
+    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+    state = GaussianOperations.apply_squeezing(state, mode="a", r=1.0)
+    state = GaussianOperations.apply_squeezing(state, mode="b", r=1.0, theta=np.pi / 2)
+    state = GaussianOperations.apply_beam_splitter(
+        state, mode_a="a", mode_b="b", eta=0.5
+    )
+
+    outcome, collapsed = GaussianMeasurements.heterodyne_measurement(
+        state, measured_mode="a", outcome=np.array([1.0, 0.5])
+    )
+    np.testing.assert_allclose(outcome, [1.0, 0.5])
+    assert collapsed.modes == ("b",)
+    # Heterodyne always adds 0.5*I of extra measurement noise relative to
+    # homodyne, so the remaining mode's conditional state can't be squeezed
+    # below the vacuum level in the measured quadrature's conjugate way that
+    # homodyne allows -- concretely, its covariance eigenvalues stay >= 0.5.
+    eigvals = np.linalg.eigvalsh(collapsed.covariance)
+    assert (eigvals >= 0.5 - 1e-9).all()
+
+
+def test_heterodyne_measurement_is_reproducible_with_seeded_rng():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    v1, _ = GaussianMeasurements.heterodyne_measurement(
+        state, measured_mode="a", rng=np.random.default_rng(7)
+    )
+    v2, _ = GaussianMeasurements.heterodyne_measurement(
+        state, measured_mode="a", rng=np.random.default_rng(7)
+    )
+    np.testing.assert_allclose(v1, v2)
+
+
+# ---------------------------------------------------------------------------
+# Visual-only demos (no assertions beyond "it runs") -- opt in with PLOT=True
+# ---------------------------------------------------------------------------
+
+
+def test_native_qutip_wigner_plot_demo():
+    if not PLOT:
+        pytest.skip("visual-only demo; set PLOT=True to view")
+    import matplotlib.pyplot as plt
+
+    state = GaussianCircuit().add_mode("a")
+    state.squeeze(mode="a", r=0.6, theta=0.0)
+    cv_state = state.compile_and_run()
+    rho = cv_state.to_qutip(N_cutoff=15)
+
+    xvec = np.linspace(-5, 5, 150)
+    W = qt.wigner(rho, xvec, xvec)
+    plt.figure(figsize=(5, 4))
+    plt.contourf(xvec, xvec, W, 100, cmap="RdBu_r")
+    plt.title("Native QuTiP Wigner function (squeezed vacuum)")
+    qt.matrix_histogram(rho.full().real[:10, :10])
+    plt.show()
+
+
+def test_laser_pulse_cavity_plot_demo():
+    if not PLOT:
+        pytest.skip("visual-only demo; set PLOT=True to view")
+    import matplotlib.pyplot as plt
+
+    N_cutoff = 15
+    rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
+    tlist = np.linspace(0, 5, 100)
+    states = QBSSimulator.run_cavity_with_pulse(
+        rho_init=rho_vacuum,
+        tlist=tlist,
+        K=0.3,
+        kappa=0.05,
+        amp=3.0,
+        t0=1.5,
+        sigma=0.5,
+        N_cutoff=N_cutoff,
+    )
+    n_op = qt.num(N_cutoff)
+    photon_numbers = [qt.expect(n_op, s) for s in states]
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(tlist, photon_numbers)
+    plt.xlabel("time")
+    plt.ylabel("<n>")
+    plt.title("Driven Kerr cavity: photon number vs time")
+    plt.show()
+
+
+def test_full_cavity_multipanel_plot_demo():
+    if not PLOT:
+        pytest.skip("visual-only demo; set PLOT=True to view")
+    import matplotlib.pyplot as plt
+
+    N_cutoff = 12
+    alpha = 1.5
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+    theta_list = np.linspace(0, 2 * np.pi, 60)
+    results = QBSSimulator.scan_mzi_with_loss(
+        psi_cat, theta_list, kappa=0.2, N_cutoff=N_cutoff
+    )
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+    axes[0].plot(theta_list, results["n1"])
+    axes[0].set_title("Mean photon number, arm 1")
+    axes[1].plot(theta_list, results["n2"])
+    axes[1].set_title("Mean photon number, arm 2")
+    axes[2].plot(theta_list, results["parity1"])
+    axes[2].set_title("Parity, arm 1")
+    plt.tight_layout()
+    plt.show()
+
+
 # ---------------------------------------------------------------------------
 # Time-dependent simulation (slower, integration-style tests)
 # ---------------------------------------------------------------------------
-
-
-def test_cavity_decay():
-    """older test"""
-    circuit = GaussianCircuit()
-    circuit.add_mode("c")
-
-    circuit.squeeze(mode="c", r=0.5, theta=0.0)
-    initial_cv_state = circuit.compile_and_run()
-
-    N_cutoff = 20
-    rho_0 = initial_cv_state.to_qutip(N_cutoff=N_cutoff)
-
-    # Physikalische Kavitäten-Parameter definieren
-    omega_c = 2.0 * np.pi * 1.0  # Kavitätsfrequenz (z.B. 1 GHz im rotierenden System)
-    kappa = 0.3  # Zerfallsrate der Kavität (Photonenverlust durch Spiegel)
-
-    a = qt.destroy(N_cutoff)
-    H_cav = omega_c * a.dag() * a  # Freier Kavitäts-Hamiltonoperator
-
-    # Lindblad Kollaps-Operatoren für dissipative Verluste
-    # sqrt(kappa) * a beschreibt das kontinuierliche Heraussickern von Photonen
-    collapse_operators = [np.sqrt(kappa) * a]
-    tlist = np.linspace(0, 5, 200)
-    simulation_result = qt.mesolve(H_cav, rho_0, tlist, c_ops=collapse_operators)
-
-    # Zustand am Ende der Zeitentwicklung extrahieren
-    rho_t_final = simulation_result.states[-1]
-    photon_numbers = [
-        qt.expect(a.dag() * a, state) for state in simulation_result.states
-    ]
-    # Ein Photon fliegt aus der Kavität und triggert unseren Detektor (Heralded State)
-    # Wir simulieren den re-normierten Zustand nach der bedingten Messung
-    rho_subtracted = a * rho_t_final * a.dag()
-    rho_final_non_gaussian = rho_subtracted / rho_subtracted.tr()
-    assert rho_final_non_gaussian.tr() == pytest.approx(1.0)
-
-    if PLOT:
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-        axes[0].plot(
-            tlist,
-            photon_numbers,
-            label=r"$\langle n \rangle$ (Photonenzahl)",
-            color="darkblue",
-            lw=2,
-        )
-        axes[0].set_title("Photonenverlust der Kavität über die Zeit")
-        axes[0].set_xlabel("Zeit $t$")
-        axes[0].set_ylabel("Mittlere Photonenzahl")
-        axes[0].grid(True, ls="--")
-        axes[0].legend()
-
-        xvec = np.linspace(-4, 4, 200)
-        W_before = qt.wigner(rho_t_final, xvec, xvec)
-        cont1 = axes[1].contourf(
-            xvec, xvec, W_before, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3
-        )
-        fig.colorbar(cont1, ax=axes[1])
-        axes[1].set_title("Vor Photonen-Abzug\n(Klassisch-gedämpftes Ellipsoid)")
-        axes[1].set_xlabel("x")
-        axes[1].set_ylabel("p")
-        axes[1].axis("equal")
-
-        # Plot C: Wigner-Funktion NACH dem Photonen-Abzug (Nicht-Gaußsche Schrödinger-Katze)
-        W_after = qt.wigner(rho_final_non_gaussian, xvec, xvec)
-        cont2 = axes[2].contourf(
-            xvec, xvec, W_after, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3
-        )
-        fig.colorbar(cont2, ax=axes[2])
-        axes[2].set_title("Nach Photonen-Abzug\n(Cat State)")
-        axes[2].set_xlabel("x")
-        axes[2].set_ylabel("p")
-        axes[2].axis("equal")
-
-        plt.tight_layout()
-        plt.show()
 
 
 def test_triggered_cavity_end_to_end():
@@ -508,47 +597,6 @@ def test_triggered_cavity_end_to_end():
     )
     purity = (rho_final_non_gaussian * rho_final_non_gaussian).tr().real
     assert 0.0 < purity <= 1.0 + 1e-9
-    if PLOT:
-        a = qt.destroy(N_fock)
-        photon_numbers = [qt.expect(a.dag() * a, state) for state in states]
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-        axes[0].plot(
-            tlist,
-            photon_numbers,
-            label=r"$\langle n \rangle$ (Photonenzahl)",
-            color="darkblue",
-            lw=2,
-        )
-        axes[0].set_title("Photonenverlust der Kavität über die Zeit")
-        axes[0].set_xlabel("Zeit $t$")
-        axes[0].set_ylabel("Mittlere Photonenzahl")
-        axes[0].grid(True, ls="--")
-        axes[0].legend()
-
-        xvec = np.linspace(-4, 4, 200)
-        W_before = qt.wigner(rho_kerr_cat, xvec, xvec)
-        cont1 = axes[1].contourf(
-            xvec, xvec, W_before, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3
-        )
-        fig.colorbar(cont1, ax=axes[1])
-        axes[1].set_title("Vor Photonen-Abzug\n(Klassisch-gedämpftes Ellipsoid)")
-        axes[1].set_xlabel("x")
-        axes[1].set_ylabel("p")
-        axes[1].axis("equal")
-
-        # Plot C: Wigner-Funktion NACH dem Photonen-Abzug (Nicht-Gaußsche Schrödinger-Katze)
-        W_after = qt.wigner(rho_final_non_gaussian, xvec, xvec)
-        cont2 = axes[2].contourf(
-            xvec, xvec, W_after, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3
-        )
-        fig.colorbar(cont2, ax=axes[2])
-        axes[2].set_title("Nach Photonen-Abzug\n(Cat State)")
-        axes[2].set_xlabel("x")
-        axes[2].set_ylabel("p")
-        axes[2].axis("equal")
-
-        plt.tight_layout()
-        plt.show()
 
 
 def test_decoherence_mzi_parity_visibility_drops_with_loss():

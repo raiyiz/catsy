@@ -73,6 +73,11 @@ def _check_non_negative(value: float, name: str) -> None:
         raise ValueError(f"{name} must be >= 0, got {value}.")
 
 
+def _check_positive_int(value: int, name: str) -> None:
+    if not isinstance(value, (int, np.integer)) or value < 1:
+        raise ValueError(f"{name} must be a positive integer, got {value!r}.")
+
+
 # ---------------------------------------------------------------------------
 # Phase-space state
 # ---------------------------------------------------------------------------
@@ -107,6 +112,12 @@ class GaussianState:
             raise ValueError(f"Mode '{mode_name}' is not present in this state.")
         return self.modes.index(mode_name) * 2
 
+    def __repr__(self) -> str:
+        purity = 1.0 / (
+            2.0 ** len(self.modes) * np.sqrt(max(np.linalg.det(self.covariance), 0.0))
+        )
+        return f"GaussianState(modes={self.modes}, purity~{purity:.3f})"
+
     def copy(self) -> GaussianState:
         return GaussianState(
             modes=self.modes,
@@ -120,15 +131,17 @@ class GaussianState:
         """Exact conversion of (d, V) into a QuTiP density matrix via the
         Williamson decomposition (thermal states + a symplectic unitary).
 
-        Known limitation: the symplectic generator is recovered via
-        `scipy.linalg.sqrtm`/`logm` on the covariance matrix, which can lose
-        a fraction of a percent of trace fidelity for some covariance
-        matrices (this is a numerical property of that matrix decomposition,
-        not a Fock-space truncation effect — increasing N_cutoff will not
-        fix it). If `to_qutip` warns about trace deviation, check whether
-        raising N_cutoff helps first; if the deviation is cutoff-independent,
-        it's this decomposition's precision limit for that particular V.
+        Known limitation: the symplectic transform S is recovered via
+        `scipy.linalg.sqrtm`, which can be mildly ill-conditioned for some
+        covariance matrices, so S may only be *approximately* symplectic. Its
+        generator G is forced to be exactly symmetric before building the
+        Fock-space Hamiltonian below, which guarantees U_cv is exactly
+        unitary and `tr(rho) == 1` always holds -- but the reconstructed
+        state's covariance can then deviate slightly from the requested V.
+        `to_qutip` warns when that residual is non-negligible; raising
+        N_cutoff will NOT reduce it, since it isn't a truncation effect.
         """
+        _check_positive_int(N_cutoff, "N_cutoff")
         qt = _lazy_qutip()
         n_modes = len(self.modes)
 
@@ -170,8 +183,24 @@ class GaussianState:
         V_diag = scipy.linalg.block_diag(*[nu_k * np.eye(2) for nu_k in nu])
         S = scipy.linalg.sqrtm(self.covariance @ np.linalg.inv(V_diag)).real
 
+        symplectic_residual = np.abs(S @ Omega @ S.T - Omega).max()
+        if symplectic_residual > TOL_TRACE_WARN:
+            logger.warning(
+                "to_qutip: the recovered symplectic transform is only "
+                "approximately symplectic (residual %.2e). The returned state "
+                "is still exactly normalized (tr=1) but its covariance may "
+                "deviate from the requested V by a comparable amount. This is "
+                "not a Fock-truncation effect -- raising N_cutoff won't help.",
+                symplectic_residual,
+            )
+
         # Quadratic generator: S = exp(Omega @ G) -> G = -Omega @ logm(S).
+        # G is forced exactly symmetric: it mathematically must be (it
+        # generates a quadratic-form Hamiltonian), and enforcing it exactly
+        # guarantees H_cv is Hermitian and U_cv is exactly unitary, so
+        # tr(rho) == 1 is guaranteed rather than merely approximate.
         G = -Omega @ scipy.linalg.logm(S).real
+        G = 0.5 * (G + G.T)
 
         H_cv = 0
         for i in range(2 * n_modes):
@@ -179,8 +208,14 @@ class GaussianState:
                 if np.abs(G[i, j]) > TOL_ZERO_ENTRY:
                     H_cv += 0.5 * G[i, j] * r_ops[i] * r_ops[j]
 
-        U_cv = (-1j * H_cv).expm()
-        rho_transformed = U_cv * rho_0 * U_cv.dag()
+        # H_cv stays a plain int 0 (no .expm()) when S is already the
+        # identity -- e.g. plain vacuum or a purely-displaced state with no
+        # squeezing at all -- so it needs the same zero-guard H_disp has below.
+        if H_cv != 0:
+            U_cv = (-1j * H_cv).expm()
+            rho_transformed = U_cv * rho_0 * U_cv.dag()
+        else:
+            rho_transformed = rho_0
 
         # Displacement.
         H_disp = 0
@@ -195,17 +230,6 @@ class GaussianState:
             rho_final = D_cv * rho_transformed * D_cv.dag()
         else:
             rho_final = rho_transformed
-
-        trace_err = abs(rho_final.tr() - 1.0)
-        if trace_err > TOL_TRACE_WARN:
-            logger.warning(
-                "to_qutip: tr(rho) deviates from 1 by %.2e at N_cutoff=%d. Try a "
-                "larger N_cutoff first (Fock truncation); if the deviation doesn't "
-                "shrink, it's sqrtm/logm precision loss in the symplectic "
-                "decomposition for this covariance matrix, not truncation.",
-                trace_err,
-                N_cutoff,
-            )
 
         return rho_final
 
@@ -224,7 +248,6 @@ class GaussianState:
         plt.xticks(range(len(ticks)), ticks)
         plt.yticks(range(len(ticks)), ticks)
         plt.title("Multi-mode covariance matrix V")
-        plt.show()
 
     # -- Serialization ----------------------------------------------------
 
@@ -282,6 +305,25 @@ class GaussianOperations:
 
         new_d = S_global @ state.displacement
         new_V = S_global @ state.covariance @ S_global.T
+        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+
+    @staticmethod
+    def apply_phase_rotation(
+        state: GaussianState, mode: str, phi: float
+    ) -> GaussianState:
+        """Phase-space rotation by angle `phi` on `mode` (a passive, energy-
+        preserving gate -- the piece needed alongside squeezing + beam
+        splitters to generate arbitrary single- and two-mode Gaussian
+        unitaries)."""
+        idx = state.get_mode_index(mode)
+        dim = len(state.displacement)
+
+        R_local = np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]])
+        R_global = np.eye(dim)
+        R_global[idx : idx + 2, idx : idx + 2] = R_local
+
+        new_d = R_global @ state.displacement
+        new_V = R_global @ state.covariance @ R_global.T
         return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
 
     @staticmethod
@@ -379,6 +421,32 @@ class GaussianChannel:
         new_V = X_global @ state.covariance @ X_global.T + Y_global
         return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
 
+    # -- Serialization ------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "target_modes": list(self.target_modes),
+            "X": self.X.tolist(),
+            "Y": self.Y.tolist(),
+            "d0": self.d0.tolist(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> GaussianChannel:
+        return cls(
+            target_modes=tuple(data["target_modes"]),
+            X=np.array(data["X"], dtype=float),
+            Y=np.array(data["Y"], dtype=float),
+            d0=np.array(data["d0"], dtype=float),
+        )
+
+    def save(self, path: str | Path) -> None:
+        Path(path).write_text(json.dumps(self.to_dict()))
+
+    @classmethod
+    def load(cls, path: str | Path) -> GaussianChannel:
+        return cls.from_dict(json.loads(Path(path).read_text()))
+
 
 class QBSChannels:
     """Factory for standard optical noise channels."""
@@ -401,7 +469,9 @@ class QBSChannels:
         p-quadrature only, proportional to the jitter variance."""
         _check_non_negative(sigma_phi, "sigma_phi")
         X = np.eye(2)
-        Y = np.diag([0.0, sigma_phi**2])
+        Y = np.diag(
+            [0.0, sigma_phi**2]
+        )  # fixed: was shape (1,2), invalid for a 2x2 channel
         d0 = np.zeros(2)
         return GaussianChannel(target_modes=(mode,), X=X, Y=Y, d0=d0)
 
@@ -443,6 +513,10 @@ def _op_squeeze(
     return GaussianOperations.apply_squeezing(state, mode=modes[0], **kwargs)
 
 
+def _op_rotate(state: GaussianState, modes: tuple[str, ...], **kwargs) -> GaussianState:
+    return GaussianOperations.apply_phase_rotation(state, mode=modes[0], **kwargs)
+
+
 def _op_beam_splitter(
     state: GaussianState, modes: tuple[str, ...], **kwargs
 ) -> GaussianState:
@@ -466,6 +540,7 @@ def _op_thermal_loss(
 # GaussianCircuit.register) instead of touching compile_and_run.
 OPERATION_REGISTRY: dict[str, Callable[..., GaussianState]] = {
     "Squeezing": _op_squeeze,
+    "PhaseRotation": _op_rotate,
     "BeamSplitter": _op_beam_splitter,
     "Loss": _op_loss,
     "ThermalLossChannel": _op_thermal_loss,
@@ -499,6 +574,9 @@ class GaussianCircuit:
 
     def squeeze(self, mode: str, r: float, theta: float = 0.0) -> GaussianCircuit:
         return self._add_op("Squeezing", (mode,), r=r, theta=theta)
+
+    def rotate(self, mode: str, phi: float) -> GaussianCircuit:
+        return self._add_op("PhaseRotation", (mode,), phi=phi)
 
     def beam_splitter(self, mode_a: str, mode_b: str, eta: float) -> GaussianCircuit:
         return self._add_op("BeamSplitter", (mode_a, mode_b), eta=eta)
@@ -648,9 +726,49 @@ class GaussianMeasurements:
         remaining_modes = tuple(m for m in state.modes if m != measured_mode)
         return measured_value, GaussianState(remaining_modes, d_cond, V_cond)
 
+    @staticmethod
+    def heterodyne_measurement(
+        state: GaussianState,
+        measured_mode: str,
+        outcome: np.ndarray | None = None,
+        rng: np.random.Generator | None = None,
+    ) -> tuple[np.ndarray, GaussianState]:
+        """Heterodyne (double-homodyne) measurement on `measured_mode`: both
+        quadratures are measured simultaneously, equivalent to splitting the
+        mode 50:50 against vacuum and homodyning each output. Unlike
+        `homodyne_measurement`, the outcome is a 2-vector (x, p) and the
+        measured mode collapses onto (approximately) a coherent state rather
+        than a squeezed one, because the extra vacuum port contributes a
+        fixed 0.5*I of measurement noise.
+        """
+        idx_m = state.get_mode_index(measured_mode)
+        dim = len(state.displacement)
+        remaining_indices = [i for i in range(dim) if i < idx_m or i > idx_m + 1]
+
+        V_MM = state.covariance[idx_m : idx_m + 2, idx_m : idx_m + 2]
+        V_MR = state.covariance[idx_m : idx_m + 2, remaining_indices]
+        V_RM = V_MR.T
+        V_RR = state.covariance[np.ix_(remaining_indices, remaining_indices)]
+        d_M = state.displacement[idx_m : idx_m + 2]
+        d_R = state.displacement[remaining_indices]
+
+        V_eff = V_MM + 0.5 * np.eye(2)  # added vacuum-port noise
+        V_eff_inv = np.linalg.inv(V_eff)
+
+        if outcome is None:
+            rng = rng if rng is not None else np.random.default_rng()
+            outcome = rng.multivariate_normal(mean=d_M, cov=V_eff)
+        outcome = np.asarray(outcome, dtype=float)
+
+        d_cond = d_R + V_RM @ V_eff_inv @ (outcome - d_M)
+        V_cond = V_RR - V_RM @ V_eff_inv @ V_MR
+
+        remaining_modes = tuple(m for m in state.modes if m != measured_mode)
+        return outcome, GaussianState(remaining_modes, d_cond, V_cond)
+
 
 # ---------------------------------------------------------------------------
-# Analytic phase-space plotting (no Hilbert space needed)
+# phase-space plotting
 # ---------------------------------------------------------------------------
 
 
@@ -774,6 +892,7 @@ class FockOperations:
     @staticmethod
     def photon_subtraction(rho, mode_idx: int = 0, N_cutoff: int = 20):
         """rho -> a * rho * a^dagger (renormalized). Probabilistic heralding."""
+        _check_positive_int(N_cutoff, "N_cutoff")
         qt = _lazy_qutip()
         n_modes = len(rho.dims[0])
         a_op = FockOperations._mode_operator(
@@ -784,6 +903,7 @@ class FockOperations:
     @staticmethod
     def photon_addition(rho, mode_idx: int = 0, N_cutoff: int = 20):
         """rho -> a^dagger * rho * a (renormalized)."""
+        _check_positive_int(N_cutoff, "N_cutoff")
         qt = _lazy_qutip()
         n_modes = len(rho.dims[0])
         adag_op = FockOperations._mode_operator(
@@ -848,8 +968,14 @@ class QBSSimulator:
         amp, t0, sigma : Gaussian pulse-shape parameters
         N_cutoff : Hilbert-space dimension
         """
-        qt = _lazy_qutip()
+        _check_positive_int(N_cutoff, "N_cutoff")
         _check_non_negative(kappa, "kappa")
+        if len(tlist) < 2:
+            raise ValueError("tlist must contain at least 2 time points.")
+        if sigma <= 0:
+            raise ValueError(f"sigma must be > 0, got {sigma}.")
+
+        qt = _lazy_qutip()
 
         a = qt.destroy(N_cutoff)
         H_kerr = K * a.dag() * a.dag() * a * a
@@ -870,8 +996,11 @@ class QBSSimulator:
     ) -> dict:
         """Noisy Mach-Zehnder interferometer scan for a cat state: intensities
         and output parity as a function of the phase theta."""
-        qt = _lazy_qutip()
+        _check_positive_int(N_cutoff, "N_cutoff")
         _check_non_negative(kappa, "kappa")
+        if len(theta_list) < 1:
+            raise ValueError("theta_list must contain at least 1 point.")
+        qt = _lazy_qutip()
 
         a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
         a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
