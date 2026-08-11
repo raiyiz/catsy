@@ -29,7 +29,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
+import qutip as qt
 import scipy.linalg
 
 logger = logging.getLogger("catst")
@@ -47,20 +49,6 @@ TOL_ZERO_TRACE = (
 TOL_TRACE_WARN = (
     1e-6  # deviation from tr(rho) == 1 worth warning about (truncation error)
 )
-
-
-def _lazy_qutip():
-    """Import qutip on first use only, so pure phase-space work never pays for it."""
-    import qutip as qt
-
-    return qt
-
-
-def _lazy_pyplot():
-    """Import matplotlib.pyplot on first use only."""
-    import matplotlib.pyplot as plt
-
-    return plt
 
 
 def _check_unit_interval(value: float, name: str) -> None:
@@ -142,7 +130,6 @@ class GaussianState:
         N_cutoff will NOT reduce it, since it isn't a truncation effect.
         """
         _check_positive_int(N_cutoff, "N_cutoff")
-        qt = _lazy_qutip()
         n_modes = len(self.modes)
 
         # Fundamental symplectic form Omega = bigoplus [[0,1],[-1,0]]
@@ -237,7 +224,6 @@ class GaussianState:
 
     def plot_covariance(self):
         """Visualize correlations between all registered modes."""
-        plt = _lazy_pyplot()
         ticks = []
         for m in self.modes:
             ticks.extend([f"q_{m}", f"p_{m}"])
@@ -802,7 +788,6 @@ def compute_wigner_analytically(
 
 
 def plot_wigner(W, X, P, mode_name: str):
-    plt = _lazy_pyplot()
     plt.figure(figsize=(6, 5))
     span = max(np.max(W), np.abs(np.min(W)))
     contour = plt.contourf(X, P, W, 100, cmap="RdBu_r", vmin=-span, vmax=span)
@@ -849,7 +834,6 @@ def compute_joint_correlation(
 
 
 def plot_joint_correlation(P, X_a, X_b, mode_a: str, mode_b: str):
-    plt = _lazy_pyplot()
     plt.figure(figsize=(6, 5))
     plt.contourf(X_a, X_b, P, 100, cmap="viridis")
     plt.colorbar(label="Probability density")
@@ -872,7 +856,6 @@ class FockOperations:
 
     @staticmethod
     def _mode_operator(op_1mode, n_modes: int, mode_idx: int, N_cutoff: int):
-        qt = _lazy_qutip()
         if n_modes == 1:
             return op_1mode
         op_list = [qt.qeye(N_cutoff)] * n_modes
@@ -893,7 +876,6 @@ class FockOperations:
     def photon_subtraction(rho, mode_idx: int = 0, N_cutoff: int = 20):
         """rho -> a * rho * a^dagger (renormalized). Probabilistic heralding."""
         _check_positive_int(N_cutoff, "N_cutoff")
-        qt = _lazy_qutip()
         n_modes = len(rho.dims[0])
         a_op = FockOperations._mode_operator(
             qt.destroy(N_cutoff), n_modes, mode_idx, N_cutoff
@@ -904,7 +886,6 @@ class FockOperations:
     def photon_addition(rho, mode_idx: int = 0, N_cutoff: int = 20):
         """rho -> a^dagger * rho * a (renormalized)."""
         _check_positive_int(N_cutoff, "N_cutoff")
-        qt = _lazy_qutip()
         n_modes = len(rho.dims[0])
         adag_op = FockOperations._mode_operator(
             qt.create(N_cutoff), n_modes, mode_idx, N_cutoff
@@ -975,8 +956,6 @@ class QBSSimulator:
         if sigma <= 0:
             raise ValueError(f"sigma must be > 0, got {sigma}.")
 
-        qt = _lazy_qutip()
-
         a = qt.destroy(N_cutoff)
         H_kerr = K * a.dag() * a.dag() * a * a
 
@@ -1000,7 +979,6 @@ class QBSSimulator:
         _check_non_negative(kappa, "kappa")
         if len(theta_list) < 1:
             raise ValueError("theta_list must contain at least 1 point.")
-        qt = _lazy_qutip()
 
         a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
         a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))

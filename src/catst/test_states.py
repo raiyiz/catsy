@@ -66,9 +66,6 @@ def test_beam_splitter_entangles_independent_modes():
     # cross-correlations (entanglement) between them.
     assert np.abs(mixed.covariance[0:2, 2:4]).max() > 1e-6
 
-    # if PLOT:
-    #     mixed.plot_covariance()
-
 
 def test_beam_splitter_rejects_invalid_eta():
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
@@ -362,6 +359,7 @@ def test_photon_subtraction_state_and_rho_entry_points_agree():
     # i.e. it's genuinely non-Gaussian. Purity must still be < 1 (mixed by loss? No,
     # it's pure) so instead check it's a valid, normalized state:
     assert via_state.tr() == pytest.approx(1.0, abs=1e-6)
+
 
 def test_photon_subtraction_zero_probability_raises():
     N_cutoff = 5
@@ -706,23 +704,12 @@ def test_kerr_state():
 
 
 def test_cat_in_mzi():
-
-    # =====================================================================
-    # 1. PREPARATION: Den exakten Kerr-Cat-Zustand erzeugen
-    # =====================================================================
-    # (Wir nehmen die Katze aus unserem vorherigen Schritt direkt im Hilbertraum auf)
-    N_cutoff = 22  # Dimension pro Mode im Interferometer
+    N_cutoff = 22
     a = qt.destroy(N_cutoff)
 
-    # Wir bauen uns eine reine, ungedämpfte Katze analytisch im Hilbertraum,
-    # um numerisch sauber und schnell zu bleiben: |cat> = N * (|alpha> + |-alpha>)
     alpha = 2
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
 
-    # =====================================================================
-    # 2. DAS ZWEI-MODEN-MZI IM HILBERTRAUM DEFINIEREN
-    # =====================================================================
-    # Wir haben zwei Pfade im Interferometer: Mode 1 (Arm A) und Mode 2 (Arm B)
     a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
     a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
 
@@ -735,7 +722,7 @@ def test_cat_in_mzi():
     psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
 
     # --- SCHRITT A: Erster Strahlteiler (BS1) ---
-    # Erzeugt massive Verschränkung zwischen den beiden Pfaden!
+    # Erzeugt Verschränkung zwischen beiden Pfaden!
     psi_after_BS1 = U_BS * psi_in
 
     # --- SCHRITT B: Phasenverschiebung theta im oberen Arm (Arm 1) ---
@@ -748,10 +735,6 @@ def test_cat_in_mzi():
     # Rekombination der Pfade
     psi_out = U_BS * psi_after_phase
 
-    # =====================================================================
-    # 3. AUSWERTUNG & PARTIAL TRACE AN DEN AUSGANGS-PORTS
-    # =====================================================================
-    # Wir schauen uns an, was aus Ausgangsport 1 und Ausgangsport 2 herauskommt
     rho_out_port1 = qt.ptrace(psi_out, 0)
     rho_out_port2 = qt.ptrace(psi_out, 1)
 
@@ -782,10 +765,6 @@ def test_cat_in_mzi():
 
 
 def test_time_cat_mzi():
-
-    # =====================================================================
-    # 1. SETUP: Katze und Operatoren im Hilbertraum definieren
-    # =====================================================================
     N_cutoff = 22  # Hilbertraum-Dimension pro Mode
     a = qt.destroy(N_cutoff)
 
@@ -802,19 +781,15 @@ def test_time_cat_mzi():
     n2_op = a2.dag() * a2
 
     # Paritäts-Operator für Port 1: P = exp(i * pi * a1^dagger * a1)
-    # Er misst, ob die Photonenzahl gerade (+1) oder ungerade (-1) ist
+    # Photonenzahl gerade (+1) oder ungerade (-1)
     parity1_op = (1j * np.pi * n1_op).expm()
 
-    # Der 50:50 Strahlteiler-Operator (BS)
+    # 50:50 (BS)
     H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
     U_BS = H_BS.expm()
 
     # Eingangszustand: Katze auf Port 1, Vakuum auf Port 2
     psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
-
-    # =====================================================================
-    # 2. PHASENSCHLEIFE (Der Phasen-Scan von 0 bis 2*pi)
-    # =====================================================================
     theta_list = np.linspace(0, 2 * np.pi, 200)
 
     # Listen für die Messergebnisse
@@ -834,12 +809,10 @@ def test_time_cat_mzi():
         # 2. Zweiter Strahlteiler (Rekombination)
         psi_out = U_BS * psi_after_phase
 
-        # 3. Erwartungswerte für diesen Phasenwert berechnen [source: 1.2.3]
+        # 3. Erwartungswerte für Phasenwert
         mean_n1.append(qt.expect(n1_op, psi_out))
         mean_n2.append(qt.expect(n2_op, psi_out))
         parity_port1.append(qt.expect(parity1_op, psi_out).real)
-
-    print("✅ Scan beendet. Generiere Diagramme...")
 
     if PLOT:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
@@ -862,7 +835,7 @@ def test_time_cat_mzi():
         ax1.legend()
 
         # Plot B: Quanten-Parität am Ausgang 1
-        # Das zeigt die Verschiebung der mikroskopischen Interferenzstreifen
+        # zeigt die Verschiebung der mikroskopischen Interferenzstreifen
         ax2.plot(
             theta_list / np.pi,
             parity_port1,
