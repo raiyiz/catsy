@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,6 +48,12 @@ TOL_ZERO_TRACE = (
 )
 TOL_TRACE_WARN = (
     1e-6  # deviation from tr(rho) == 1 worth warning about (truncation error)
+)
+DUAN_SEPARABILITY_BOUND = (
+    2.0  # Duan-Simon witness threshold in this vacuum=0.5 convention -- see
+    # compute_duan_inseparability. Any separable (non-entangled) two-mode
+    # state satisfies Var(x_a-x_b) + Var(p_a+p_b) >= this value; two
+    # independent vacua exactly saturate it.
 )
 
 
@@ -275,6 +281,51 @@ class GaussianOperations:
         return GaussianState(modes=modes, displacement=d, covariance=V)
 
     @staticmethod
+    def create_coherent(
+        modes: tuple[str, ...], alphas: complex | Sequence[complex]
+    ) -> GaussianState:
+        """Multi-mode coherent state |alpha_1> ⊗ ... ⊗ |alpha_n> -- a vacuum
+        with each mode displaced by its complex amplitude alpha_k. Passing a
+        single scalar broadcasts the same alpha to every mode."""
+        if np.isscalar(alphas):
+            alphas = [alphas] * len(modes)
+        alphas = list(alphas)
+        if len(alphas) != len(modes):
+            raise ValueError(
+                f"Got {len(alphas)} alpha(s) for {len(modes)} mode(s); "
+                "pass one alpha per mode (or a single scalar to broadcast)."
+            )
+
+        state = GaussianOperations.create_vacuum(modes)
+        for mode, alpha in zip(modes, alphas):
+            state = GaussianOperations.apply_displacement(state, mode, alpha)
+        return state
+
+    @staticmethod
+    def create_epr_pair(mode_a: str, mode_b: str, r: float) -> GaussianState:
+        """Canonical two-mode squeezed vacuum (EPR pair): squeeze `mode_a` in
+        x, `mode_b` in p, then combine them on a 50:50 beam splitter. This is
+        the standard recipe for *genuine* (non-classical) CV entanglement --
+        as opposed to merely correlated noise from a channel, which can look
+        similar in a scatter plot but never violates the Duan-Simon bound
+        (see `compute_duan_inseparability`).
+
+        Produces Var(x_a - x_b) = Var(p_a + p_b) = exp(-2r): x_a and x_b end
+        up positively correlated, p_a and p_b end up anti-correlated, and
+        both combined variances drop below the vacuum (shot-noise) level for
+        any r > 0.
+        """
+        _check_non_negative(r, "r")
+        state = GaussianOperations.create_vacuum((mode_a, mode_b))
+        state = GaussianOperations.apply_squeezing(state, mode=mode_a, r=r, theta=0.0)
+        state = GaussianOperations.apply_squeezing(
+            state, mode=mode_b, r=r, theta=np.pi / 2
+        )
+        return GaussianOperations.apply_beam_splitter(
+            state, mode_a=mode_a, mode_b=mode_b, eta=0.5
+        )
+
+    @staticmethod
     def apply_squeezing(
         state: GaussianState, mode: str, r: float, theta: float = 0.0
     ) -> GaussianState:
@@ -311,6 +362,40 @@ class GaussianOperations:
         new_d = R_global @ state.displacement
         new_V = R_global @ state.covariance @ R_global.T
         return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+
+    @staticmethod
+    def apply_displacement(
+        state: GaussianState,
+        mode: str,
+        alpha: complex | None = None,
+        *,
+        x: float | None = None,
+        p: float | None = None,
+    ) -> GaussianState:
+        """Phase-space displacement D(alpha) = exp(alpha*adag - alpha^*a) on
+        `mode`: shifts the mean by (x, p) = (sqrt(2)*Re(alpha), sqrt(2)*Im(alpha))
+        and leaves the covariance untouched (displacement is affine, not
+        symplectic-mixing, so it never changes purity/entanglement).
+
+        Give either `alpha` (complex amplitude) or both `x` and `p`
+        (quadrature shifts directly) -- not both.
+        """
+        if alpha is not None and (x is not None or p is not None):
+            raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
+        if alpha is not None:
+            d_x, d_p = np.sqrt(2.0) * np.real(alpha), np.sqrt(2.0) * np.imag(alpha)
+        elif x is not None and p is not None:
+            d_x, d_p = x, p
+        else:
+            raise ValueError("Must supply either `alpha` or both `x` and `p`.")
+
+        idx = state.get_mode_index(mode)
+        new_d = state.displacement.copy()
+        new_d[idx] += d_x
+        new_d[idx + 1] += d_p
+        return GaussianState(
+            modes=state.modes, displacement=new_d, covariance=state.covariance.copy()
+        )
 
     @staticmethod
     def apply_beam_splitter(
@@ -503,6 +588,12 @@ def _op_rotate(state: GaussianState, modes: tuple[str, ...], **kwargs) -> Gaussi
     return GaussianOperations.apply_phase_rotation(state, mode=modes[0], **kwargs)
 
 
+def _op_displace(
+    state: GaussianState, modes: tuple[str, ...], **kwargs
+) -> GaussianState:
+    return GaussianOperations.apply_displacement(state, mode=modes[0], **kwargs)
+
+
 def _op_beam_splitter(
     state: GaussianState, modes: tuple[str, ...], **kwargs
 ) -> GaussianState:
@@ -527,6 +618,7 @@ def _op_thermal_loss(
 OPERATION_REGISTRY: dict[str, Callable[..., GaussianState]] = {
     "Squeezing": _op_squeeze,
     "PhaseRotation": _op_rotate,
+    "Displacement": _op_displace,
     "BeamSplitter": _op_beam_splitter,
     "Loss": _op_loss,
     "ThermalLossChannel": _op_thermal_loss,
@@ -540,18 +632,25 @@ class GaussianCircuit:
 
     modes: tuple[str, ...] = field(default_factory=tuple)
     _operations: list[CircuitOperation] = field(default_factory=list, init=False)
+    # Per-mode starting amplitude (0 -> vacuum), used by compile_and_run when
+    # no initial_state is supplied -- see add_mode(alpha=...).
+    _initial_alphas: dict[str, complex] = field(default_factory=dict, init=False)
 
     @classmethod
     def register(cls, name: str, fn: Callable[..., GaussianState]) -> None:
         """Register a new circuit-operation kind so `.compile_and_run` can execute it."""
         OPERATION_REGISTRY[name] = fn
 
-    def add_mode(self, mode_name: str) -> GaussianCircuit:
+    def add_mode(self, mode_name: str, alpha: complex = 0.0) -> GaussianCircuit:
+        """Register a new mode, optionally starting it in the coherent state
+        |alpha> instead of vacuum (only takes effect when `compile_and_run`
+        is called without an explicit `initial_state`)."""
         if mode_name in self.modes:
             raise ValueError(
                 f"Mode '{mode_name}' is already registered in this circuit."
             )
         self.modes = self.modes + (mode_name,)
+        self._initial_alphas[mode_name] = alpha
         return self
 
     def _add_op(self, name: str, modes: tuple[str, ...], **kwargs) -> GaussianCircuit:
@@ -563,6 +662,25 @@ class GaussianCircuit:
 
     def rotate(self, mode: str, phi: float) -> GaussianCircuit:
         return self._add_op("PhaseRotation", (mode,), phi=phi)
+
+    def displace(
+        self,
+        mode: str,
+        alpha: complex | None = None,
+        *,
+        x: float | None = None,
+        p: float | None = None,
+    ) -> GaussianCircuit:
+        """Add a displacement gate. Give either `alpha` or both `x` and `p`;
+        either way the op is stored as (x, p) so the circuit stays plain-
+        float JSON-serializable (see `to_dict`)."""
+        if alpha is not None and (x is not None or p is not None):
+            raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
+        if alpha is not None:
+            x, p = np.sqrt(2.0) * np.real(alpha), np.sqrt(2.0) * np.imag(alpha)
+        elif x is None or p is None:
+            raise ValueError("Must supply either `alpha` or both `x` and `p`.")
+        return self._add_op("Displacement", (mode,), x=float(x), p=float(p))
 
     def beam_splitter(self, mode_a: str, mode_b: str, eta: float) -> GaussianCircuit:
         return self._add_op("BeamSplitter", (mode_a, mode_b), eta=eta)
@@ -582,7 +700,8 @@ class GaussianCircuit:
             raise ValueError("Circuit has no registered modes.")
 
         if initial_state is None:
-            current_state = GaussianOperations.create_vacuum(self.modes)
+            alphas = [self._initial_alphas.get(m, 0.0) for m in self.modes]
+            current_state = GaussianOperations.create_coherent(self.modes, alphas)
         else:
             if set(initial_state.modes) != set(self.modes):
                 raise ValueError(
@@ -623,6 +742,10 @@ class GaussianCircuit:
     def to_dict(self) -> dict[str, Any]:
         return {
             "modes": list(self.modes),
+            # Stored as [re, im] pairs -- complex isn't JSON-serializable.
+            "initial_alphas": {
+                m: [np.real(a), np.imag(a)] for m, a in self._initial_alphas.items()
+            },
             "operations": [
                 {"name": op.name, "modes": list(op.modes), "kwargs": op.kwargs}
                 for op in self._operations
@@ -632,6 +755,10 @@ class GaussianCircuit:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GaussianCircuit:
         circuit = cls(modes=tuple(data["modes"]))
+        circuit._initial_alphas = {
+            m: complex(re, im)
+            for m, (re, im) in data.get("initial_alphas", {}).items()
+        }
         for op in data["operations"]:
             if op["name"] not in OPERATION_REGISTRY:
                 raise KeyError(
@@ -802,11 +929,26 @@ def plot_wigner(W, X, P, mode_name: str):
 
 
 def compute_joint_correlation(
-    state: GaussianState, mode_a: str, mode_b: str, x_max: float = 3.0
+    state: GaussianState,
+    mode_a: str,
+    mode_b: str,
+    x_max: float = 3.0,
+    num_points: int = 150,
+    quadrature: str = "x",
 ):
-    """Joint probability distribution of x_a vs x_b (e.g. EPR correlation)."""
-    idx_a = state.get_mode_index(mode_a)
-    idx_b = state.get_mode_index(mode_b)
+    """Joint probability distribution of the same quadrature on two modes
+    (e.g. x_a vs x_b, or p_a vs p_b) -- the tool for actually *seeing* an
+    EPR-style correlation or anti-correlation, as opposed to only reading it
+    off the covariance matrix. `quadrature` selects which pair: 'x' shows
+    position correlation, 'p' shows momentum correlation (anti-correlated,
+    for the standard `GaussianOperations.create_epr_pair` construction).
+    """
+    if quadrature not in ("x", "p"):
+        raise ValueError(f"quadrature must be 'x' or 'p', got {quadrature!r}.")
+    offset = 0 if quadrature == "x" else 1
+
+    idx_a = state.get_mode_index(mode_a) + offset
+    idx_b = state.get_mode_index(mode_b) + offset
 
     V_sub = np.array(
         [
@@ -816,7 +958,7 @@ def compute_joint_correlation(
     )
     d_sub = np.array([state.displacement[idx_a], state.displacement[idx_b]])
 
-    xvec = np.linspace(-x_max, x_max, 150)
+    xvec = np.linspace(-x_max, x_max, num_points)
     X_a, X_b = np.meshgrid(xvec, xvec)
 
     det_V = np.linalg.det(V_sub)
@@ -833,15 +975,48 @@ def compute_joint_correlation(
     return P, X_a, X_b
 
 
-def plot_joint_correlation(P, X_a, X_b, mode_a: str, mode_b: str):
+def plot_joint_correlation(
+    P, X_a, X_b, mode_a: str, mode_b: str, quadrature: str = "x"
+):
     plt.figure(figsize=(6, 5))
     plt.contourf(X_a, X_b, P, 100, cmap="viridis")
     plt.colorbar(label="Probability density")
-    plt.title(f"Correlation: quadrature x_{mode_a} vs x_{mode_b}")
-    plt.xlabel(f"x_{mode_a}")
-    plt.ylabel(f"x_{mode_b}")
+    plt.title(f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}")
+    plt.xlabel(f"{quadrature}_{mode_a}")
+    plt.ylabel(f"{quadrature}_{mode_b}")
     plt.axis("equal")
     plt.show()
+
+
+def compute_duan_inseparability(
+    state: GaussianState, mode_a: str, mode_b: str
+) -> float:
+    """Duan-Simon two-mode entanglement witness (Duan, Giedke, Cirac & Zoller,
+    PRL 84, 2722 (2000)). In this codebase's vacuum=0.5 convention, *every*
+    separable (classically-correlated-at-best) state satisfies
+
+        Var(x_a - x_b) + Var(p_a + p_b) >= DUAN_SEPARABILITY_BOUND (== 2.0),
+
+    with two independent vacua exactly saturating the bound. A value
+    strictly below it is a *sufficient* condition for genuine, non-classical
+    entanglement between mode_a and mode_b: no amount of classical
+    correlation (e.g. from `QBSChannels.correlated_thermal_noise`) can beat
+    it, only a genuinely entangling operation like the beam splitter in
+    `GaussianOperations.create_epr_pair` can. The bound is not necessary --
+    some entangled states pass it undetected -- so failing to beat it does
+    not itself prove separability.
+    """
+    idx_a = state.get_mode_index(mode_a)
+    idx_b = state.get_mode_index(mode_b)
+    V = state.covariance
+
+    var_x_diff = V[idx_a, idx_a] + V[idx_b, idx_b] - 2 * V[idx_a, idx_b]
+    var_p_sum = (
+        V[idx_a + 1, idx_a + 1]
+        + V[idx_b + 1, idx_b + 1]
+        + 2 * V[idx_a + 1, idx_b + 1]
+    )
+    return var_x_diff + var_p_sum
 
 
 # ---------------------------------------------------------------------------

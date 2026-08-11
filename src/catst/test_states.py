@@ -6,6 +6,7 @@ import qutip as qt
 from matplotlib import pyplot as plt
 
 from .states import (
+    DUAN_SEPARABILITY_BOUND,
     OPERATION_REGISTRY,
     FockOperations,
     GaussianChannel,
@@ -16,13 +17,14 @@ from .states import (
     NonGaussianOperations,
     QBSChannels,
     QBSSimulator,
+    compute_duan_inseparability,
     compute_joint_correlation,
     compute_wigner_analytically,
     plot_joint_correlation,
     plot_wigner,
 )
 
-PLOT = 0  # flip on locally to pop up matplotlib windows while developing
+PLOT = 1  # flip on locally to pop up matplotlib windows while developing
 
 RNG = np.random.default_rng(1234)  # shared, seeded RNG -> reproducible test outcomes
 
@@ -81,6 +83,95 @@ def test_loss_reduces_toward_vacuum():
     lossy = GaussianOperations.apply_loss(state, mode="a", eta=0.0)
     # eta=0 is total loss -> mode is replaced by vacuum regardless of input.
     np.testing.assert_allclose(lossy.covariance, 0.5 * np.eye(2), atol=1e-9)
+
+
+def test_displacement_shifts_mean_leaves_covariance_untouched():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    squeezed = GaussianOperations.apply_squeezing(state, mode="a", r=0.4, theta=0.2)
+    displaced = GaussianOperations.apply_displacement(squeezed, mode="a", alpha=1.0)
+    # Displacement is affine, not symplectic-mixing: covariance is unchanged...
+    np.testing.assert_allclose(displaced.covariance, squeezed.covariance)
+    # ...but the mean shifts by (sqrt(2)*Re(alpha), sqrt(2)*Im(alpha)).
+    np.testing.assert_allclose(
+        displaced.displacement - squeezed.displacement, [np.sqrt(2.0), 0.0]
+    )
+
+
+def test_displacement_alpha_and_xp_are_equivalent():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    alpha = 0.6 - 0.9j
+    via_alpha = GaussianOperations.apply_displacement(state, mode="a", alpha=alpha)
+    via_xp = GaussianOperations.apply_displacement(
+        state, mode="a", x=np.sqrt(2.0) * alpha.real, p=np.sqrt(2.0) * alpha.imag
+    )
+    np.testing.assert_allclose(via_alpha.displacement, via_xp.displacement)
+
+
+def test_displacement_rejects_conflicting_or_missing_args():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    with pytest.raises(ValueError):
+        # alpha together with x/p is ambiguous.
+        GaussianOperations.apply_displacement(state, mode="a", alpha=1.0, x=1.0)
+    with pytest.raises(ValueError):
+        # Neither alpha nor a full (x, p) pair given.
+        GaussianOperations.apply_displacement(state, mode="a")
+    with pytest.raises(ValueError):
+        GaussianOperations.apply_displacement(state, mode="a", x=1.0)  # p missing
+
+
+def test_create_coherent_matches_displaced_vacuum():
+    alpha = 1.2 + 0.4j
+    coherent = GaussianOperations.create_coherent(("a",), alpha)
+    manual = GaussianOperations.apply_displacement(
+        GaussianOperations.create_vacuum(("a",)), mode="a", alpha=alpha
+    )
+    np.testing.assert_allclose(coherent.displacement, manual.displacement)
+    np.testing.assert_allclose(coherent.covariance, 0.5 * np.eye(2))
+
+
+def test_create_coherent_broadcasts_scalar_alpha_across_modes():
+    state = GaussianOperations.create_coherent(("a", "b"), 1.0j)
+    np.testing.assert_allclose(state.displacement[0:2], state.displacement[2:4])
+
+
+def test_create_coherent_rejects_mismatched_alpha_count():
+    with pytest.raises(ValueError):
+        GaussianOperations.create_coherent(("a", "b"), [1.0])
+
+
+def test_coherent_state_mean_photon_number_matches_alpha_squared():
+    # |alpha> has <n> = |alpha|^2 -- a direct check that apply_displacement's
+    # (x, p) convention is consistent with the Fock-space bridge in to_qutip.
+    alpha = 1.5 + 0.7j
+    state = GaussianOperations.create_coherent(("a",), alpha)
+    rho = state.to_qutip(N_cutoff=25)
+    mean_n = qt.expect(qt.num(25), rho)
+    assert mean_n == pytest.approx(np.abs(alpha) ** 2, rel=1e-3)
+
+
+def test_circuit_displace_matches_manual_displacement():
+    manual = GaussianOperations.create_vacuum(modes=("a",))
+    manual = GaussianOperations.apply_squeezing(manual, mode="a", r=0.3)
+    manual = GaussianOperations.apply_displacement(manual, mode="a", alpha=0.5 - 0.2j)
+
+    circuit = GaussianCircuit().add_mode("a")
+    circuit.squeeze(mode="a", r=0.3).displace(mode="a", alpha=0.5 - 0.2j)
+    compiled = circuit.compile_and_run()
+
+    np.testing.assert_allclose(compiled.displacement, manual.displacement, atol=1e-10)
+    np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
+
+
+def test_circuit_add_mode_with_alpha_seeds_coherent_starting_state():
+    circuit = GaussianCircuit().add_mode("c", alpha=1.0 + 1.0j)
+    compiled = circuit.compile_and_run()
+    expected = GaussianOperations.create_coherent(("c",), 1.0 + 1.0j)
+    np.testing.assert_allclose(compiled.displacement, expected.displacement)
+    # Explicitly passing an initial_state still overrides the seeded alpha.
+    overridden = circuit.compile_and_run(
+        initial_state=GaussianOperations.create_vacuum(("c",))
+    )
+    np.testing.assert_allclose(overridden.displacement, np.zeros(2))
 
 
 def test_get_mode_index_unknown_mode_raises():
@@ -209,6 +300,19 @@ def test_circuit_roundtrips_through_file(tmp_path):
     np.testing.assert_allclose(restored_result.covariance, original_result.covariance)
 
 
+def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
+    circuit = GaussianCircuit()
+    circuit.add_mode("a", alpha=0.5 + 1.3j).add_mode("b")
+    circuit.displace(mode="b", x=0.2, p=-0.4)
+    path = tmp_path / "circuit.json"
+    circuit.save(path)
+    restored = GaussianCircuit.load(path)
+
+    original_result = circuit.compile_and_run()
+    restored_result = restored.compile_and_run()
+    np.testing.assert_allclose(restored_result.displacement, original_result.displacement)
+
+
 # ---------------------------------------------------------------------------
 # Phase-space <-> Fock-space bridge (Williamson conversion)
 # ---------------------------------------------------------------------------
@@ -335,6 +439,171 @@ def test_joint_correlation_plot_runs():
     assert np.all(P >= 0)
     if PLOT:
         plot_joint_correlation(P, X_a, X_b, "a", "b")
+
+
+def test_joint_correlation_rejects_invalid_quadrature():
+    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+    with pytest.raises(ValueError):
+        compute_joint_correlation(state, "a", "b", quadrature="z")
+
+
+def test_joint_correlation_x_correlated_p_anticorrelated_for_epr_pair():
+    # The whole point of an EPR pair: the SAME quadrature choice (x or p)
+    # shows opposite-sign correlation between the two modes. Recover the
+    # sign numerically from the plotted joint density itself (not just the
+    # covariance matrix), so this test actually exercises what a person
+    # would see on screen.
+    epr = GaussianOperations.create_epr_pair("a", "b", r=1.0)
+
+    P_x, Xa_x, Xb_x = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="x")
+    P_p, Xa_p, Xb_p = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="p")
+    dx = Xa_x[0, 1] - Xa_x[0, 0]
+
+    # Means are zero, so this is directly the covariance Integral[x_a*x_b*P].
+    empirical_cov_x = np.sum(Xa_x * Xb_x * P_x) * dx * dx
+    empirical_cov_p = np.sum(Xa_p * Xb_p * P_p) * dx * dx
+
+    assert empirical_cov_x == pytest.approx(epr.covariance[0, 2], rel=5e-3)
+    assert empirical_cov_p == pytest.approx(epr.covariance[1, 3], rel=5e-3)
+    assert empirical_cov_x > 0  # x_a, x_b: positively correlated
+    assert empirical_cov_p < 0  # p_a, p_b: anti-correlated
+
+
+# ---------------------------------------------------------------------------
+# Genuine CV entanglement: the Duan-Simon witness
+# ---------------------------------------------------------------------------
+
+
+def test_create_epr_pair_matches_manual_squeeze_squeeze_bs():
+    manual = GaussianOperations.create_vacuum(("a", "b"))
+    manual = GaussianOperations.apply_squeezing(manual, mode="a", r=0.8, theta=0.0)
+    manual = GaussianOperations.apply_squeezing(
+        manual, mode="b", r=0.8, theta=np.pi / 2
+    )
+    manual = GaussianOperations.apply_beam_splitter(
+        manual, mode_a="a", mode_b="b", eta=0.5
+    )
+    epr = GaussianOperations.create_epr_pair("a", "b", r=0.8)
+    np.testing.assert_allclose(epr.displacement, manual.displacement)
+    np.testing.assert_allclose(epr.covariance, manual.covariance)
+
+
+def test_duan_witness_independent_vacua_saturate_separability_bound():
+    # Two completely independent vacuum modes are the boundary case: no
+    # correlation at all, so the witness sits exactly on the separability
+    # bound rather than below it.
+    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+    witness = compute_duan_inseparability(state, "a", "b")
+    assert witness == pytest.approx(DUAN_SEPARABILITY_BOUND)
+
+
+def test_duan_witness_confirms_genuine_entanglement_for_epr_pair():
+    r = 1.0
+    epr = GaussianOperations.create_epr_pair("a", "b", r=r)
+    witness = compute_duan_inseparability(epr, "a", "b")
+    # Both combined variances squeeze to exp(-2r) below vacuum -- an exact,
+    # closed-form prediction for this construction.
+    assert witness == pytest.approx(2.0 * np.exp(-2.0 * r), rel=1e-6)
+    assert witness < DUAN_SEPARABILITY_BOUND
+
+
+def test_duan_witness_strengthens_with_more_squeezing():
+    weak = compute_duan_inseparability(
+        GaussianOperations.create_epr_pair("a", "b", r=0.3), "a", "b"
+    )
+    strong = compute_duan_inseparability(
+        GaussianOperations.create_epr_pair("a", "b", r=1.2), "a", "b"
+    )
+    assert DUAN_SEPARABILITY_BOUND > weak > strong > 0.0
+
+
+def test_classical_correlation_does_not_violate_duan_bound():
+    # A noise channel can visibly correlate two modes' quadratures (nonzero
+    # cross-covariance -- something a naive look at the joint plot alone
+    # might mistake for entanglement) without ever creating genuine
+    # entanglement, because the correlation is classical: it never beats the
+    # Duan-Simon bound the way a real entangling operation (the beam
+    # splitter inside create_epr_pair) does.
+    vacuum = GaussianOperations.create_vacuum(modes=("a", "b"))
+    correlated = QBSChannels.correlated_thermal_noise(
+        "a", "b", eta=0.5, n_thermal=0.5, c_correlation=0.3
+    ).apply(vacuum)
+
+    assert abs(correlated.covariance[0, 2]) > 1e-6  # visibly correlated in x...
+    witness = compute_duan_inseparability(correlated, "a", "b")
+    assert witness >= DUAN_SEPARABILITY_BOUND - 1e-9  # ...but not entangled
+
+
+def test_epr_entanglement_survives_but_weakens_under_loss():
+    # A physically important consistency check: loss on just one arm of an
+    # EPR pair degrades -- but for moderate loss does not necessarily
+    # destroy -- the entanglement, and the Duan witness should track that
+    # continuously rather than jumping.
+    epr = GaussianOperations.create_epr_pair("a", "b", r=1.0)
+    witness_clean = compute_duan_inseparability(epr, "a", "b")
+
+    lossy = GaussianOperations.apply_loss(epr, mode="a", eta=0.9)
+    witness_light_loss = compute_duan_inseparability(lossy, "a", "b")
+
+    very_lossy = GaussianOperations.apply_loss(epr, mode="a", eta=0.1)
+    witness_heavy_loss = compute_duan_inseparability(very_lossy, "a", "b")
+
+    assert witness_clean < witness_light_loss < witness_heavy_loss
+    assert witness_light_loss < DUAN_SEPARABILITY_BOUND  # still entangled
+    assert witness_heavy_loss > DUAN_SEPARABILITY_BOUND  # heavy loss killed it
+
+
+def test_epr_pair_entanglement_visualization_demo():
+    # Side-by-side proof, by eye: the SAME quadrature pair is positively
+    # correlated (x) or anti-correlated (p) for a genuinely entangled EPR
+    # pair, while a classically-correlated control state shows same-sign
+    # correlation in both -- the visual signature of "correlated but not
+    # entangled" versus "genuinely entangled".
+    if not PLOT:
+        pytest.skip("visual-only demo; set PLOT=True to view")
+    import matplotlib.pyplot as plt
+
+    r = 1.0
+    epr = GaussianOperations.create_epr_pair("a", "b", r=r)
+    vacuum = GaussianOperations.create_vacuum(("a", "b"))
+    classical = QBSChannels.correlated_thermal_noise(
+        "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
+    ).apply(vacuum)
+
+    duan_epr = compute_duan_inseparability(epr, "a", "b")
+    duan_classical = compute_duan_inseparability(classical, "a", "b")
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 10))
+    panels = [
+        (epr, "x", axes[0][0], f"EPR pair: x_a vs x_b\n(Duan sum = {duan_epr:.2f})"),
+        (epr, "p", axes[0][1], f"EPR pair: p_a vs p_b\n(Duan sum = {duan_epr:.2f})"),
+        (
+            classical,
+            "x",
+            axes[1][0],
+            f"Classical noise: x_a vs x_b\n(Duan sum = {duan_classical:.2f})",
+        ),
+        (
+            classical,
+            "p",
+            axes[1][1],
+            f"Classical noise: p_a vs p_b\n(Duan sum = {duan_classical:.2f})",
+        ),
+    ]
+    for state, quad, ax, title in panels:
+        P, X_a, X_b = compute_joint_correlation(state, "a", "b", x_max=6.0, quadrature=quad)
+        ax.contourf(X_a, X_b, P, 100, cmap="viridis")
+        ax.set_title(title)
+        ax.set_xlabel(f"{quad}_a")
+        ax.set_ylabel(f"{quad}_b")
+        ax.axis("equal")
+
+    fig.suptitle(
+        f"Genuine entanglement vs classical correlation "
+        f"(separability bound = {DUAN_SEPARABILITY_BOUND})"
+    )
+    plt.tight_layout()
+    plt.show()
 
 
 # ---------------------------------------------------------------------------
@@ -624,231 +893,155 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     print(f"MZI decoherence scan runtime: {perf_counter() - start_time:.2f}s")
 
 
-def test_kerr_state():
-    N_cutoff = (
-        35  # Höherer Cutoff wichtig, da Kerr-Zustände breite Fock-Verteilungen haben!
-    )
-    rho_0 = qt.ket2dm(qt.fock(N_cutoff, 0))  # Start im reinen Vakuum
-
-    a = qt.destroy(N_cutoff)
-
-    K = 0.5  # Stärke der Kerr-Nichtlinearität
-    pulse_amplitude = 5.0  # Laser-Stärke
-
-    # Laser-Pulsform: Ein schneller, starker Puls zu Beginn, um die Kavität zu laden
-    def pulse_shape(t, **kwargs):
-        return kwargs["amp"] * np.exp(
-            -((t - kwargs["t0"]) ** 2) / (2 * kwargs["sigma"] ** 2)
-        )
-
-    # H = H_Kerr + Omega(t) * (a + a^dagger)
-    H_kerr = K * a.dag() * a.dag() * a * a  # Statischer Kerr-Term
-    H_drive = a + a.dag()  # Zeitabhängiger Laser-Treiber
-
-    H_total = [H_kerr, [H_drive, pulse_shape]]
-    pulse_args = {"amp": pulse_amplitude, "t0": 2.0, "sigma": 0.8}
-
-    # Minimale Kavitäten-Dämpfung (Katzen-Zustände sind extrem empfindlich gegen Verlust!)
-    kappa = 0.01
-    c_ops = [np.sqrt(kappa) * a]
-
+def test_kerr_cat_state_generation():
+    # A driven, weakly-damped Kerr cavity: a fast pulse loads the cavity with
+    # a coherent state, then the Kerr nonlinearity shears it into a cat
+    # state. Routed through QBSSimulator.run_cavity_with_pulse rather than
+    # hand-rolled here, so this test and test_triggered_cavity_end_to_end
+    # exercise the exact same code path the rest of the suite relies on.
+    N_cutoff = 35  # Kerr cat states have wide Fock-number support -> needs a high cutoff.
+    rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     tlist = np.linspace(0, 6, 200)
-    result = qt.mesolve(H_total, rho_0, tlist, c_ops=c_ops, args=pulse_args)
-    assert len(result.states) == 200
+
+    states = QBSSimulator.run_cavity_with_pulse(
+        rho_init=rho_vacuum,
+        tlist=tlist,
+        K=0.5,  # Kerr nonlinearity strength
+        kappa=0.01,  # light damping -- cat states are fragile against loss
+        amp=5.0,
+        t0=2.0,
+        sigma=0.8,
+        N_cutoff=N_cutoff,
+    )
+    assert len(states) == len(tlist)
+    assert states[-1].tr() == pytest.approx(1.0, abs=1e-6)
 
     if PLOT:
-        rho_t0 = result.states[10]  # t ~ 0.0 (gleich am Anfang)
-        rho_t1 = result.states[40]  # t ~ 1.8 (kurz nach dem Puls)
-        rho_t2 = result.states[110]  # t ~ 3.3 (Kerr fängt an zu verzerren)
-        rho_t3 = result.states[-1]  # t = 6.0 (Kollision -> Katze!)
+        # Snapshots: pulse arriving, freshly-displaced coherent blob, Kerr
+        # shear starting to bend it, and the final cat state.
+        snapshot_indices = [10, 40, 110, -1]
+        snapshot_labels = [
+            "t ~ 0.3: pulse arriving",
+            "t ~ 1.2: displaced coherent blob",
+            "t ~ 3.3: Kerr shear setting in",
+            "t = 6.0: Kerr cat state",
+        ]
 
         fig, axes = plt.subplots(2, 2, figsize=(10, 10))
         xvec = np.linspace(-5, 5, 200)
+        cont = None
+        for ax, idx, label in zip(axes.flat, snapshot_indices, snapshot_labels):
+            W = qt.wigner(states[idx], xvec, xvec)
+            cont = ax.contourf(xvec, xvec, W, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
+            ax.set_title(label)
+            ax.set_xlabel("x")
+            ax.set_ylabel("p")
+            ax.axis("equal")
 
-        # Zeitschritt 0
-        W0 = qt.wigner(rho_t0, xvec, xvec)
-        axes[0][0].contourf(xvec, xvec, W0, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
-        axes[0][0].set_title(r"t = 0.3: Kohärenter Laser-Puls")
-        axes[0][0].set_xlabel("x")
-        axes[0][0].set_ylabel("p")
-        axes[0][0].axis("equal")
-
-        # Zeitschritt 1: Der Laser hat ein verschobenes "Gauß-Blob" (Coherent State) erzeugt
-        W1 = qt.wigner(rho_t1, xvec, xvec)
-        axes[0][1].contourf(xvec, xvec, W1, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
-        axes[0][1].set_title(r"t = 1.2: Defomrierter Laser-Puls")
-        axes[0][1].set_xlabel("x")
-        axes[0][1].set_ylabel("p")
-        axes[0][1].axis("equal")
-
-        # Zeitschritt 2: Die Kerr-Nichtlinearität verbiegt den Zustand zu einer Banane
-        W2 = qt.wigner(rho_t2, xvec, xvec)
-        axes[1][0].contourf(xvec, xvec, W2, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
-        axes[1][0].set_title(r"t = 3.3: Kerr-Squeezing & Verbiegung")
-        axes[1][0].set_xlabel("x")
-        axes[1][0].set_ylabel("p")
-        axes[1][0].axis("equal")
-
-        W3 = qt.wigner(rho_t3, xvec, xvec)
-        cont = axes[1][1].contourf(
-            xvec, xvec, W3, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25
-        )
-        axes[1][1].set_title(r"t = 6.0: Kerr-Cat State")
-        axes[1][1].set_xlabel("x")
-        axes[1][1].set_ylabel("p")
-        axes[1][1].axis("equal")
-
-        fig.colorbar(cont, ax=axes[:, :], label="Wigner-Dichte")
-
+        fig.colorbar(cont, ax=axes[:, :], label="Wigner density")
         plt.show()
 
 
-def test_cat_in_mzi():
-    N_cutoff = 22
-    a = qt.destroy(N_cutoff)
+def test_cat_state_single_shot_through_mzi():
+    # Single-phase companion to test_decoherence_mzi_parity_visibility_drops_with_loss
+    # below: a loss-free MZI at one fixed theta, kept mainly to inspect the
+    # output Wigner functions -- so it belongs with the other visual-only
+    # demos and follows the same skip-when-not-plotting convention.
+    if not PLOT:
+        pytest.skip("visual-only demo; set PLOT=True to view")
 
+    N_cutoff = 22
     alpha = 2
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
 
     a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
     a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
 
-    # Der 50:50 Strahlteiler-Operator zwischen den beiden Armen
-    # U_BS = exp(i * pi/4 * (a1^dagger * a2 + a1 * a2^dagger))
+    # 50:50 beam splitter between the two arms: U_BS = exp(i*pi/4*(a1^dag*a2 + a1*a2^dag)).
     H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
     U_BS = H_BS.expm()
 
-    # Eingangs-Zustand des MZI: Katze auf Port 1, Vakuum auf Port 2
+    # MZI input: cat state on port 1, vacuum on port 2.
     psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
 
-    # --- SCHRITT A: Erster Strahlteiler (BS1) ---
-    # Erzeugt Verschränkung zwischen beiden Pfaden!
-    psi_after_BS1 = U_BS * psi_in
+    # First beam splitter entangles the two arms.
+    psi_after_bs1 = U_BS * psi_in
 
-    # --- SCHRITT B: Phasenverschiebung theta im oberen Arm (Arm 1) ---
-    # Wir wählen eine Verschiebung von theta = pi/2 (90 Grad) für maximale Interferenzänderung
+    # Phase shift theta in the upper arm (arm 1).
     theta = np.pi / 4
     U_phase = (1j * theta * a1.dag() * a1).expm()
-    psi_after_phase = U_phase * psi_after_BS1
+    psi_after_phase = U_phase * psi_after_bs1
 
-    # --- SCHRITT C: Zweiter Strahlteiler (BS2) ---
-    # Rekombination der Pfade
+    # Second beam splitter recombines the arms.
     psi_out = U_BS * psi_after_phase
 
     rho_out_port1 = qt.ptrace(psi_out, 0)
     rho_out_port2 = qt.ptrace(psi_out, 1)
+    assert rho_out_port1.tr() == pytest.approx(1.0, abs=1e-6)
+    assert rho_out_port2.tr() == pytest.approx(1.0, abs=1e-6)
 
-    if PLOT:
-        fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-        xvec = np.linspace(-4, 4, 200)
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    xvec = np.linspace(-4, 4, 200)
 
-        # Port 1 Wigner-Funktion
-        W_port1 = qt.wigner(rho_out_port1, xvec, xvec)
-        axes[0].contourf(xvec, xvec, W_port1, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
-        axes[0].set_title(
-            "MZI Ausgangsport 1\n(Verschobene Katze bei $\\theta=\\pi/2$)"
-        )
-        axes[0].set_xlabel("x")
-        axes[0].set_ylabel("p")
-        axes[0].axis("equal")
+    W_port1 = qt.wigner(rho_out_port1, xvec, xvec)
+    axes[0].contourf(xvec, xvec, W_port1, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
+    axes[0].set_title(r"MZI output port 1 (shifted cat, $\theta=\pi/4$)")
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("p")
+    axes[0].axis("equal")
 
-        # Port 2 Wigner-Funktion
-        W_port2 = qt.wigner(rho_out_port2, xvec, xvec)
-        axes[1].contourf(xvec, xvec, W_port2, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
-        axes[1].set_title("MZI Ausgangsport 2\n(Gegenphasige Interferenz)")
-        axes[1].set_xlabel("x")
-        axes[1].set_ylabel("p")
-        axes[1].axis("equal")
+    W_port2 = qt.wigner(rho_out_port2, xvec, xvec)
+    axes[1].contourf(xvec, xvec, W_port2, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
+    axes[1].set_title("MZI output port 2 (out-of-phase interference)")
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("p")
+    axes[1].axis("equal")
 
-        plt.tight_layout()
-        plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
-def test_time_cat_mzi():
-    N_cutoff = 22  # Hilbertraum-Dimension pro Mode
-    a = qt.destroy(N_cutoff)
+def test_cat_mzi_phase_scan_fringes():
+    # Loss-free (kappa=0) phase scan of a cat state through the MZI -- the
+    # clean-case counterpart plotted alongside the noisy one in
+    # test_decoherence_mzi_parity_visibility_drops_with_loss. Routed through
+    # QBSSimulator.scan_mzi_with_loss instead of duplicating that loop here,
+    # so both tests exercise the same simulation code.
+    if not PLOT:
+        pytest.skip("visual-only demo; set PLOT=True to view")
 
-    # Eine reine Katze vorbereiten: |cat> = N * (|alpha> + |-alpha>)
+    N_cutoff = 22
     alpha = 4.0 + 2j
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
-
-    # Zwei-Moden-Operatoren im Gesamtraum aufbauen
-    a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
-    a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
-
-    # Teilchenzahl-Operatoren für die Ausgänge
-    n1_op = a1.dag() * a1
-    n2_op = a2.dag() * a2
-
-    # Paritäts-Operator für Port 1: P = exp(i * pi * a1^dagger * a1)
-    # Photonenzahl gerade (+1) oder ungerade (-1)
-    parity1_op = (1j * np.pi * n1_op).expm()
-
-    # 50:50 (BS)
-    H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
-    U_BS = H_BS.expm()
-
-    # Eingangszustand: Katze auf Port 1, Vakuum auf Port 2
-    psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
     theta_list = np.linspace(0, 2 * np.pi, 200)
 
-    # Listen für die Messergebnisse
-    mean_n1 = []
-    mean_n2 = []
-    parity_port1 = []
+    results = QBSSimulator.scan_mzi_with_loss(
+        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
+    )
 
-    # Erster Strahlteiler ist fix für alle Phasen (Verschränkung im MZI)
-    psi_after_BS1 = U_BS * psi_in
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-    print("🔄 Scanne Phase theta von 0 bis 2pi...")
-    for theta in theta_list:
-        # 1. Phasenverschiebung im oberen Arm anwenden
-        U_phase = (1j * theta * a1.dag() * a1).expm()
-        psi_after_phase = U_phase * psi_after_BS1
+    ax1.plot(theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2)
+    ax1.plot(
+        theta_list / np.pi,
+        results["n2"],
+        label="Output port 2",
+        color="crimson",
+        lw=2,
+        ls="--",
+    )
+    ax1.set_ylabel(r"Mean photon number $\langle n \rangle$")
+    ax1.set_title("Mach-Zehnder interference fringes (intensity)")
+    ax1.grid(True, ls="--")
+    ax1.legend()
 
-        # 2. Zweiter Strahlteiler (Rekombination)
-        psi_out = U_BS * psi_after_phase
+    ax2.plot(theta_list / np.pi, results["parity1"], label="Parity, port 1", color="purple", lw=2.5)
+    ax2.axhline(0, color="black", lw=0.5, ls="-")
+    ax2.set_xlabel(r"Phase shift $\theta$ ($\times \pi$)")
+    ax2.set_ylabel("Parity expectation value")
+    ax2.set_title("Quantum parity oscillation (super-resolution)")
+    ax2.grid(True, ls="--")
+    ax2.legend()
 
-        # 3. Erwartungswerte für Phasenwert
-        mean_n1.append(qt.expect(n1_op, psi_out))
-        mean_n2.append(qt.expect(n2_op, psi_out))
-        parity_port1.append(qt.expect(parity1_op, psi_out).real)
-
-    if PLOT:
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-
-        # Plot A: Klassische Intensitäten (Photonenzahlen) an den Ausgängen
-        ax1.plot(
-            theta_list / np.pi, mean_n1, label="Ausgangs-Port 1", color="darkblue", lw=2
-        )
-        ax1.plot(
-            theta_list / np.pi,
-            mean_n2,
-            label="Ausgangs-Port 2",
-            color="crimson",
-            lw=2,
-            ls="--",
-        )
-        ax1.set_ylabel(r"Mittlere Photonenzahl $\langle n \rangle$")
-        ax1.set_title("Mach-Zehnder Interferenz-Fransen (Intensität)")
-        ax1.grid(True, ls="--")
-        ax1.legend()
-
-        # Plot B: Quanten-Parität am Ausgang 1
-        # zeigt die Verschiebung der mikroskopischen Interferenzstreifen
-        ax2.plot(
-            theta_list / np.pi,
-            parity_port1,
-            label="Parität Port 1",
-            color="purple",
-            lw=2.5,
-        )
-        ax2.axhline(0, color="black", lw=0.5, ls="-")
-        ax2.set_xlabel(r"Phasenverschiebung $\theta$ ($\times \pi$)")
-        ax2.set_ylabel("Erwartungswert der Parität")
-        ax2.set_title("Quanten-Paritäts-Oszillation (Super-Auflösung)")
-        ax2.grid(True, ls="--")
-        ax2.legend()
-
-        plt.tight_layout()
-        plt.show()
+    plt.tight_layout()
+    plt.show()
