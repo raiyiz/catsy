@@ -22,6 +22,7 @@ from .states import (
     compute_wigner_analytically,
     plot_joint_correlation,
     plot_wigner,
+    _williamson_decomposition,
 )
 
 # ---------------------------------------------------------------------------
@@ -193,6 +194,110 @@ def test_classical_phase_jitter_channel_applies():
     jittered = channel.apply(state)
     assert jittered.covariance[0, 0] == pytest.approx(0.5)  # q untouched
     assert jittered.covariance[1, 1] > 0.5  # p gained noise
+
+
+def test_gaussian_state_rejects_unphysical_covariance():
+    with pytest.raises(ValueError, match="uncertainty relation"):
+        GaussianState(
+            modes=("a",),
+            displacement=np.zeros(2),
+            covariance=0.1 * np.eye(2),
+        )
+
+
+def test_gaussian_state_rejects_nonsymmetric_covariance():
+    covariance = np.array([[0.5, 0.1], [0.0, 0.5]])
+    with pytest.raises(ValueError, match="symmetric"):
+        GaussianState(
+            modes=("a",),
+            displacement=np.zeros(2),
+            covariance=covariance,
+        )
+
+
+def test_gaussian_state_rejects_nonfinite_values():
+    covariance = np.diag([np.inf, np.inf])
+    with pytest.raises(ValueError, match="finite"):
+        GaussianState(
+            modes=("a",),
+            displacement=np.zeros(2),
+            covariance=covariance,
+        )
+
+
+def test_gaussian_channel_rejects_non_cp_channel():
+    # X=2I with no added noise amplifies phase space without the noise
+    # required by complete positivity.
+    with pytest.raises(ValueError, match="complete positivity"):
+        GaussianChannel(
+            target_modes=("a",),
+            X=2.0 * np.eye(2),
+            Y=np.zeros((2, 2)),
+            d0=np.zeros(2),
+        )
+
+
+def test_gaussian_channel_rejects_nonsymmetric_noise():
+    with pytest.raises(ValueError, match="symmetric"):
+        GaussianChannel(
+            target_modes=("a",),
+            X=np.eye(2),
+            Y=np.array([[0.1, 0.2], [0.0, 0.1]]),
+            d0=np.zeros(2),
+        )
+
+
+def test_thermal_loss_is_a_valid_gaussian_channel():
+    channel = QBSChannels.thermal_loss(
+        mode="a",
+        eta=0.7,
+        n_thermal=0.2,
+    )
+    assert channel.X.shape == (2, 2)
+
+
+def test_correlated_thermal_noise_rejects_excessive_correlation():
+    with pytest.raises(ValueError, match="c_correlation"):
+        QBSChannels.correlated_thermal_noise(
+            "a",
+            "b",
+            eta=0.5,
+            n_thermal=0.5,
+            c_correlation=0.500001,
+        )
+
+
+def test_correlated_thermal_noise_accepts_physical_boundary():
+    channel = QBSChannels.correlated_thermal_noise(
+        "a",
+        "b",
+        eta=0.5,
+        n_thermal=0.5,
+        c_correlation=0.5,
+    )
+    assert channel.Y.shape == (4, 4)
+
+
+def test_correlated_thermal_noise_accepts_negative_physical_boundary():
+    channel = QBSChannels.correlated_thermal_noise(
+        "a",
+        "b",
+        eta=0.5,
+        n_thermal=0.5,
+        c_correlation=-0.5,
+    )
+    assert channel.Y.shape == (4, 4)
+
+
+def test_correlated_thermal_noise_rejects_correlation_without_thermal_occupation():
+    with pytest.raises(ValueError, match="c_correlation"):
+        QBSChannels.correlated_thermal_noise(
+            "a",
+            "b",
+            eta=0.5,
+            n_thermal=0.0,
+            c_correlation=1e-6,
+        )
 
 
 def test_channel_dimension_validation():
@@ -398,6 +503,58 @@ def test_homodyne_measurement_is_reproducible_with_seeded_rng():
         state, measured_mode="a", phi=0.0, rng=np.random.default_rng(42)
     )
     assert v1 == v2
+
+
+def test_homodyne_rejects_nonfinite_phase_and_outcome():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+
+    with pytest.raises(ValueError, match="phi must be finite"):
+        GaussianMeasurements.homodyne_measurement(
+            state, measured_mode="a", phi=np.nan
+        )
+
+    with pytest.raises(ValueError, match="finite scalar"):
+        GaussianMeasurements.homodyne_measurement(
+            state, measured_mode="a", phi=0.0, outcome=np.inf
+        )
+
+
+def test_homodyne_single_mode_returns_valid_empty_state():
+    state = GaussianOperations.create_coherent(modes=("a",), alphas=0.7 + 0.2j)
+    outcome, collapsed = GaussianMeasurements.homodyne_measurement(
+        state, measured_mode="a", phi=0.0, outcome=1.25
+    )
+
+    assert outcome == pytest.approx(1.25)
+    assert collapsed.modes == ()
+    assert collapsed.displacement.shape == (0,)
+    assert collapsed.covariance.shape == (0, 0)
+
+
+def test_heterodyne_rejects_invalid_outcome_shape_and_nonfinite_values():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+
+    with pytest.raises(ValueError, match=r"shape \(2,\)"):
+        GaussianMeasurements.heterodyne_measurement(
+            state, measured_mode="a", outcome=np.array([1.0])
+        )
+
+    with pytest.raises(ValueError, match="finite values"):
+        GaussianMeasurements.heterodyne_measurement(
+            state, measured_mode="a", outcome=np.array([1.0, np.nan])
+        )
+
+
+def test_heterodyne_single_mode_returns_valid_empty_state():
+    state = GaussianOperations.create_vacuum(modes=("a",))
+    outcome, collapsed = GaussianMeasurements.heterodyne_measurement(
+        state, measured_mode="a", outcome=np.array([0.2, -0.3])
+    )
+
+    np.testing.assert_allclose(outcome, [0.2, -0.3])
+    assert collapsed.modes == ()
+    assert collapsed.displacement.shape == (0,)
+    assert collapsed.covariance.shape == (0, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -673,6 +830,53 @@ def test_circuit_rotate_matches_manual_rotation():
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 
 
+def test_williamson_decomposition_is_genuinely_symplectic():
+    rng = np.random.default_rng(1234)
+    A = rng.normal(size=(6, 6))
+    covariance = A @ A.T + 0.5 * np.eye(6)
+
+    nus, S, D = _williamson_decomposition(covariance)
+    Omega = np.kron(np.eye(3), np.array([[0.0, 1.0], [-1.0, 0.0]]))
+
+    assert np.all(nus >= 0.5 - 1e-10)
+    np.testing.assert_allclose(S @ Omega @ S.T, Omega, atol=1e-8)
+    np.testing.assert_allclose(S @ D @ S.T, covariance, atol=1e-8)
+
+
+def test_to_qutip_reconstructs_gaussian_covariance():
+    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+    state = GaussianOperations.apply_squeezing(state, mode="a", r=0.45, theta=0.2)
+    state = GaussianOperations.apply_squeezing(state, mode="b", r=0.35, theta=-0.4)
+    state = GaussianOperations.apply_beam_splitter(
+        state, mode_a="a", mode_b="b", eta=0.37
+    )
+    state = GaussianOperations.apply_displacement(
+        state, mode="a", alpha=0.4 + 0.2j
+    )
+
+    N_cutoff = 30
+    rho = state.to_qutip(N_cutoff=N_cutoff)
+
+    a_ops = []
+    for i in range(2):
+        op_list = [qt.qeye(N_cutoff) for _ in range(2)]
+        op_list[i] = qt.destroy(N_cutoff)
+        a_ops.append(qt.tensor(*op_list))
+
+    r_ops = []
+    for a in a_ops:
+        r_ops.extend([
+            (a + a.dag()) / np.sqrt(2.0),
+            (a - a.dag()) / (1j * np.sqrt(2.0)),
+        ])
+
+    covariance = qt.covariance_matrix(r_ops, rho, symmetrized=True).real
+    displacement = np.array([qt.expect(op, rho).real for op in r_ops])
+
+    np.testing.assert_allclose(displacement, state.displacement, atol=2e-5)
+    np.testing.assert_allclose(covariance, state.covariance, atol=2e-5)
+
+
 def test_to_qutip_handles_plain_vacuum_and_pure_displacement():
     # Regression test: to_qutip used to crash on any state with no squeezing
     # at all (H_cv stayed a plain int 0, which has no .expm()).
@@ -687,10 +891,9 @@ def test_to_qutip_handles_plain_vacuum_and_pure_displacement():
 
 
 def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
-    # Regression test: this covariance matrix (squeeze + BS + thermal loss)
-    # used to leave tr(rho) ~0.7% below 1 due to a mildly non-symplectic S
-    # from sqrtm(). Symmetrizing the generator now guarantees tr==1 exactly,
-    # regardless of the underlying decomposition's precision.
+    # Regression test: a mixed, correlated covariance matrix should convert
+    # to a normalized Fock-space density matrix without relying on the old
+    # non-symplectic sqrtm/logm decomposition.
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
     state = GaussianOperations.apply_squeezing(state, mode="a", r=0.5)
     state = GaussianOperations.apply_squeezing(state, mode="b", r=0.5, theta=np.pi / 2)
@@ -871,11 +1074,8 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
 
-    # theta doubles as the arm's loss "exposure time" in this model (see
-    # scan_mzi_with_loss), so decoherence only becomes visible after enough
-    # theta has accumulated. Compare visibility over the back half of the
-    # scan rather than the raw peak-to-peak of the whole trace, which can be
-    # dominated by the still-clean early-theta region even at nonzero kappa.
+    # Loss has a fixed exposure time and is therefore independent of the
+    # scanned phase.  Compare the complete phase scan directly.
     theta_list = np.linspace(0, 2 * np.pi, 80)
     results_clean = QBSSimulator.scan_mzi_with_loss(
         psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
@@ -890,6 +1090,38 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     # Loss must wash out (not enhance) the super-resolved parity fringes.
     assert visibility_noisy < visibility_clean
     print(f"MZI decoherence scan runtime: {perf_counter() - start_time:.2f}s")
+
+
+def test_mzi_phase_scan_is_independent_of_loss_when_exposure_time_is_zero():
+    N_cutoff = 10
+    alpha = 1.2
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+    theta_list = np.array([-0.7, 0.0, 0.9])
+
+    clean = QBSSimulator.scan_mzi_with_loss(
+        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
+    )
+    zero_exposure = QBSSimulator.scan_mzi_with_loss(
+        psi_cat, theta_list, kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0
+    )
+
+    for key in ("n1", "n2", "parity1"):
+        np.testing.assert_allclose(
+            zero_exposure[key], clean[key], atol=1e-10, rtol=1e-10
+        )
+
+
+def test_mzi_negative_phase_is_not_clipped_to_zero():
+    N_cutoff = 12
+    alpha = 1.0
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+
+    result = QBSSimulator.scan_mzi_with_loss(
+        psi_cat, np.array([-0.8, 0.0, 0.8]), kappa=0.0, N_cutoff=N_cutoff
+    )
+
+    # A real phase scan must distinguish a negative phase from zero.
+    assert not np.allclose(result["n1"][0], result["n1"][1], atol=1e-8)
 
 
 def test_kerr_cat_state_generation(plot_enabled):

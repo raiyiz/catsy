@@ -36,40 +36,137 @@ import scipy.linalg
 
 logger = logging.getLogger("catst")
 
-# Centralized numerical tolerances (previously scattered magic numbers).
-TOL_SYMPLECTIC_FLOOR = (
-    0.499  # symplectic eigenvalues below this are clamped to vacuum (0.5)
-)
 TOL_ZERO_ENTRY = (
     1e-9  # negligible matrix-entry threshold when building qutip Hamiltonians
-)
-TOL_ZERO_TRACE = (
-    1e-11  # a heralded/conditioned state with trace below this is unphysical
 )
 TOL_TRACE_WARN = (
     1e-6  # deviation from tr(rho) == 1 worth warning about (truncation error)
 )
+# Centralized numerical tolerances.
 DUAN_SEPARABILITY_BOUND = (
     2.0  # Duan-Simon witness threshold in this vacuum=0.5 convention -- see
     # compute_duan_inseparability. Any separable (non-entangled) two-mode
     # state satisfies Var(x_a-x_b) + Var(p_a+p_b) >= this value; two
     # independent vacua exactly saturate it.
 )
+TOL_PHYSICALITY = 1e-10
 
 
 def _check_unit_interval(value: float, name: str) -> None:
-    if not (0.0 <= value <= 1.0):
+    if not np.isfinite(value) or not (0.0 <= value <= 1.0):
         raise ValueError(f"{name} must lie in [0, 1], got {value}.")
 
 
 def _check_non_negative(value: float, name: str) -> None:
-    if value < 0:
-        raise ValueError(f"{name} must be >= 0, got {value}.")
+    if not np.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be finite and >= 0, got {value}.")
 
 
 def _check_positive_int(value: int, name: str) -> None:
     if not isinstance(value, (int, np.integer)) or value < 1:
         raise ValueError(f"{name} must be a positive integer, got {value!r}.")
+
+
+def _symplectic_form(n_modes: int) -> np.ndarray:
+    """Return Omega for the (x1, p1, x2, p2, ...) convention."""
+    omega_1 = np.array([[0.0, 1.0], [-1.0, 0.0]])
+    return scipy.linalg.block_diag(*[omega_1 for _ in range(n_modes)])
+
+
+def _validate_finite_array(value: np.ndarray, name: str) -> None:
+    if not np.all(np.isfinite(value)):
+        raise ValueError(f"{name} must contain only finite values.")
+
+
+def _validate_physical_covariance(
+    covariance: np.ndarray, *, tol: float = TOL_PHYSICALITY
+) -> None:
+    """Validate V + i Omega / 2 >= 0 in the vacuum=0.5 convention."""
+    if covariance.ndim != 2:
+        raise ValueError("covariance must be a 2D array.")
+
+    dim = covariance.shape[0]
+    if dim % 2:
+        raise ValueError(f"covariance dimension must be even, got {dim}.")
+
+    _validate_finite_array(covariance, "covariance")
+    if dim == 0:
+        return
+
+    if not np.allclose(covariance, covariance.T, atol=tol, rtol=0.0):
+        raise ValueError("covariance must be symmetric.")
+
+    omega = _symplectic_form(dim // 2)
+    uncertainty_matrix = covariance + 0.5j * omega
+    min_eigenvalue = np.linalg.eigvalsh(uncertainty_matrix).min()
+
+    if min_eigenvalue < -tol:
+        raise ValueError(
+            "covariance violates the Gaussian uncertainty relation: "
+            f"minimum eigenvalue of V + iOmega/2 is {min_eigenvalue:.3e}."
+        )
+
+
+def _validate_gaussian_channel(
+    X: np.ndarray,
+    Y: np.ndarray,
+    d0: np.ndarray,
+    *,
+    expected_dim: int,
+    tol: float = TOL_PHYSICALITY,
+) -> None:
+    """Validate dimensions and complete positivity of a Gaussian channel."""
+    if X.shape != (expected_dim, expected_dim):
+        raise ValueError(
+            f"X must have shape ({expected_dim}, {expected_dim}), got {X.shape}."
+        )
+    if Y.shape != (expected_dim, expected_dim):
+        raise ValueError(
+            f"Y must have shape ({expected_dim}, {expected_dim}), got {Y.shape}."
+        )
+    if d0.shape != (expected_dim,):
+        raise ValueError(
+            f"d0 must have shape ({expected_dim},), got {d0.shape}."
+        )
+
+    _validate_finite_array(X, "X")
+    _validate_finite_array(Y, "Y")
+    _validate_finite_array(d0, "d0")
+
+    if not np.allclose(Y, Y.T, atol=tol, rtol=0.0):
+        raise ValueError("Gaussian channel noise matrix Y must be symmetric.")
+
+    omega = _symplectic_form(expected_dim // 2)
+    cp_matrix = Y + 0.5j * (omega - X @ omega @ X.T)
+    min_eigenvalue = np.linalg.eigvalsh(cp_matrix).min()
+
+    if min_eigenvalue < -tol:
+        raise ValueError(
+            "Gaussian channel violates complete positivity: "
+            "minimum eigenvalue of Y + i(Omega - XOmegaX^T)/2 is "
+            f"{min_eigenvalue:.3e}."
+        )
+
+
+def _check_thermal_correlation(
+    c_correlation: float, n_thermal: float
+) -> None:
+    """Validate cross-mode thermal covariance for the shared-bath model."""
+    if not np.isfinite(c_correlation):
+        raise ValueError(
+            f"c_correlation must be finite, got {c_correlation}."
+        )
+
+    # The underlying two-mode environment covariance is
+    # [[(n+1/2)I, cI], [cI, (n+1/2)I]].
+    # Its physicality condition is |c| <= n.
+    limit = n_thermal
+    if abs(c_correlation) > limit + TOL_PHYSICALITY:
+        raise ValueError(
+            "c_correlation is outside the physical range for the requested "
+            f"thermal occupation: |c_correlation| must be <= {limit}, "
+            f"got {c_correlation}."
+        )
 
 
 def _json_save(obj: Any, path: str | Path) -> None:
@@ -101,6 +198,94 @@ def _apply_gaussian_transform(
 # ---------------------------------------------------------------------------
 
 
+def _williamson_decomposition(
+    covariance: np.ndarray,
+    *,
+    tol: float = 1e-10,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return symplectic eigenvalues, S and D with V = S D S.T.
+
+    The construction uses the positive square root of V followed by a real
+    Schur decomposition of sqrt(V) @ Omega @ sqrt(V).  This avoids treating a
+    generic matrix square root of V @ D^{-1} as though it were symplectic.
+    """
+    covariance = np.asarray(covariance, dtype=float)
+    dim = covariance.shape[0]
+    if dim == 0 or dim % 2:
+        raise ValueError("covariance dimension must be a positive even number")
+
+    n_modes = dim // 2
+    Omega = _symplectic_form(n_modes)
+
+    eigvals, eigvecs = np.linalg.eigh(covariance)
+    if np.min(eigvals) <= 0:
+        raise ValueError("covariance must be positive definite")
+    A = (eigvecs * np.sqrt(eigvals)) @ eigvecs.T
+
+    M = A @ Omega @ A
+    T, O = scipy.linalg.schur(M, output="real")
+
+    nus: list[float] = []
+    for i in range(0, dim, 2):
+        block = T[i : i + 2, i : i + 2]
+        offdiag = 0.5 * (block[0, 1] - block[1, 0])
+        nu = abs(float(offdiag))
+        if nu <= tol:
+            raise ValueError(
+                "covariance has a numerically singular symplectic eigenvalue"
+            )
+
+        # Normalize the Schur block to +nu * [[0,1],[-1,0]].
+        if offdiag < 0:
+            O[:, i : i + 2] = O[:, i : i + 2] @ np.diag([1.0, -1.0])
+        nus.append(nu)
+
+    D_diag = np.repeat(nus, 2)
+    D = np.diag(D_diag)
+    S = A @ O @ np.diag(1.0 / np.sqrt(D_diag))
+
+    symplectic_residual = np.max(np.abs(S @ Omega @ S.T - Omega))
+    covariance_residual = np.max(np.abs(S @ D @ S.T - covariance))
+    if symplectic_residual > 1e-8 or covariance_residual > 1e-8:
+        raise RuntimeError(
+            "Williamson decomposition residual too large: "
+            f"symplectic={symplectic_residual:.3e}, "
+            f"covariance={covariance_residual:.3e}."
+        )
+
+    return np.asarray(nus), S, D
+
+
+def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]):
+    """Build a QuTiP unitary implementing an orthogonal symplectic O."""
+    n_modes = len(a_ops)
+    A = O[0::2, 0::2]
+    B = O[0::2, 1::2]
+    C = O[1::2, 0::2]
+    D = O[1::2, 1::2]
+
+    # For a passive symplectic transformation, a' = U a.
+    U = 0.5 * (A + D + 1j * (C - B))
+    # Project tiny floating-point deviations back onto U(n).
+    u, _, vh = np.linalg.svd(U)
+    U = u @ vh
+
+    h = 1j * scipy.linalg.logm(U)
+    h = 0.5 * (h + h.conj().T)
+
+    H = 0
+    for i in range(n_modes):
+        for j in range(n_modes):
+            hij = h[i, j]
+            if abs(hij) > TOL_PHYSICALITY:
+                H += hij * a_ops[i].dag() * a_ops[j]
+
+    if H == 0:
+        return qt.tensor(*[qt.qeye(a.dims[0][0]) for a in a_ops])
+
+    return (-1j * H).expm()
+
+
 @dataclass
 class GaussianState:
     """A multi-mode Gaussian state, fully described by (modes, d, V)."""
@@ -128,6 +313,9 @@ class GaussianState:
                 f"got {self.covariance.shape}."
             )
 
+        _validate_finite_array(self.displacement, "displacement")
+        _validate_physical_covariance(self.covariance)
+
     def get_mode_index(self, mode_name: str) -> int:
         if mode_name not in self.modes:
             raise ValueError(f"Mode '{mode_name}' is not present in this state.")
@@ -149,109 +337,115 @@ class GaussianState:
     # -- Fock-space bridge --------------------------------------------------
 
     def to_qutip(self, N_cutoff: int = 15):
-        """Exact conversion of (d, V) into a QuTiP density matrix via the
-        Williamson decomposition (thermal states + a symplectic unitary).
+        """Convert this Gaussian state to a truncated QuTiP density matrix.
 
-        Known limitation: the symplectic transform S is recovered via
-        `scipy.linalg.sqrtm`, which can be mildly ill-conditioned for some
-        covariance matrices, so S may only be *approximately* symplectic. Its
-        generator G is forced to be exactly symmetric before building the
-        Fock-space Hamiltonian below, which guarantees U_cv is exactly
-        unitary and `tr(rho) == 1` always holds -- but the reconstructed
-        state's covariance can then deviate slightly from the requested V.
-        `to_qutip` warns when that residual is non-negligible; raising
-        N_cutoff will NOT reduce it, since it isn't a truncation effect.
+        The conversion uses a numerically stable Williamson decomposition of the
+        covariance matrix, followed by a polar decomposition of the resulting
+        symplectic matrix.  The thermal Williamson modes are prepared with
+        ``qutip.thermal_dm``; the passive part is implemented with a
+        number-conserving quadratic Hamiltonian and the positive symplectic part
+        with a quadratic quadrature Hamiltonian.  The displacement is applied
+        with QuTiP's ``displace`` primitive.
+
+        The Williamson and symplectic decompositions are performed in ordinary
+        floating-point phase space.  The only approximation that cannot be
+        removed by increasing ``N_cutoff`` is the finite Fock-space truncation.
         """
         _check_positive_int(N_cutoff, "N_cutoff")
         n_modes = len(self.modes)
 
-        # Fundamental symplectic form Omega = bigoplus [[0,1],[-1,0]]
-        omega_1 = np.array([[0, 1], [-1, 0]])
-        Omega = scipy.linalg.block_diag(*[omega_1 for _ in range(n_modes)])
+        # The covariance is already checked for physicality by GaussianState.
+        symplectic_values, S, D = _williamson_decomposition(self.covariance)
 
-        # Symplectic eigenvalues from i*Omega*V; eigenvalues occur in +-nu pairs.
-        M = 1j * Omega @ self.covariance
-        eigvals = np.linalg.eigvals(M)
-        nu = sorted(np.abs(eigvals.real)[::2])
+        # A numerical sanity check here is useful because this routine is the
+        # bridge between the phase-space and Hilbert-space representations.
+        Omega = _symplectic_form(n_modes)
+        symplectic_residual = np.max(np.abs(S @ Omega @ S.T - Omega))
+        covariance_residual = np.max(np.abs(S @ D @ S.T - self.covariance))
+        if symplectic_residual > 1e-8 or covariance_residual > 1e-8:
+            raise RuntimeError(
+                "Williamson decomposition failed numerical consistency checks: "
+                f"symplectic residual={symplectic_residual:.3e}, "
+                f"covariance residual={covariance_residual:.3e}."
+            )
 
-        # Base thermal states (nu_k = 0.5 -> vacuum).
-        rho_list = []
-        for nu_k in nu:
-            if nu_k < TOL_SYMPLECTIC_FLOOR:
-                nu_k = 0.5
-            n_thermal = nu_k - 0.5
-            if n_thermal < 1e-6:
-                rho_list.append(qt.ket2dm(qt.fock(N_cutoff, 0)))
-            else:
-                rho_list.append(qt.thermal_dm(N_cutoff, n_thermal))
-        rho_0 = qt.tensor(*rho_list)
+        # The Williamson diagonal state is a tensor product of thermal states.
+        rho_list = [
+            qt.thermal_dm(N_cutoff, max(float(nu) - 0.5, 0.0))
+            for nu in symplectic_values
+        ]
+        rho = qt.tensor(*rho_list)
 
-        # Canonical operators in the combined Hilbert space.
+        # Build canonical quadrature operators in the same interleaved
+        # (x1,p1,x2,p2,...) convention as the phase-space representation.
         a_ops = []
         for i in range(n_modes):
-            op_list = [qt.qeye(N_cutoff)] * n_modes
+            op_list = [qt.qeye(N_cutoff) for _ in range(n_modes)]
             op_list[i] = qt.destroy(N_cutoff)
             a_ops.append(qt.tensor(*op_list))
 
         r_ops = []
         for a in a_ops:
-            x = (a + a.dag()) / np.sqrt(2)
-            p = (a - a.dag()) / (1j * np.sqrt(2))
-            r_ops.extend([x, p])
+            r_ops.append((a + a.dag()) / np.sqrt(2.0))
+            r_ops.append((a - a.dag()) / (1j * np.sqrt(2.0)))
 
-        # Symplectic transform S with S @ V_diag @ S.T == V, via matrix square roots.
-        V_diag = scipy.linalg.block_diag(*[nu_k * np.eye(2) for nu_k in nu])
-        S = scipy.linalg.sqrtm(self.covariance @ np.linalg.inv(V_diag)).real
+        # Polar decomposition of the symplectic transformation:
+        #     S = P O
+        # with P positive symplectic and O orthogonal symplectic.
+        # Unlike logm(S) directly, logm(P) is the logarithm of a positive
+        # matrix and therefore gives the well-behaved quadratic generator we
+        # need.  O is a passive Gaussian transformation.
+        P = scipy.linalg.sqrtm(S @ S.T).real
+        P_inv = scipy.linalg.inv(P)
+        O = P_inv @ S
 
-        symplectic_residual = np.abs(S @ Omega @ S.T - Omega).max()
-        if symplectic_residual > TOL_TRACE_WARN:
-            logger.warning(
-                "to_qutip: the recovered symplectic transform is only "
-                "approximately symplectic (residual %.2e). The returned state "
-                "is still exactly normalized (tr=1) but its covariance may "
-                "deviate from the requested V by a comparable amount. This is "
-                "not a Fock-truncation effect -- raising N_cutoff won't help.",
-                symplectic_residual,
+        passive_residual = max(
+            np.max(np.abs(O.T @ O - np.eye(2 * n_modes))),
+            np.max(np.abs(O @ Omega @ O.T - Omega)),
+        )
+        positive_residual = np.max(np.abs(P @ Omega @ P.T - Omega))
+        if passive_residual > 1e-8 or positive_residual > 1e-8:
+            raise RuntimeError(
+                "Symplectic polar decomposition failed numerical consistency "
+                f"checks: passive residual={passive_residual:.3e}, "
+                f"positive residual={positive_residual:.3e}."
             )
 
-        # Quadratic generator: S = exp(Omega @ G) -> G = -Omega @ logm(S).
-        # G is forced exactly symmetric: it mathematically must be (it
-        # generates a quadratic-form Hamiltonian), and enforcing it exactly
-        # guarantees H_cv is Hermitian and U_cv is exactly unitary, so
-        # tr(rho) == 1 is guaranteed rather than merely approximate.
-        G = -Omega @ scipy.linalg.logm(S).real
+        # Apply the passive transformation first, then the positive one, so
+        # the total phase-space transformation is P @ O = S.
+        U_passive = _qutip_passive_unitary(O, a_ops)
+        rho = U_passive * rho * U_passive.dag()
+
+        log_P = scipy.linalg.logm(P).real
+        G = -Omega @ log_P
         G = 0.5 * (G + G.T)
 
-        H_cv = 0
+        H_positive = 0
         for i in range(2 * n_modes):
             for j in range(2 * n_modes):
-                if np.abs(G[i, j]) > TOL_ZERO_ENTRY:
-                    H_cv += 0.5 * G[i, j] * r_ops[i] * r_ops[j]
+                gij = G[i, j]
+                if np.abs(gij) > TOL_PHYSICALITY:
+                    H_positive += 0.5 * gij * r_ops[i] * r_ops[j]
 
-        # H_cv stays a plain int 0 (no .expm()) when S is already the
-        # identity -- e.g. plain vacuum or a purely-displaced state with no
-        # squeezing at all -- so it needs the same zero-guard H_disp has below.
-        if H_cv != 0:
-            U_cv = (-1j * H_cv).expm()
-            rho_transformed = U_cv * rho_0 * U_cv.dag()
-        else:
-            rho_transformed = rho_0
+        if H_positive != 0:
+            U_positive = (-1j * H_positive).expm()
+            rho = U_positive * rho * U_positive.dag()
 
-        # Displacement.
-        H_disp = 0
+        # QuTiP's displacement convention is alpha=(dx+i*dp)/sqrt(2), which
+        # directly matches the x,p convention used by GaussianState.
         for i in range(n_modes):
-            d_x = self.displacement[2 * i]
-            d_p = self.displacement[2 * i + 1]
-            if np.abs(d_x) > TOL_ZERO_ENTRY or np.abs(d_p) > TOL_ZERO_ENTRY:
-                H_disp += d_p * r_ops[2 * i] - d_x * r_ops[2 * i + 1]
+            dx = float(self.displacement[2 * i])
+            dp = float(self.displacement[2 * i + 1])
+            if abs(dx) <= TOL_PHYSICALITY and abs(dp) <= TOL_PHYSICALITY:
+                continue
 
-        if H_disp != 0:
-            D_cv = (-1j * H_disp).expm()
-            rho_final = D_cv * rho_transformed * D_cv.dag()
-        else:
-            rho_final = rho_transformed
+            alpha = (dx + 1j * dp) / np.sqrt(2.0)
+            op_list = [qt.qeye(N_cutoff) for _ in range(n_modes)]
+            op_list[i] = qt.displace(N_cutoff, alpha)
+            D_op = qt.tensor(*op_list)
+            rho = D_op * rho * D_op.dag()
 
-        return rho_final
+        return rho
 
     # -- Plotting -------------------------------------------------------
 
@@ -477,13 +671,13 @@ class GaussianChannel:
     d0: np.ndarray
 
     def __post_init__(self):
+        if len(set(self.target_modes)) != len(self.target_modes):
+            raise ValueError(f"Duplicate target mode names in {self.target_modes!r}.")
+
         dim = 2 * len(self.target_modes)
-        if self.X.shape != (dim, dim):
-            raise ValueError(f"X must have shape ({dim}, {dim}), got {self.X.shape}.")
-        if self.Y.shape != (dim, dim):
-            raise ValueError(f"Y must have shape ({dim}, {dim}), got {self.Y.shape}.")
-        if self.d0.shape != (dim,):
-            raise ValueError(f"d0 must have shape ({dim},), got {self.d0.shape}.")
+        _validate_gaussian_channel(
+            self.X, self.Y, self.d0, expected_dim=dim
+        )
 
     def apply(self, state: GaussianState) -> GaussianState:
         global_dim = len(state.displacement)
@@ -566,6 +760,7 @@ class QBSChannels:
         """Correlated thermal noise on two modes coupled to the same bath."""
         _check_unit_interval(eta, "eta")
         _check_non_negative(n_thermal, "n_thermal")
+        _check_thermal_correlation(c_correlation, n_thermal)
 
         X = np.sqrt(eta) * np.eye(4)
         V_diag = (1 - eta) * (n_thermal + 0.5) * np.eye(2)
@@ -805,17 +1000,18 @@ class GaussianMeasurements:
         outcome: float | None = None,
         rng: np.random.Generator | None = None,
     ) -> tuple[float, GaussianState]:
-        """Stochastically-correct homodyne projection on `measured_mode`.
-        Computes the phase-space collapse of the remaining modes via the
-        Schur complement.
+        """Perform an ideal single-quadrature homodyne measurement.
 
-        Parameters
-        ----------
-        phi : local-oscillator phase (0 measures x/q, pi/2 measures p).
-        outcome : if given, force this measurement result instead of sampling.
-        rng : numpy Generator for reproducible sampling; defaults to a fresh
-            `np.random.default_rng()` per call.
+        The measured quadrature is rotated onto ``x`` and conditioned using
+        the Gaussian Schur complement.  ``outcome`` may be supplied to force
+        a particular measurement result (useful for deterministic tests).
         """
+        if not np.isfinite(phi):
+            raise ValueError(f"phi must be finite, got {phi!r}.")
+        if outcome is not None:
+            if not np.isscalar(outcome) or not np.isfinite(outcome):
+                raise ValueError("homodyne outcome must be a finite scalar.")
+
         n_modes = len(state.modes)
         idx_m = state.get_mode_index(measured_mode)
 
@@ -831,22 +1027,30 @@ class GaussianMeasurements:
             i for i in range(2 * n_modes) if i != idx_x and i != idx_m + 1
         ]
 
-        V_MM = V_rot[idx_x, idx_x]
+        V_MM = float(V_rot[idx_x, idx_x])
+        if not np.isfinite(V_MM) or V_MM <= TOL_PHYSICALITY:
+            raise ValueError(
+                "homodyne measurement variance must be finite and positive; "
+                f"got {V_MM:.3e}."
+            )
+
         V_MR = V_rot[idx_x, remaining_indices]
         V_RM = V_rot[remaining_indices, idx_x]
         V_RR = V_rot[np.ix_(remaining_indices, remaining_indices)]
 
-        d_M = d_rot[idx_x]
+        d_M = float(d_rot[idx_x])
         d_R = d_rot[remaining_indices]
 
         if outcome is None:
             rng = rng if rng is not None else np.random.default_rng()
-            measured_value = rng.normal(loc=d_M, scale=np.sqrt(V_MM))
+            measured_value = float(rng.normal(loc=d_M, scale=np.sqrt(V_MM)))
         else:
-            measured_value = outcome
+            measured_value = float(outcome)
 
-        d_cond = d_R + V_RM * (1.0 / V_MM) * (measured_value - d_M)
+        gain = V_RM / V_MM
+        d_cond = d_R + gain * (measured_value - d_M)
         V_cond = V_RR - np.outer(V_RM, V_MR) / V_MM
+        V_cond = 0.5 * (V_cond + V_cond.T)
 
         remaining_modes = tuple(m for m in state.modes if m != measured_mode)
         return measured_value, GaussianState(remaining_modes, d_cond, V_cond)
@@ -877,19 +1081,36 @@ class GaussianMeasurements:
         d_M = state.displacement[idx_m : idx_m + 2]
         d_R = state.displacement[remaining_indices]
 
-        V_eff = V_MM + 0.5 * np.eye(2)  # added vacuum-port noise
-        V_eff_inv = np.linalg.inv(V_eff)
+        V_eff = 0.5 * (V_MM + 0.5 * np.eye(2)) + 0.5 * (V_MM + 0.5 * np.eye(2)).T
+        if not np.all(np.isfinite(V_eff)):
+            raise ValueError("heterodyne effective covariance must be finite.")
+
+        try:
+            np.linalg.cholesky(V_eff)
+        except np.linalg.LinAlgError as exc:
+            raise ValueError("heterodyne effective covariance must be positive definite.") from exc
 
         if outcome is None:
             rng = rng if rng is not None else np.random.default_rng()
-            outcome = rng.multivariate_normal(mean=d_M, cov=V_eff)
-        outcome = np.asarray(outcome, dtype=float)
+            measured_outcome = rng.multivariate_normal(mean=d_M, cov=V_eff)
+        else:
+            measured_outcome = np.asarray(outcome, dtype=float)
+            if measured_outcome.shape != (2,):
+                raise ValueError(
+                    "heterodyne outcome must have shape (2,), "
+                    f"got {measured_outcome.shape}."
+                )
+            if not np.all(np.isfinite(measured_outcome)):
+                raise ValueError("heterodyne outcome must contain only finite values.")
 
-        d_cond = d_R + V_RM @ V_eff_inv @ (outcome - d_M)
-        V_cond = V_RR - V_RM @ V_eff_inv @ V_MR
+        gain = np.linalg.solve(V_eff, V_MR).T
+        innovation = measured_outcome - d_M
+        d_cond = d_R + gain @ innovation
+        V_cond = V_RR - gain @ V_MR
+        V_cond = 0.5 * (V_cond + V_cond.T)
 
         remaining_modes = tuple(m for m in state.modes if m != measured_mode)
-        return outcome, GaussianState(remaining_modes, d_cond, V_cond)
+        return measured_outcome, GaussianState(remaining_modes, d_cond, V_cond)
 
 
 # ---------------------------------------------------------------------------
@@ -1051,7 +1272,7 @@ class FockOperations:
     def _apply_and_renormalize(rho, op, label: str):
         rho_new = op * rho * op.dag()
         trace_val = rho_new.tr()
-        if abs(trace_val) < TOL_ZERO_TRACE:
+        if abs(trace_val) < TOL_PHYSICALITY:
             raise ValueError(
                 f"{label}: heralding success probability is numerically zero."
             )
@@ -1156,14 +1377,34 @@ class QBSSimulator:
 
     @staticmethod
     def scan_mzi_with_loss(
-        psi_cat_single, theta_list: np.ndarray, kappa: float, N_cutoff: int
+        psi_cat_single,
+        theta_list: np.ndarray,
+        kappa: float,
+        N_cutoff: int,
+        *,
+        loss_time: float = 1.0,
     ) -> dict:
-        """Noisy Mach-Zehnder interferometer scan for a cat state: intensities
-        and output parity as a function of the phase theta."""
+        """Scan a cat state through a noisy Mach-Zehnder interferometer.
+
+        ``theta_list`` is now a pure phase scan.  It no longer controls the
+        duration for which the arm is exposed to loss.  ``kappa`` is the
+        photon-loss rate and ``loss_time`` is the fixed physical exposure
+        time of the lossy arm, so its amplitude transmissivity is independent
+        of the scanned phase.
+
+        The model is: input -> 50:50 BS -> fixed-time amplitude damping on
+        arm 1 -> phase shift on arm 1 -> second 50:50 BS -> measurements.
+        Amplitude damping is phase-covariant, so applying the fixed loss before
+        the phase is physically equivalent to applying it after the phase.
+        """
         _check_positive_int(N_cutoff, "N_cutoff")
         _check_non_negative(kappa, "kappa")
-        if len(theta_list) < 1:
-            raise ValueError("theta_list must contain at least 1 point.")
+        _check_non_negative(loss_time, "loss_time")
+        theta_list = np.asarray(theta_list, dtype=float)
+        if theta_list.ndim != 1 or len(theta_list) < 1:
+            raise ValueError("theta_list must be a non-empty 1D array.")
+        if not np.all(np.isfinite(theta_list)):
+            raise ValueError("theta_list must contain only finite values.")
 
         a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
         a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
@@ -1177,21 +1418,36 @@ class QBSSimulator:
         psi_in = qt.tensor(psi_cat_single, qt.fock(N_cutoff, 0))
         psi_after_BS1 = U_BS * psi_in
 
-        results = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
-        c_ops = [np.sqrt(kappa) * a1] if kappa > 0 else []
-        H_phase = a1.dag() * a1
+        # The loss channel is independent of theta.  For amplitude damping
+        # generated by H=0 and collapse operator sqrt(kappa)*a, the fixed
+        # exposure time gives eta = exp(-kappa * loss_time).
+        c_ops = [np.sqrt(kappa) * a1] if kappa > 0 and loss_time > 0 else []
+        if c_ops:
+            loss_sim = qt.mesolve(
+                0 * n1_op,
+                psi_after_BS1,
+                [0.0, float(loss_time)],
+                c_ops=c_ops,
+            )
+            rho_after_loss = loss_sim.states[-1]
+            if rho_after_loss.isket:
+                rho_after_loss = qt.ket2dm(rho_after_loss)
+        elif psi_after_BS1.isket:
+            rho_after_loss = qt.ket2dm(psi_after_BS1)
+        else:
+            rho_after_loss = psi_after_BS1
+
+        results = {
+            "theta": theta_list,
+            "n1": [],
+            "n2": [],
+            "parity1": [],
+        }
 
         for theta in theta_list:
-            t_span = [0, theta] if theta > 0 else [0, 1e-9]
-            sim = qt.mesolve(H_phase, psi_after_BS1, t_span, c_ops=c_ops)
-            rho_arm = sim.states[-1]
-            # mesolve returns a ket (not a density matrix) when there are no
-            # collapse operators (kappa == 0). Normalize to rho either way so
-            # the recombination step below works for both the lossy and
-            # loss-free branches.
-            if rho_arm.isket:
-                rho_arm = qt.ket2dm(rho_arm)
-            rho_out = U_BS * rho_arm * U_BS.dag()
+            U_phase = (1j * float(theta) * n1_op).expm()
+            rho_after_phase = U_phase * rho_after_loss * U_phase.dag()
+            rho_out = U_BS * rho_after_phase * U_BS.dag()
 
             results["n1"].append(qt.expect(n1_op, rho_out))
             results["n2"].append(qt.expect(n2_op, rho_out))
