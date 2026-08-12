@@ -321,6 +321,43 @@ class GaussianState:
             raise ValueError(f"Mode '{mode_name}' is not present in this state.")
         return self.modes.index(mode_name) * 2
 
+    def reorder_modes(self, modes: tuple[str, ...] | list[str]) -> GaussianState:
+        """Return an equivalent state with quadratures arranged in ``modes`` order.
+
+        The requested modes must contain exactly the same unique mode names as
+        this state. Both the displacement vector and covariance matrix are
+        permuted together, so this operation changes only the representation,
+        not the physical state.
+        """
+        requested = tuple(modes)
+
+        if len(requested) != len(self.modes) or set(requested) != set(self.modes):
+            raise ValueError(
+                "Requested mode order must contain exactly the state's modes; "
+                f"state={self.modes!r}, requested={requested!r}."
+            )
+
+        if len(set(requested)) != len(requested):
+            raise ValueError(f"Duplicate mode names in requested order: {requested!r}.")
+
+        if requested == self.modes:
+            return self.copy()
+
+        indices = [
+            self.get_mode_index(mode) + offset
+            for mode in requested
+            for offset in (0, 1)
+        ]
+
+        displacement = self.displacement[indices].copy()
+        covariance = self.covariance[np.ix_(indices, indices)].copy()
+
+        return GaussianState(
+            modes=requested,
+            displacement=displacement,
+            covariance=covariance,
+        )
+
     def __repr__(self) -> str:
         purity = 1.0 / (
             2.0 ** len(self.modes) * np.sqrt(max(np.linalg.det(self.covariance), 0.0))
@@ -915,7 +952,10 @@ class GaussianCircuit:
                 raise ValueError(
                     "Initial state's modes don't match the circuit's modes."
                 )
-            current_state = initial_state
+            # Circuit order is canonical.  A state may arrive with the same
+            # named modes in a different order; reorder it once at the boundary
+            # so every subsequent operation sees the same positional layout.
+            current_state = initial_state.reorder_modes(self.modes)
 
         logger.debug(
             "Running circuit over modes %s (%d ops)", self.modes, len(self._operations)

@@ -15,6 +15,8 @@ is what actually executes a fixed sequence of gates over a fixed mode set.
 from __future__ import annotations
 
 import json
+
+import numpy as np
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,16 @@ from .states import GaussianCircuit, GaussianState
 # Component blueprint
 # ---------------------------------------------------------------------------
 
+# Structural contract for each component type.  Numerical/physical execution
+# remains in ``GaussianOperations``; this table only defines what a layout
+# component must look like before it can be registered.
+_COMPONENT_SPECS = {
+    "BeamSplitter": {"ports": 2, "kwargs": ("eta",)},
+    "Loss": {"ports": 1, "kwargs": ("eta",)},
+    "Squeezing": {"ports": 1, "kwargs": ("r", "theta")},
+    "PhaseRotation": {"ports": 1, "kwargs": ("phi",)},
+}
+
 
 @dataclass
 class OpticalComponent:
@@ -34,6 +46,69 @@ class OpticalComponent:
     op_type: str  # one of "BeamSplitter", "Loss", "Squeezing", "PhaseRotation"
     ports: tuple[str, ...]  # the ordered port/channel names it connects to
     kwargs: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate the structural contract of a layout component.
+
+        Component validation belongs here because an ``OpticalComponent`` is
+        the reusable layout object.  The circuit compiler remains responsible
+        for executing valid components.
+        """
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("OpticalComponent name must be a non-empty string.")
+
+        if self.op_type not in _COMPONENT_SPECS:
+            raise ValueError(
+                f"Unknown optical component type {self.op_type!r}. "
+                f"Known types: {sorted(_COMPONENT_SPECS)}."
+            )
+
+        self.ports = tuple(self.ports)
+        self.kwargs = dict(self.kwargs)
+
+        expected_ports = _COMPONENT_SPECS[self.op_type]["ports"]
+        if len(self.ports) != expected_ports:
+            raise ValueError(
+                f"{self.op_type} requires exactly {expected_ports} port(s), "
+                f"got {len(self.ports)}."
+            )
+
+        if len(set(self.ports)) != len(self.ports):
+            raise ValueError(
+                f"{self.op_type} cannot connect the same port more than once: "
+                f"{self.ports!r}."
+            )
+
+        if any(not isinstance(port, str) or not port.strip() for port in self.ports):
+            raise ValueError("All optical component ports must be non-empty strings.")
+
+        expected_kwargs = _COMPONENT_SPECS[self.op_type]["kwargs"]
+        if set(self.kwargs) != set(expected_kwargs):
+            missing = sorted(set(expected_kwargs) - set(self.kwargs))
+            extra = sorted(set(self.kwargs) - set(expected_kwargs))
+            details = []
+            if missing:
+                details.append(f"missing {missing}")
+            if extra:
+                details.append(f"unexpected {extra}")
+            raise ValueError(
+                f"Invalid kwargs for {self.op_type}: " + ", ".join(details) + "."
+            )
+
+        for key in expected_kwargs:
+            value = self.kwargs[key]
+            if not np.isscalar(value) or not np.isfinite(value):
+                raise ValueError(
+                    f"{self.op_type} parameter {key!r} must be a finite scalar, "
+                    f"got {value!r}."
+                )
+
+        if self.op_type in {"BeamSplitter", "Loss"}:
+            eta = float(self.kwargs["eta"])
+            if not 0.0 <= eta <= 1.0:
+                raise ValueError(
+                    f"{self.op_type} parameter 'eta' must be in [0, 1], got {eta}."
+                )
 
     def to_dict(self) -> dict[str, Any]:
         return {

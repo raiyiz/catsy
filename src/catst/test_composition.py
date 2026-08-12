@@ -38,6 +38,34 @@ def test_component_to_dict_and_from_dict_agree():
     assert OpticalComponent.from_dict(comp.to_dict()) == comp
 
 
+def test_component_rejects_wrong_port_count():
+    with pytest.raises(ValueError, match="exactly 2 port"):
+        OpticalComponent("BS1", "BeamSplitter", ("a",), {"eta": 0.5})
+
+    with pytest.raises(ValueError, match="exactly 1 port"):
+        OpticalComponent("Loss", "Loss", ("a", "b"), {"eta": 0.9})
+
+
+def test_component_rejects_duplicate_ports():
+    with pytest.raises(ValueError, match="same port"):
+        OpticalComponent("BS1", "BeamSplitter", ("a", "a"), {"eta": 0.5})
+
+
+def test_component_rejects_invalid_parameters():
+    with pytest.raises(ValueError, match="eta"):
+        OpticalComponent("BS1", "BeamSplitter", ("a", "b"), {"eta": 1.1})
+
+    with pytest.raises(ValueError, match="finite"):
+        OpticalComponent(
+            "Phase", "PhaseRotation", ("a",), {"phi": np.inf}
+        )
+
+
+def test_component_rejects_unknown_type():
+    with pytest.raises(ValueError, match="Unknown optical component"):
+        OpticalComponent("Mystery", "Unknown", ("a",), {})
+
+
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------

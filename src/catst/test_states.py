@@ -184,6 +184,41 @@ def test_duplicate_mode_names_rejected():
             covariance=0.5 * np.eye(4),
         )
 
+def test_state_reorder_modes_preserves_physical_state(two_mode_vacuum):
+    state = GaussianOperations.apply_displacement(
+        two_mode_vacuum, mode="a", alpha=0.7 + 0.2j
+    )
+    state = GaussianOperations.apply_squeezing(state, mode="b", r=0.4, theta=0.3)
+
+    reordered = state.reorder_modes(("b", "a"))
+    roundtrip = reordered.reorder_modes(("a", "b"))
+
+    assert reordered.modes == ("b", "a")
+    np.testing.assert_allclose(roundtrip.displacement, state.displacement)
+    np.testing.assert_allclose(roundtrip.covariance, state.covariance)
+
+
+def test_state_reorder_modes_rejects_wrong_mode_set(two_mode_vacuum):
+    with pytest.raises(ValueError, match="exactly the state's modes"):
+        two_mode_vacuum.reorder_modes(("a", "c"))
+
+
+def test_circuit_canonicalizes_initial_state_mode_order():
+    initial = GaussianOperations.create_coherent(
+        ("b", "a"), alphas=[0.0 + 1.0j, 1.0 + 0.0j]
+    )
+
+    circuit = GaussianCircuit().add_mode("a").add_mode("b")
+    result = circuit.compile_and_run(initial_state=initial)
+
+    assert result.modes == ("a", "b")
+    expected = GaussianOperations.create_coherent(
+        ("a", "b"), alphas=[1.0 + 0.0j, 0.0 + 1.0j]
+    )
+    np.testing.assert_allclose(result.displacement, expected.displacement)
+    np.testing.assert_allclose(result.covariance, expected.covariance)
+
+
 
 def test_classical_phase_jitter_channel_applies():
     # Regression test: this channel used to build a (1,2)-shaped Y matrix,
