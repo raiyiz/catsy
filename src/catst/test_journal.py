@@ -22,7 +22,9 @@ def test_log_run_requires_exactly_one_hardware_reference():
     with pytest.raises(ValueError):
         entry.log_run("run")
     with pytest.raises(ValueError):
-        entry.log_run("run", circuit=GaussianCircuit(), setup_layout_file="layout.json")
+        entry.log_run(
+            "run", circuit=GaussianCircuit(), setup_layout_file="layout.json"
+        )
 
 
 def test_log_run_with_inline_circuit_embeds_full_definition():
@@ -46,9 +48,18 @@ def test_log_run_with_inline_circuit_embeds_full_definition():
     assert run.hardware_layout_reference is None
     assert run.circuit["modes"] == ["a", "b"]
     assert run.final_state_cv["modes"] == ["a", "b"]
-    assert run.data_payloads["joint_prob_x"]["values"] == P.tolist()
-    assert run.data_payloads["joint_prob_x"]["unit"] == "arbitrary_units"
-    assert len(entry.runs) == 1
+
+    # Array metadata sits in the run record; the array data itself is only
+    # reachable through get_array (it never touches the JSON side).
+    payload_meta = run.data_payloads["joint_prob_x"]
+    assert payload_meta["shape"] == list(P.shape)
+    assert payload_meta["unit"] == "arbitrary_units"
+    np.testing.assert_array_equal(entry.get_array(payload_meta["npz_key"]), P)
+
+    reconstructed = entry.get_final_state(run)
+    np.testing.assert_array_equal(reconstructed.displacement, final_state.displacement)
+    np.testing.assert_array_equal(reconstructed.covariance, final_state.covariance)
+    assert reconstructed.modes == final_state.modes
 
 
 def test_log_run_with_setup_layout_file_references_rather_than_embeds(tmp_path):
@@ -74,10 +85,14 @@ def test_log_run_with_setup_layout_file_references_rather_than_embeds(tmp_path):
     assert run.circuit is None
     assert run.hardware_layout_reference == str(layout_path)
     assert run.scalar_results == {"purity": 0.99, "duan_score": 1.2}
-    wigner = run.data_payloads["wigner"]
-    assert wigner["values"] == [[0.1, 0.2], [0.3, 0.4]]
-    assert wigner["unit"] == "Wigner Density"
-    assert wigner["dimensions"] == ["x", "p"]
+
+    wigner_meta = run.data_payloads["wigner"]
+    assert wigner_meta["unit"] == "Wigner Density"
+    assert wigner_meta["dimensions"] == ["x", "p"]
+    assert wigner_meta["shape"] == [2, 2]
+    np.testing.assert_array_equal(
+        entry.get_array(wigner_meta["npz_key"]), [[0.1, 0.2], [0.3, 0.4]]
+    )
 
 
 def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
@@ -90,22 +105,34 @@ def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
             "annotated": {"data": [3.0, 4.0], "unit": "V", "dimensions": ["t"]},
         },
     )
-    assert run.data_payloads["raw"] == {
-        "values": [1.0, 2.0],
-        "unit": "arbitrary_units",
-        "dimensions": [],
-    }
-    assert run.data_payloads["annotated"] == {
-        "values": [3.0, 4.0],
-        "unit": "V",
-        "dimensions": ["t"],
-    }
+    raw_meta = run.data_payloads["raw"]
+    assert raw_meta["unit"] == "arbitrary_units"
+    assert raw_meta["dimensions"] == []
+    np.testing.assert_array_equal(entry.get_array(raw_meta["npz_key"]), [1.0, 2.0])
+
+    annotated_meta = run.data_payloads["annotated"]
+    assert annotated_meta["unit"] == "V"
+    assert annotated_meta["dimensions"] == ["t"]
+    np.testing.assert_array_equal(entry.get_array(annotated_meta["npz_key"]), [3.0, 4.0])
 
 
 def test_log_run_rejects_array_dict_payload_missing_data_key():
     entry = JournalEntry(title="Bad payload")
     with pytest.raises(ValueError):
         entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": {"unit": "V"}})
+
+
+def test_get_array_raises_for_unknown_key():
+    entry = JournalEntry(title="No arrays logged")
+    with pytest.raises(KeyError):
+        entry.get_array("nonexistent")
+
+
+def test_get_final_state_raises_when_run_has_none_logged():
+    entry = JournalEntry(title="No final state")
+    run = entry.log_run("run", circuit=GaussianCircuit())
+    with pytest.raises(ValueError):
+        entry.get_final_state(run)
 
 
 def test_journal_entry_initialization_generates_metadata():
@@ -117,22 +144,51 @@ def test_journal_entry_initialization_generates_metadata():
 
 
 # ---------------------------------------------------------------------------
-# JournalEntry.to_dict / save
+# JournalEntry.to_dict / save / load
 # ---------------------------------------------------------------------------
 
 
-def test_to_dict_matches_schema():
+def test_to_dict_matches_schema_and_excludes_array_data():
     entry = JournalEntry(title="Schema Test")
-    entry.log_run("run", circuit=GaussianCircuit(), metrics={"purity": 1.0})
+    entry.log_run(
+        "run", circuit=GaussianCircuit(), metrics={"purity": 1.0}, arrays={"x": [1, 2]}
+    )
 
     serialized = entry.to_dict()
-    assert serialized["schema_version"] == "1.0.0"
+    assert serialized["schema_version"] == "2.0.0"
     assert serialized["metadata"]["title"] == "Schema Test"
     assert len(serialized["runs"]) == 1
     assert serialized["runs"][0]["scalar_results"] == {"purity": 1.0}
+    # The array metadata (shape/unit/npz_key) is there, but never the values.
+    assert "npz_key" in serialized["runs"][0]["data_payloads"]["x"]
+    assert "values" not in serialized["runs"][0]["data_payloads"]["x"]
+    assert json.dumps(serialized)  # whole thing is plain-JSON safe
 
 
-def test_save_writes_a_json_file_and_creates_missing_directories(tmp_path):
+def test_save_writes_only_json_when_entry_has_no_array_data(tmp_path):
+    entry = JournalEntry(title="No arrays")
+    entry.log_run("run", circuit=GaussianCircuit(), metrics={"purity": 1.0})
+
+    saved_path = entry.save(tmp_path)
+
+    assert saved_path.exists()
+    assert saved_path.suffix == ".json"
+    assert not saved_path.with_suffix(".npz").exists()
+
+
+def test_save_writes_a_companion_npz_when_arrays_are_logged(tmp_path):
+    entry = JournalEntry(title="Has arrays")
+    entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": [1.0, 2.0, 3.0]})
+
+    saved_path = entry.save(tmp_path)
+
+    npz_path = saved_path.with_suffix(".npz")
+    assert npz_path.exists()
+    # No leftover .tmp files from the atomic-write step.
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_save_creates_missing_directories(tmp_path):
     deep_dir = tmp_path / "deep" / "nested" / "sub" / "folder"
     entry = JournalEntry(title="Deep Path Test")
     entry.log_run("run", circuit=GaussianCircuit())
@@ -140,11 +196,10 @@ def test_save_writes_a_json_file_and_creates_missing_directories(tmp_path):
     saved_path = entry.save(deep_dir)
 
     assert saved_path.exists()
-    assert saved_path.suffix == ".json"
     assert deep_dir.is_dir()
 
 
-def test_save_and_reload_lifecycle_preserves_run_data(tmp_path):
+def test_save_and_load_roundtrip_preserves_runs_and_arrays(tmp_path):
     entry = JournalEntry(title="E2E Integration Test", tags=["e2e"])
     entry.log_run(
         "Sweep Point A",
@@ -158,19 +213,39 @@ def test_save_and_reload_lifecycle_preserves_run_data(tmp_path):
         metrics={"fidelity": 0.88},
         arrays={"quadratures": {"data": [5.6, 7.8], "unit": "Squeezing Level"}},
     )
-
     saved_path = entry.save(tmp_path)
-    with open(saved_path) as f:
-        loaded_data = json.load(f)
 
-    assert loaded_data["schema_version"] == "1.0.0"
-    assert loaded_data["metadata"]["title"] == "E2E Integration Test"
-    assert len(loaded_data["runs"]) == 2
+    reloaded = JournalEntry.load(saved_path)
 
-    point_b = loaded_data["runs"][1]
-    assert point_b["run_name"] == "Sweep Point B"
-    assert point_b["scalar_results"]["fidelity"] == 0.88
-    assert point_b["data_payloads"]["quadratures"]["values"] == [5.6, 7.8]
+    assert reloaded.title == "E2E Integration Test"
+    assert reloaded.tags == ["e2e"]
+    assert len(reloaded.runs) == 2
+
+    point_b = reloaded.runs[1]
+    assert point_b.run_name == "Sweep Point B"
+    assert point_b.scalar_results["fidelity"] == 0.88
+    quad_meta = point_b.data_payloads["quadratures"]
+    assert quad_meta["unit"] == "Squeezing Level"
+    np.testing.assert_array_equal(reloaded.get_array(quad_meta["npz_key"]), [5.6, 7.8])
+
+
+def test_resaving_after_reload_preserves_previously_logged_arrays(tmp_path):
+    """Loading an entry back and logging a *new* run shouldn't lose the
+    arrays that were already on disk from before the reload."""
+    entry = JournalEntry(title="Grows over time")
+    entry.log_run("First run", circuit=GaussianCircuit(), arrays={"x": [1.0, 2.0]})
+    saved_path = entry.save(tmp_path)
+
+    reloaded = JournalEntry.load(saved_path)
+    reloaded.log_run("Second run", circuit=GaussianCircuit(), arrays={"y": [3.0, 4.0]})
+    reloaded.save(tmp_path)
+
+    fully_reloaded = JournalEntry.load(saved_path)
+    assert len(fully_reloaded.runs) == 2
+    x_key = fully_reloaded.runs[0].data_payloads["x"]["npz_key"]
+    y_key = fully_reloaded.runs[1].data_payloads["y"]["npz_key"]
+    np.testing.assert_array_equal(fully_reloaded.get_array(x_key), [1.0, 2.0])
+    np.testing.assert_array_equal(fully_reloaded.get_array(y_key), [3.0, 4.0])
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +265,19 @@ def test_new_entry_is_pre_populated_with_title_tags_and_notes(tmp_path):
     assert entry.notes.startswith("Testing phase-space")
 
 
+def test_load_entry_resolves_the_id_to_its_saved_file(tmp_path):
+    journal = SimulationJournal(tmp_path / "runs")
+    entry = journal.new_entry(title="Findable entry")
+    entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": [1.0]})
+    entry.save(journal.storage_path)
+
+    reloaded = journal.load_entry(entry.entry_id)
+    assert reloaded.title == "Findable entry"
+    np.testing.assert_array_equal(
+        reloaded.get_array(reloaded.runs[0].data_payloads["x"]["npz_key"]), [1.0]
+    )
+
+
 def test_fetch_history_summary_orders_entries_most_recent_first(tmp_path):
     journal = SimulationJournal(tmp_path / "runs")
 
@@ -205,6 +293,26 @@ def test_fetch_history_summary_orders_entries_most_recent_first(tmp_path):
 
     summaries = journal.fetch_history_summary()
     assert [s["title"] for s in summaries] == ["Newer run", "Older run"]
+
+
+def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monkeypatch):
+    journal = SimulationJournal(tmp_path / "runs")
+    entry = journal.new_entry(title="Has a big array")
+    entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": np.zeros(1000)})
+    entry.save(journal.storage_path)
+
+    original_np_load = np.load
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("fetch_history_summary must not open .npz files")
+
+    monkeypatch.setattr(np, "load", fail_if_called)
+    try:
+        summaries = journal.fetch_history_summary()
+    finally:
+        monkeypatch.setattr(np, "load", original_np_load)
+
+    assert summaries[0]["title"] == "Has a big array"
 
 
 # ---------------------------------------------------------------------------
@@ -238,12 +346,12 @@ def test_journal_records_a_full_optical_bench_experiment(tmp_path):
     )
     saved_path = entry.save(journal.storage_path)
 
-    with open(saved_path) as f:
-        loaded = json.load(f)
-    assert loaded["runs"][0]["scalar_results"]["duan_score"] == pytest.approx(
-        duan_score
-    )
-    assert loaded["runs"][0]["hardware_layout_reference"] == str(layout_path)
-    assert loaded["runs"][0]["final_state_cv"]["modes"] == ["line_1", "line_2"]
+    reloaded = JournalEntry.load(saved_path)
+    run = reloaded.runs[0]
+    assert run.scalar_results["duan_score"] == pytest.approx(duan_score)
+    assert run.hardware_layout_reference == str(layout_path)
+
+    reconstructed_state = reloaded.get_final_state(run)
+    np.testing.assert_allclose(reconstructed_state.covariance, result_epr.covariance)
     # Entanglement survives a 10%-loss arm.
     assert duan_score < 2.0

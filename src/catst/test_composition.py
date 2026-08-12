@@ -3,6 +3,7 @@ import pytest
 
 from .composition import OpticalComponent, OpticalSetup
 from .states import GaussianOperations, compute_duan_inseparability
+from .test_states import PLOT
 
 # ---------------------------------------------------------------------------
 # Layout assembly + serialization
@@ -134,4 +135,30 @@ def test_draw_prints_the_rendered_schematic(capsys):
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
     setup.draw()
     captured = capsys.readouterr()
+    print(captured.out)
     assert captured.out.strip() == setup.render_schematic().strip()
+
+def test_visual_schematic_draw():
+    if not PLOT:
+        pytest.skip("visual-only demo; set PLOT=True to view")
+    mzi = OpticalSetup("MZI Interferometer Node")
+    mzi.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.fiber_loss("Loss_A", port="line_1", eta=0.9)
+    mzi.phase_shifter("Phase_B", port="line_2", phi=0.785)
+    mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
+
+    # Visualisierung mit Angabe der Input-Zustände aufrufen
+    mzi.draw(input_states={"Route 1": "|α=1.5>", "Route 2": "|ξ=0.8>"})
+# ---------------------------------------------------------------------------
+# JournalEntry.to_dict / save
+# ---------------------------------------------------------------------------
+
+    # another schematic
+    mzi = OpticalSetup("Colored MZI Architecture")
+    mzi.inline_squeezer("Sqz_Input", port="line_2", r=0.7)
+    mzi.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.fiber_loss("Loss_A", port="line_1", eta=0.85)
+    mzi.phase_shifter("Phase_B", port="line_2", phi=1.57)
+    mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
+
+    mzi.draw(input_states={"Route 1": "|α=2.0>", "Route 2": "|0>"})

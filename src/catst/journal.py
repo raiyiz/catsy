@@ -4,15 +4,34 @@ A `JournalEntry` records one experiment: its metadata (title, tags, notes)
 plus one or more logged simulation runs. Each run pairs a hardware
 description -- either an inline `GaussianCircuit` (full gate sequence
 embedded) or a reference to a saved `OpticalSetup` layout file (referenced,
-not duplicated) -- with its scalar results and any heavy array payloads.
-`SimulationJournal` indexes a directory of saved entries.
+not duplicated) -- with its scalar results, its final `GaussianState` (if
+logged), and any heavy array payloads. `SimulationJournal` indexes a
+directory of saved entries.
+
+Storage format: each entry is split across two files by access pattern --
+
+  - ``entry_<id>.json``: metadata, scalar results, and small per-array
+    annotations (unit, dimensions, shape, dtype). Always small; this is
+    what `SimulationJournal.fetch_history_summary` reads, and the only
+    file touched when just browsing entries.
+  - ``entry_<id>.npz``: every numpy array logged against the entry (run
+    results, final-state covariances/displacements), compressed. Only
+    written when an entry actually has array data. Reading it back is
+    lazy -- `numpy.load` on an .npz doesn't decompress an individual
+    array until it's indexed, so `JournalEntry.get_array` only pays for
+    the arrays it's actually asked for.
+
+JSON alone was the wrong format for the array payloads: a numeric grid
+serializes to several times its binary size as decimal-text JSON, and
+`json.load` has to parse all of it even to read a title. Splitting the file
+means listing/searching entries stays cheap regardless of how much array
+data is attached to them.
 
 Design notes (mirrors states.py):
-  - Entries are JSON-serializable dataclasses; callers pass numpy arrays
-    into `JournalEntry.log_run` and get plain nested lists back out of
-    `to_dict` / the saved file.
   - All public entry points validate their inputs and raise ValueError with
     a specific message; nothing relies on `assert`.
+  - Saves are atomic (write to a temp file, then `Path.replace`), so a
+    crash mid-write can't corrupt an existing entry on disk.
 """
 
 from __future__ import annotations
@@ -28,27 +47,56 @@ import numpy as np
 
 from .states import GaussianCircuit, GaussianState
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 
 
-def _normalize_array_payload(payload: Any) -> dict[str, Any]:
-    """Converts one array-ish `log_run` payload into its canonical,
-    JSON-safe form. Accepts either a raw array/list or an already-annotated
-    ``{"data": ..., "unit": ..., "dimensions": ...}`` mapping."""
+def _make_entry_id() -> str:
+    """A sortable, filesystem-friendly entry ID: a UTC timestamp prefix (so
+    `ls` / `glob` already comes back in creation order) plus a short random
+    suffix (so concurrent entries never collide)."""
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"{stamp}_{uuid.uuid4().hex[:8]}"
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    tmp_path = path.with_name(path.name + ".tmp")
+    tmp_path.write_text(text)
+    tmp_path.replace(path)
+
+
+def _atomic_write_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
+    tmp_path = path.with_name(path.name + ".tmp")
+    # Write through an open file object rather than a bare path: np.savez*
+    # appends ".npz" to string/Path targets that don't already end with it,
+    # which would otherwise turn "entry_x.npz.tmp" into "entry_x.npz.tmp.npz".
+    with open(tmp_path, "wb") as f:
+        np.savez_compressed(f, **arrays)
+    tmp_path.replace(path)
+
+
+def _split_array_payload(payload: Any) -> tuple[np.ndarray, dict[str, Any]]:
+    """Separates one array-ish `log_run` payload into its raw ndarray (to be
+    stored in the entry's companion .npz) and its small JSON-safe metadata
+    (unit, dimensions, shape, dtype). Accepts either a raw array/list or an
+    already-annotated ``{"data": ..., "unit": ..., "dimensions": ...}``
+    mapping."""
     if isinstance(payload, dict):
         if "data" not in payload:
             raise ValueError("Array payload dict must contain a 'data' key.")
-        data = payload["data"]
-        if isinstance(data, np.ndarray):
-            data = data.tolist()
-        return {
-            "values": data,
-            "unit": payload.get("unit", "arbitrary_units"),
-            "dimensions": payload.get("dimensions", []),
-        }
-    if isinstance(payload, np.ndarray):
-        payload = payload.tolist()
-    return {"values": payload, "unit": "arbitrary_units", "dimensions": []}
+        data = np.asarray(payload["data"])
+        unit = payload.get("unit", "arbitrary_units")
+        dimensions = payload.get("dimensions", [])
+    else:
+        data = np.asarray(payload)
+        unit = "arbitrary_units"
+        dimensions = []
+    meta = {
+        "unit": unit,
+        "dimensions": dimensions,
+        "shape": list(data.shape),
+        "dtype": str(data.dtype),
+    }
+    return data, meta
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +109,7 @@ class SimulationRun:
     """One logged execution within a `JournalEntry`."""
 
     run_name: str
-    run_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
     circuit: dict[str, Any] | None = None
     hardware_layout_reference: str | None = None
@@ -81,17 +129,43 @@ class SimulationRun:
             "data_payloads": self.data_payloads,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SimulationRun:
+        return cls(
+            run_name=data["run_name"],
+            run_id=data["run_id"],
+            timestamp=data["timestamp"],
+            circuit=data["circuit"],
+            hardware_layout_reference=data["hardware_layout_reference"],
+            final_state_cv=data["final_state_cv"],
+            scalar_results=data["scalar_results"],
+            data_payloads=data["data_payloads"],
+        )
+
 
 @dataclass
 class JournalEntry:
-    """A single experiment record: metadata plus a sequence of logged runs."""
+    """A single experiment record: metadata plus a sequence of logged runs.
+
+    Array data logged via `log_run` (result arrays, final-state vectors) is
+    held in memory until `save`, at which point it's written to a companion
+    .npz file alongside the entry's .json -- see the module docstring.
+    """
 
     title: str = "Untitled Simulation"
-    entry_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    entry_id: str = field(default_factory=_make_entry_id)
     timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
     tags: list[str] = field(default_factory=list)
     notes: str = ""
     runs: list[SimulationRun] = field(default_factory=list)
+
+    # Arrays logged but not yet flushed to a companion .npz by `save`.
+    _pending_arrays: dict[str, np.ndarray] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+    # Companion .npz of a loaded (or already-saved) entry, opened lazily --
+    # np.load on an .npz doesn't decompress an array until it's indexed.
+    _npz_file: Any = field(default=None, init=False, repr=False, compare=False)
 
     def log_run(
         self,
@@ -112,7 +186,9 @@ class JournalEntry:
         `metrics` holds single-value results (e.g. ``{"purity": 0.98}``).
         `arrays` holds heavy numeric payloads keyed by name, each either a
         raw array or an annotated
-        ``{"data": ..., "unit": ..., "dimensions": ...}`` mapping.
+        ``{"data": ..., "unit": ..., "dimensions": ...}`` mapping. Array
+        data (from `final_state` and `arrays` alike) is held in memory and
+        only written to disk on `save`.
         """
         if circuit is not None and setup_layout_file is not None:
             raise ValueError("Pass either `circuit` or `setup_layout_file`, not both.")
@@ -125,15 +201,56 @@ class JournalEntry:
             hardware_layout_reference=(
                 str(setup_layout_file) if setup_layout_file is not None else None
             ),
-            final_state_cv=final_state.to_dict() if final_state is not None else None,
             scalar_results=dict(metrics or {}),
-            data_payloads={
-                key: _normalize_array_payload(payload)
-                for key, payload in (arrays or {}).items()
-            },
         )
+
+        if final_state is not None:
+            d_key = f"{run.run_id}__final_state__displacement"
+            v_key = f"{run.run_id}__final_state__covariance"
+            self._pending_arrays[d_key] = np.asarray(final_state.displacement)
+            self._pending_arrays[v_key] = np.asarray(final_state.covariance)
+            run.final_state_cv = {
+                "modes": list(final_state.modes),
+                "displacement_npz_key": d_key,
+                "covariance_npz_key": v_key,
+            }
+
+        for name, payload in (arrays or {}).items():
+            data, meta = _split_array_payload(payload)
+            npz_key = f"{run.run_id}__{name}"
+            self._pending_arrays[npz_key] = data
+            run.data_payloads[name] = {"npz_key": npz_key, **meta}
+
         self.runs.append(run)
         return run
+
+    # -- Reading back logged arrays ------------------------------------------
+
+    def get_array(self, npz_key: str) -> np.ndarray:
+        """Returns one previously-logged array by its npz key (see
+        ``SimulationRun.data_payloads[...]["npz_key"]``, or the
+        ``displacement_npz_key`` / ``covariance_npz_key`` on
+        `SimulationRun.final_state_cv`) -- whether it was logged earlier in
+        this process or loaded back from a saved entry's companion .npz."""
+        if npz_key in self._pending_arrays:
+            return self._pending_arrays[npz_key]
+        if self._npz_file is not None and npz_key in self._npz_file.files:
+            return self._npz_file[npz_key]
+        raise KeyError(f"No array logged under key {npz_key!r}.")
+
+    def get_final_state(self, run: SimulationRun) -> GaussianState:
+        """Reconstructs the `GaussianState` logged for `run` (see
+        `log_run(..., final_state=...)`)."""
+        if run.final_state_cv is None:
+            raise ValueError(f"Run '{run.run_name}' has no logged final state.")
+        cv = run.final_state_cv
+        return GaussianState(
+            modes=tuple(cv["modes"]),
+            displacement=self.get_array(cv["displacement_npz_key"]),
+            covariance=self.get_array(cv["covariance_npz_key"]),
+        )
+
+    # -- Serialization --------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -148,12 +265,62 @@ class JournalEntry:
             "runs": [run.to_dict() for run in self.runs],
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> JournalEntry:
+        meta = data["metadata"]
+        entry = cls(
+            title=meta["title"],
+            entry_id=meta["entry_id"],
+            timestamp=meta["timestamp"],
+            tags=list(meta["tags"]),
+            notes=meta["notes"],
+        )
+        entry.runs = [SimulationRun.from_dict(r) for r in data["runs"]]
+        return entry
+
     def save(self, directory: str | Path) -> Path:
+        """Writes ``entry_<id>.json`` (always) and ``entry_<id>.npz`` (only
+        if the entry has any array data, pending or already on disk), both
+        atomically. Safe to call again after further `log_run` calls -- new
+        arrays are merged with whatever the entry's companion .npz already
+        held, rather than overwriting it."""
         dir_path = Path(directory)
         dir_path.mkdir(parents=True, exist_ok=True)
-        file_path = dir_path / f"entry_{self.entry_id}.json"
-        file_path.write_text(json.dumps(self.to_dict(), indent=2))
-        return file_path
+        json_path = dir_path / f"entry_{self.entry_id}.json"
+        npz_path = dir_path / f"entry_{self.entry_id}.npz"
+
+        _atomic_write_text(json_path, json.dumps(self.to_dict(), indent=2))
+
+        if self._pending_arrays or self._npz_file is not None:
+            combined = {}
+            if self._npz_file is not None:
+                combined.update({k: self._npz_file[k] for k in self._npz_file.files})
+                self._npz_file.close()
+            combined.update(self._pending_arrays)
+            _atomic_write_npz(npz_path, combined)
+            self._npz_file = np.load(npz_path)
+            self._pending_arrays = {}
+
+        return json_path
+
+    @classmethod
+    def load(cls, json_path: str | Path) -> JournalEntry:
+        """Loads an entry from its ``entry_<id>.json``. The companion
+        ``.npz`` (if present alongside it) is opened lazily -- array data
+        isn't decompressed until `get_array` / `get_final_state` asks for
+        it."""
+        json_path = Path(json_path)
+        entry = cls.from_dict(json.loads(json_path.read_text()))
+        npz_path = json_path.with_suffix(".npz")
+        if npz_path.exists():
+            entry._npz_file = np.load(npz_path)
+        return entry
+
+    def close(self) -> None:
+        """Releases the companion .npz file handle, if one is open."""
+        if self._npz_file is not None:
+            self._npz_file.close()
+            self._npz_file = None
 
 
 # ---------------------------------------------------------------------------
@@ -173,9 +340,13 @@ class SimulationJournal:
     ) -> JournalEntry:
         return JournalEntry(title=title, tags=list(tags or []), notes=notes)
 
+    def load_entry(self, entry_id: str) -> JournalEntry:
+        return JournalEntry.load(self.storage_path / f"entry_{entry_id}.json")
+
     def fetch_history_summary(self) -> list[dict[str, Any]]:
-        """Scans the storage directory's entries for their index metadata,
-        without hydrating each entry's full run/array payloads into memory."""
+        """Scans the storage directory's entries for their index metadata.
+        Only reads each entry's small .json -- the companion .npz files
+        (which can be arbitrarily large) are never opened here."""
         summaries = []
         for file in self.storage_path.glob("entry_*.json"):
             with open(file, "r") as f:
