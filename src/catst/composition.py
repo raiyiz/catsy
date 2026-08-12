@@ -198,7 +198,9 @@ class OpticalSetup:
                             connector = "┴"
                         else:
                             connector = "┼"
-                        cell = f"[{connector}{label.center(block_width - 2)}{connector}]"
+                        cell = (
+                            f"[{connector}{label.center(block_width - 2)}{connector}]"
+                        )
                     else:
                         cell = f"[{label.center(block_width)}]"
                     lines[port] += f"─{cell}─"

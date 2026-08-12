@@ -72,6 +72,30 @@ def _check_positive_int(value: int, name: str) -> None:
         raise ValueError(f"{name} must be a positive integer, got {value!r}.")
 
 
+def _json_save(obj: Any, path: str | Path) -> None:
+    Path(path).write_text(json.dumps(obj))
+
+
+def _json_load(path: str | Path) -> Any:
+    return json.loads(Path(path).read_text())
+
+
+def _apply_gaussian_transform(
+    state: GaussianState,
+    transform: np.ndarray,
+    noise: np.ndarray | None = None,
+    displacement: np.ndarray | None = None,
+) -> GaussianState:
+    """Apply d' = S d + d0 and V' = S V Sᵀ + Y."""
+    new_d = transform @ state.displacement
+    if displacement is not None:
+        new_d += displacement
+    new_V = transform @ state.covariance @ transform.T
+    if noise is not None:
+        new_V += noise
+    return GaussianState(state.modes, new_d, new_V)
+
+
 # ---------------------------------------------------------------------------
 # Phase-space state
 # ---------------------------------------------------------------------------
@@ -262,11 +286,11 @@ class GaussianState:
         )
 
     def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(self.to_dict()))
+        _json_save(self.to_dict(), path)
 
     @classmethod
     def load(cls, path: str | Path) -> GaussianState:
-        return cls.from_dict(json.loads(Path(path).read_text()))
+        return cls.from_dict(_json_load(path))
 
 
 # ---------------------------------------------------------------------------
@@ -343,9 +367,7 @@ class GaussianOperations:
         S_global = np.eye(dim)
         S_global[idx : idx + 2, idx : idx + 2] = S_local
 
-        new_d = S_global @ state.displacement
-        new_V = S_global @ state.covariance @ S_global.T
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return _apply_gaussian_transform(state, S_global)
 
     @staticmethod
     def apply_phase_rotation(
@@ -362,9 +384,7 @@ class GaussianOperations:
         R_global = np.eye(dim)
         R_global[idx : idx + 2, idx : idx + 2] = R_local
 
-        new_d = R_global @ state.displacement
-        new_V = R_global @ state.covariance @ R_global.T
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return _apply_gaussian_transform(state, R_global)
 
     @staticmethod
     def apply_displacement(
@@ -423,9 +443,7 @@ class GaussianOperations:
         S_BS[idx_b : idx_b + 2, idx_a : idx_a + 2] = -r_coeff * I2
         S_BS[idx_b : idx_b + 2, idx_b : idx_b + 2] = t * I2
 
-        new_d = S_BS @ state.displacement
-        new_V = S_BS @ state.covariance @ S_BS.T
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return _apply_gaussian_transform(state, S_BS)
 
     @staticmethod
     def apply_loss(state: GaussianState, mode: str, eta: float) -> GaussianState:
@@ -440,9 +458,7 @@ class GaussianOperations:
         Y = np.zeros((dim, dim))
         Y[idx : idx + 2, idx : idx + 2] = (1 - eta) * 0.5 * np.eye(2)
 
-        new_d = X @ state.displacement
-        new_V = X @ state.covariance @ X.T + Y
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return _apply_gaussian_transform(state, X, noise=Y)
 
 
 # ---------------------------------------------------------------------------
@@ -471,29 +487,23 @@ class GaussianChannel:
 
     def apply(self, state: GaussianState) -> GaussianState:
         global_dim = len(state.displacement)
+        target_indices = [
+            i
+            for mode in self.target_modes
+            for i in (state.get_mode_index(mode), state.get_mode_index(mode) + 1)
+        ]
+        index = np.ix_(target_indices, target_indices)
 
         X_global = np.eye(global_dim)
         Y_global = np.zeros((global_dim, global_dim))
         d0_global = np.zeros(global_dim)
+        X_global[index] = self.X
+        Y_global[index] = self.Y
+        d0_global[target_indices] = self.d0
 
-        for local_idx1, m1 in enumerate(self.target_modes):
-            gi1 = state.get_mode_index(m1)
-            d0_global[gi1 : gi1 + 2] = self.d0[local_idx1 * 2 : local_idx1 * 2 + 2]
-
-            for local_idx2, m2 in enumerate(self.target_modes):
-                gi2 = state.get_mode_index(m2)
-                X_global[gi1 : gi1 + 2, gi2 : gi2 + 2] = self.X[
-                    local_idx1 * 2 : local_idx1 * 2 + 2,
-                    local_idx2 * 2 : local_idx2 * 2 + 2,
-                ]
-                Y_global[gi1 : gi1 + 2, gi2 : gi2 + 2] = self.Y[
-                    local_idx1 * 2 : local_idx1 * 2 + 2,
-                    local_idx2 * 2 : local_idx2 * 2 + 2,
-                ]
-
-        new_d = X_global @ state.displacement + d0_global
-        new_V = X_global @ state.covariance @ X_global.T + Y_global
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return _apply_gaussian_transform(
+            state, X_global, noise=Y_global, displacement=d0_global
+        )
 
     # -- Serialization ------------------------------------------------------
 
@@ -515,11 +525,11 @@ class GaussianChannel:
         )
 
     def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(self.to_dict()))
+        _json_save(self.to_dict(), path)
 
     @classmethod
     def load(cls, path: str | Path) -> GaussianChannel:
-        return cls.from_dict(json.loads(Path(path).read_text()))
+        return cls.from_dict(_json_load(path))
 
 
 class QBSChannels:
@@ -774,11 +784,11 @@ class GaussianCircuit:
         return circuit
 
     def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(self.to_dict()))
+        _json_save(self.to_dict(), path)
 
     @classmethod
     def load(cls, path: str | Path) -> GaussianCircuit:
-        return cls.from_dict(json.loads(Path(path).read_text()))
+        return cls.from_dict(_json_load(path))
 
 
 # ---------------------------------------------------------------------------

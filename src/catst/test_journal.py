@@ -22,9 +22,7 @@ def test_log_run_requires_exactly_one_hardware_reference():
     with pytest.raises(ValueError):
         entry.log_run("run")
     with pytest.raises(ValueError):
-        entry.log_run(
-            "run", circuit=GaussianCircuit(), setup_layout_file="layout.json"
-        )
+        entry.log_run("run", circuit=GaussianCircuit(), setup_layout_file="layout.json")
 
 
 def test_log_run_with_inline_circuit_embeds_full_definition():
@@ -113,7 +111,9 @@ def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
     annotated_meta = run.data_payloads["annotated"]
     assert annotated_meta["unit"] == "V"
     assert annotated_meta["dimensions"] == ["t"]
-    np.testing.assert_array_equal(entry.get_array(annotated_meta["npz_key"]), [3.0, 4.0])
+    np.testing.assert_array_equal(
+        entry.get_array(annotated_meta["npz_key"]), [3.0, 4.0]
+    )
 
 
 def test_log_run_rejects_array_dict_payload_missing_data_key():

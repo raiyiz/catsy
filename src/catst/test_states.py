@@ -24,26 +24,21 @@ from .states import (
     plot_wigner,
 )
 
-PLOT = 0  # flip on locally to pop up matplotlib windows while developing
-
-RNG = np.random.default_rng(1234)  # shared, seeded RNG -> reproducible test outcomes
-
-
 # ---------------------------------------------------------------------------
 # Phase-space layer: gates, channels, circuit compiler
 # ---------------------------------------------------------------------------
 
 
-def test_vacuum_is_shot_noise_limited():
-    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+def test_vacuum_is_shot_noise_limited(two_mode_vacuum):
+    state = two_mode_vacuum
     assert state.displacement.shape == (4,)
     np.testing.assert_allclose(state.covariance, 0.5 * np.eye(4))
 
 
-def test_squeezing_preserves_purity_determinant():
+def test_squeezing_preserves_purity_determinant(single_mode_vacuum):
     # A pure Gaussian state has det(V) == 0.25 in this (hbar=1, vacuum=0.5*I)
     # convention; squeezing is a symplectic (purity-preserving) operation.
-    state = GaussianOperations.create_vacuum(modes=("a",))
+    state = single_mode_vacuum
     squeezed = GaussianOperations.apply_squeezing(state, mode="a", r=0.8, theta=0.3)
     assert np.linalg.det(squeezed.covariance) == pytest.approx(0.25, rel=1e-9)
     # And squeezing should actually squeeze: at theta=0 the p-variance grows,
@@ -53,8 +48,8 @@ def test_squeezing_preserves_purity_determinant():
     assert unrotated.covariance[1, 1] > 0.5
 
 
-def test_beam_splitter_entangles_independent_modes():
-    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+def test_beam_splitter_entangles_independent_modes(two_mode_vacuum):
+    state = two_mode_vacuum
     state = GaussianOperations.apply_squeezing(state, mode="a", r=0.6, theta=0.0)
     state = GaussianOperations.apply_squeezing(state, mode="b", r=0.6, theta=np.pi / 2)
 
@@ -77,16 +72,16 @@ def test_beam_splitter_rejects_invalid_eta():
         GaussianOperations.apply_beam_splitter(state, mode_a="a", mode_b="a", eta=0.5)
 
 
-def test_loss_reduces_toward_vacuum():
-    state = GaussianOperations.create_vacuum(modes=("a",))
+def test_loss_reduces_toward_vacuum(single_mode_vacuum):
+    state = single_mode_vacuum
     state = GaussianOperations.apply_squeezing(state, mode="a", r=1.0, theta=0.0)
     lossy = GaussianOperations.apply_loss(state, mode="a", eta=0.0)
     # eta=0 is total loss -> mode is replaced by vacuum regardless of input.
     np.testing.assert_allclose(lossy.covariance, 0.5 * np.eye(2), atol=1e-9)
 
 
-def test_displacement_shifts_mean_leaves_covariance_untouched():
-    state = GaussianOperations.create_vacuum(modes=("a",))
+def test_displacement_shifts_mean_leaves_covariance_untouched(single_mode_vacuum):
+    state = single_mode_vacuum
     squeezed = GaussianOperations.apply_squeezing(state, mode="a", r=0.4, theta=0.2)
     displaced = GaussianOperations.apply_displacement(squeezed, mode="a", alpha=1.0)
     # Displacement is affine, not symplectic-mixing: covariance is unchanged...
@@ -97,8 +92,8 @@ def test_displacement_shifts_mean_leaves_covariance_untouched():
     )
 
 
-def test_displacement_alpha_and_xp_are_equivalent():
-    state = GaussianOperations.create_vacuum(modes=("a",))
+def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
+    state = single_mode_vacuum
     alpha = 0.6 - 0.9j
     via_alpha = GaussianOperations.apply_displacement(state, mode="a", alpha=alpha)
     via_xp = GaussianOperations.apply_displacement(
@@ -174,8 +169,8 @@ def test_circuit_add_mode_with_alpha_seeds_coherent_starting_state():
     np.testing.assert_allclose(overridden.displacement, np.zeros(2))
 
 
-def test_get_mode_index_unknown_mode_raises():
-    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+def test_get_mode_index_unknown_mode_raises(two_mode_vacuum):
+    state = two_mode_vacuum
     with pytest.raises(ValueError):
         state.get_mode_index("z")
 
@@ -410,7 +405,7 @@ def test_homodyne_measurement_is_reproducible_with_seeded_rng():
 # ---------------------------------------------------------------------------
 
 
-def test_wigner_analytical_matches_gaussian_normalization():
+def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
     circuit = GaussianCircuit()
     circuit.add_mode("a")
     circuit.squeeze(mode="a", r=1.1, theta=30.0)
@@ -425,11 +420,11 @@ def test_wigner_analytical_matches_gaussian_normalization():
     dx = (2 * 8.0) / 199
     integral = W.sum() * dx * dx
     assert integral == pytest.approx(1.0, rel=1e-2)
-    if PLOT:
+    if plot_enabled:
         plot_wigner(W, X, P, mode_name="a")
 
 
-def test_joint_correlation_plot_runs():
+def test_joint_correlation_computes_valid_grid(plot_enabled):
     circuit = GaussianCircuit()
     circuit.add_mode("a").add_mode("b")
     circuit.squeeze(mode="a", r=0.6).squeeze(
@@ -439,7 +434,7 @@ def test_joint_correlation_plot_runs():
     P, X_a, X_b = compute_joint_correlation(cv_state, "a", "b")
     assert P.shape == (150, 150)
     assert np.all(P >= 0)
-    if PLOT:
+    if plot_enabled:
         plot_joint_correlation(P, X_a, X_b, "a", "b")
 
 
@@ -559,14 +554,13 @@ def test_epr_entanglement_survives_but_weakens_under_loss():
     assert witness_heavy_loss > DUAN_SEPARABILITY_BOUND  # heavy loss killed it
 
 
+@pytest.mark.visual
 def test_epr_pair_entanglement_visualization_demo():
     # Side-by-side proof, by eye: the SAME quadrature pair is positively
     # correlated (x) or anti-correlated (p) for a genuinely entangled EPR
     # pair, while a classically-correlated control state shows same-sign
     # correlation in both -- the visual signature of "correlated but not
     # entangled" versus "genuinely entangled".
-    if not PLOT:
-        pytest.skip("visual-only demo; set PLOT=True to view")
     import matplotlib.pyplot as plt
 
     r = 1.0
@@ -763,13 +757,12 @@ def test_heterodyne_measurement_is_reproducible_with_seeded_rng():
 
 
 # ---------------------------------------------------------------------------
-# Visual-only demos (no assertions beyond "it runs") -- opt in with PLOT=True
+# Visual-only demos (no assertions beyond "it runs") -- opt in with --plot
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.visual
 def test_native_qutip_wigner_plot_demo():
-    if not PLOT:
-        pytest.skip("visual-only demo; set PLOT=True to view")
     import matplotlib.pyplot as plt
 
     state = GaussianCircuit().add_mode("a")
@@ -786,9 +779,8 @@ def test_native_qutip_wigner_plot_demo():
     plt.show()
 
 
+@pytest.mark.visual
 def test_laser_pulse_cavity_plot_demo():
-    if not PLOT:
-        pytest.skip("visual-only demo; set PLOT=True to view")
     import matplotlib.pyplot as plt
 
     N_cutoff = 15
@@ -815,9 +807,8 @@ def test_laser_pulse_cavity_plot_demo():
     plt.show()
 
 
+@pytest.mark.visual
 def test_full_cavity_multipanel_plot_demo():
-    if not PLOT:
-        pytest.skip("visual-only demo; set PLOT=True to view")
     import matplotlib.pyplot as plt
 
     N_cutoff = 12
@@ -901,7 +892,7 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     print(f"MZI decoherence scan runtime: {perf_counter() - start_time:.2f}s")
 
 
-def test_kerr_cat_state_generation():
+def test_kerr_cat_state_generation(plot_enabled):
     # A driven, weakly-damped Kerr cavity: a fast pulse loads the cavity with
     # a coherent state, then the Kerr nonlinearity shears it into a cat
     # state. Routed through QBSSimulator.run_cavity_with_pulse rather than
@@ -926,7 +917,7 @@ def test_kerr_cat_state_generation():
     assert len(states) == len(tlist)
     assert states[-1].tr() == pytest.approx(1.0, abs=1e-6)
 
-    if PLOT:
+    if plot_enabled:
         # Snapshots: pulse arriving, freshly-displaced coherent blob, Kerr
         # shear starting to bend it, and the final cat state.
         snapshot_indices = [10, 40, 110, -1]
@@ -952,13 +943,12 @@ def test_kerr_cat_state_generation():
         plt.show()
 
 
+@pytest.mark.visual
 def test_cat_state_single_shot_through_mzi():
     # Single-phase companion to test_decoherence_mzi_parity_visibility_drops_with_loss
     # below: a loss-free MZI at one fixed theta, kept mainly to inspect the
     # output Wigner functions -- so it belongs with the other visual-only
     # demos and follows the same skip-when-not-plotting convention.
-    if not PLOT:
-        pytest.skip("visual-only demo; set PLOT=True to view")
 
     N_cutoff = 22
     alpha = 2
@@ -1011,14 +1001,13 @@ def test_cat_state_single_shot_through_mzi():
     plt.show()
 
 
+@pytest.mark.visual
 def test_cat_mzi_phase_scan_fringes():
     # Loss-free (kappa=0) phase scan of a cat state through the MZI -- the
     # clean-case counterpart plotted alongside the noisy one in
     # test_decoherence_mzi_parity_visibility_drops_with_loss. Routed through
     # QBSSimulator.scan_mzi_with_loss instead of duplicating that loop here,
     # so both tests exercise the same simulation code.
-    if not PLOT:
-        pytest.skip("visual-only demo; set PLOT=True to view")
 
     N_cutoff = 22
     alpha = 4.0 + 2j

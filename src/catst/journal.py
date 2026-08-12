@@ -131,16 +131,7 @@ class SimulationRun:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SimulationRun:
-        return cls(
-            run_name=data["run_name"],
-            run_id=data["run_id"],
-            timestamp=data["timestamp"],
-            circuit=data["circuit"],
-            hardware_layout_reference=data["hardware_layout_reference"],
-            final_state_cv=data["final_state_cv"],
-            scalar_results=data["scalar_results"],
-            data_payloads=data["data_payloads"],
-        )
+        return cls(**data)
 
 
 @dataclass
@@ -166,6 +157,11 @@ class JournalEntry:
     # Companion .npz of a loaded (or already-saved) entry, opened lazily --
     # np.load on an .npz doesn't decompress an array until it's indexed.
     _npz_file: Any = field(default=None, init=False, repr=False, compare=False)
+
+    def _store_array(self, key: str, payload: Any) -> dict[str, Any]:
+        data, meta = _split_array_payload(payload)
+        self._pending_arrays[key] = data
+        return {"npz_key": key, **meta}
 
     def log_run(
         self,
@@ -216,10 +212,9 @@ class JournalEntry:
             }
 
         for name, payload in (arrays or {}).items():
-            data, meta = _split_array_payload(payload)
-            npz_key = f"{run.run_id}__{name}"
-            self._pending_arrays[npz_key] = data
-            run.data_payloads[name] = {"npz_key": npz_key, **meta}
+            run.data_payloads[name] = self._store_array(
+                f"{run.run_id}__{name}", payload
+            )
 
         self.runs.append(run)
         return run
