@@ -1,12 +1,8 @@
-from time import perf_counter
-
 import numpy as np
 import pytest
 import qutip as qt
-from matplotlib import pyplot as plt
-
-from .core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
-from .gaussian import (
+from catst.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
+from catst.gaussian import (
     OPERATION_REGISTRY,
     GaussianChannel,
     GaussianCircuit,
@@ -20,13 +16,9 @@ from .gaussian import (
     plot_joint_correlation,
     plot_wigner,
 )
-from .quantum import FockOperations, NonGaussianOperations, QBSSimulator
+from matplotlib import pyplot as plt
 
-
-
-# ---------------------------------------------------------------------------
-# Analytic Gaussian primitive checks
-# ---------------------------------------------------------------------------
+# Analytic primitive checks
 
 @pytest.mark.parametrize("r", [0.0, 0.25, 0.8, 1.2])
 def test_squeezing_has_expected_principal_variances(r):
@@ -35,7 +27,6 @@ def test_squeezing_has_expected_principal_variances(r):
 
     expected = 0.5 * np.diag([np.exp(-2 * r), np.exp(2 * r)])
     np.testing.assert_allclose(squeezed.covariance, expected, rtol=1e-12, atol=1e-12)
-
 
 @pytest.mark.parametrize(
     ("phi", "alpha"),
@@ -54,7 +45,6 @@ def test_phase_rotation_rotates_displacement(phi, alpha):
     np.testing.assert_allclose(rotated.displacement, expected, atol=1e-12)
     np.testing.assert_allclose(rotated.covariance, state.covariance, atol=1e-12)
 
-
 @pytest.mark.parametrize("eta", [0.0, 0.2, 0.5, 0.9, 1.0])
 def test_loss_matches_vacuum_environment_formula(eta):
     state = GaussianOperations.apply_squeezing(
@@ -63,6 +53,25 @@ def test_loss_matches_vacuum_environment_formula(eta):
     lossy = GaussianOperations.apply_loss(state, "a", eta=eta)
 
     expected = eta * state.covariance + (1.0 - eta) * 0.5 * np.eye(2)
+    np.testing.assert_allclose(lossy.covariance, expected, atol=1e-12)
+    np.testing.assert_allclose(lossy.displacement, np.sqrt(eta) * state.displacement)
+
+@pytest.mark.parametrize(
+    ("eta", "n_thermal"),
+    [(0.0, 0.0), (0.25, 0.5), (0.8, 1.2), (1.0, 2.0)],
+)
+def test_thermal_loss_matches_environment_formula(eta, n_thermal):
+    state = GaussianOperations.apply_squeezing(
+        GaussianOperations.create_coherent(("a",), 0.4 - 0.2j),
+        "a",
+        r=0.5,
+        theta=0.2,
+    )
+    lossy = QBSChannels.thermal_loss(
+        mode="a", eta=eta, n_thermal=n_thermal
+    ).apply(state)
+
+    expected = eta * state.covariance + (1.0 - eta) * (n_thermal + 0.5) * np.eye(2)
     np.testing.assert_allclose(lossy.covariance, expected, atol=1e-12)
     np.testing.assert_allclose(lossy.displacement, np.sqrt(eta) * state.displacement)
 
@@ -83,17 +92,12 @@ def test_beam_splitter_has_expected_coherent_amplitude_map(eta):
     np.testing.assert_allclose(mixed.displacement, expected, atol=1e-12)
     np.testing.assert_allclose(mixed.covariance, 0.5 * np.eye(4), atol=1e-12)
 
-
-# ---------------------------------------------------------------------------
-# Phase-space layer: gates, channels, circuit compiler
-# ---------------------------------------------------------------------------
-
+# States and operations
 
 def test_vacuum_is_shot_noise_limited(two_mode_vacuum):
     state = two_mode_vacuum
     assert state.displacement.shape == (4,)
     np.testing.assert_allclose(state.covariance, 0.5 * np.eye(4))
-
 
 def test_squeezing_preserves_purity_determinant(single_mode_vacuum):
     # A pure Gaussian state has det(V) == 0.25 in this (hbar=1, vacuum=0.5*I)
@@ -106,7 +110,6 @@ def test_squeezing_preserves_purity_determinant(single_mode_vacuum):
     unrotated = GaussianOperations.apply_squeezing(state, mode="a", r=0.8, theta=0.0)
     assert unrotated.covariance[0, 0] < 0.5
     assert unrotated.covariance[1, 1] > 0.5
-
 
 def test_beam_splitter_entangles_independent_modes(two_mode_vacuum):
     state = two_mode_vacuum
@@ -123,13 +126,17 @@ def test_beam_splitter_entangles_independent_modes(two_mode_vacuum):
     # cross-correlations (entanglement) between them.
     assert np.abs(mixed.covariance[0:2, 2:4]).max() > 1e-6
 
+@pytest.mark.parametrize("eta", [-0.1, 1.1])
+def test_beam_splitter_rejects_invalid_eta(eta):
+    state = GaussianOperations.create_vacuum(("a", "b"))
+    with pytest.raises(ValueError):
+        GaussianOperations.apply_beam_splitter(state, "a", "b", eta=eta)
 
-def test_beam_splitter_rejects_invalid_eta():
-    state = GaussianOperations.create_vacuum(modes=("a", "b"))
+
+def test_beam_splitter_rejects_duplicate_modes():
+    state = GaussianOperations.create_vacuum(("a", "b"))
     with pytest.raises(ValueError):
-        GaussianOperations.apply_beam_splitter(state, mode_a="a", mode_b="b", eta=1.5)
-    with pytest.raises(ValueError):
-        GaussianOperations.apply_beam_splitter(state, mode_a="a", mode_b="a", eta=0.5)
+        GaussianOperations.apply_beam_splitter(state, "a", "a", eta=0.5)
 
 
 def test_loss_reduces_toward_vacuum(single_mode_vacuum):
@@ -138,7 +145,6 @@ def test_loss_reduces_toward_vacuum(single_mode_vacuum):
     lossy = GaussianOperations.apply_loss(state, mode="a", eta=0.0)
     # eta=0 is total loss -> mode is replaced by vacuum regardless of input.
     np.testing.assert_allclose(lossy.covariance, 0.5 * np.eye(2), atol=1e-9)
-
 
 def test_displacement_shifts_mean_leaves_covariance_untouched(single_mode_vacuum):
     state = single_mode_vacuum
@@ -151,7 +157,6 @@ def test_displacement_shifts_mean_leaves_covariance_untouched(single_mode_vacuum
         displaced.displacement - squeezed.displacement, [np.sqrt(2.0), 0.0]
     )
 
-
 def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
     state = single_mode_vacuum
     alpha = 0.6 - 0.9j
@@ -161,17 +166,19 @@ def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
     )
     np.testing.assert_allclose(via_alpha.displacement, via_xp.displacement)
 
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"alpha": 1.0, "x": 1.0}, "not both"),
+        ({}, "alpha"),
+        ({"x": 1.0}, "p"),
 
-def test_displacement_rejects_conflicting_or_missing_args():
-    state = GaussianOperations.create_vacuum(modes=("a",))
-    with pytest.raises(ValueError):
-        # alpha together with x/p is ambiguous.
-        GaussianOperations.apply_displacement(state, mode="a", alpha=1.0, x=1.0)
-    with pytest.raises(ValueError):
-        # Neither alpha nor a full (x, p) pair given.
-        GaussianOperations.apply_displacement(state, mode="a")
-    with pytest.raises(ValueError):
-        GaussianOperations.apply_displacement(state, mode="a", x=1.0)  # p missing
+    ],
+)
+def test_displacement_rejects_invalid_argument_combinations(kwargs, match):
+    state = GaussianOperations.create_vacuum(("a",))
+    with pytest.raises(ValueError, match=match):
+        GaussianOperations.apply_displacement(state, mode="a", **kwargs)
 
 
 def test_create_coherent_matches_displaced_vacuum():
@@ -183,16 +190,13 @@ def test_create_coherent_matches_displaced_vacuum():
     np.testing.assert_allclose(coherent.displacement, manual.displacement)
     np.testing.assert_allclose(coherent.covariance, 0.5 * np.eye(2))
 
-
 def test_create_coherent_broadcasts_scalar_alpha_across_modes():
     state = GaussianOperations.create_coherent(("a", "b"), 1.0j)
     np.testing.assert_allclose(state.displacement[0:2], state.displacement[2:4])
 
-
 def test_create_coherent_rejects_mismatched_alpha_count():
     with pytest.raises(ValueError):
         GaussianOperations.create_coherent(("a", "b"), [1.0])
-
 
 def test_coherent_state_mean_photon_number_matches_alpha_squared():
     # |alpha> has <n> = |alpha|^2 -- a direct check that apply_displacement's
@@ -202,7 +206,6 @@ def test_coherent_state_mean_photon_number_matches_alpha_squared():
     rho = state.to_qutip(N_cutoff=25)
     mean_n = qt.expect(qt.num(25), rho)
     assert mean_n == pytest.approx(np.abs(alpha) ** 2, rel=1e-3)
-
 
 def test_circuit_displace_matches_manual_displacement():
     manual = GaussianOperations.create_vacuum(modes=("a",))
@@ -216,7 +219,6 @@ def test_circuit_displace_matches_manual_displacement():
     np.testing.assert_allclose(compiled.displacement, manual.displacement, atol=1e-10)
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 
-
 def test_circuit_add_mode_with_alpha_seeds_coherent_starting_state():
     circuit = GaussianCircuit().add_mode("c", alpha=1.0 + 1.0j)
     compiled = circuit.compile_and_run()
@@ -228,12 +230,12 @@ def test_circuit_add_mode_with_alpha_seeds_coherent_starting_state():
     )
     np.testing.assert_allclose(overridden.displacement, np.zeros(2))
 
-
 def test_get_mode_index_unknown_mode_raises(two_mode_vacuum):
     state = two_mode_vacuum
     with pytest.raises(ValueError):
         state.get_mode_index("z")
 
+# Mode ordering and circuits
 
 def test_duplicate_mode_names_rejected():
     with pytest.raises(ValueError):
@@ -256,11 +258,9 @@ def test_state_reorder_modes_preserves_physical_state(two_mode_vacuum):
     np.testing.assert_allclose(roundtrip.displacement, state.displacement)
     np.testing.assert_allclose(roundtrip.covariance, state.covariance)
 
-
 def test_state_reorder_modes_rejects_wrong_mode_set(two_mode_vacuum):
     with pytest.raises(ValueError, match="exactly the state's modes"):
         two_mode_vacuum.reorder_modes(("a", "c"))
-
 
 def test_circuit_canonicalizes_initial_state_mode_order():
     initial = GaussianOperations.create_coherent(
@@ -277,8 +277,6 @@ def test_circuit_canonicalizes_initial_state_mode_order():
     np.testing.assert_allclose(result.displacement, expected.displacement)
     np.testing.assert_allclose(result.covariance, expected.covariance)
 
-
-
 def test_classical_phase_jitter_channel_applies():
     # Regression test: this channel used to build a (1,2)-shaped Y matrix,
     # which fails GaussianChannel's (2,2) validation. It must now apply cleanly
@@ -287,8 +285,7 @@ def test_classical_phase_jitter_channel_applies():
     channel = QBSChannels.classical_phase_jitter(mode="a", sigma_phi=0.3)
     jittered = channel.apply(state)
     assert jittered.covariance[0, 0] == pytest.approx(0.5)  # q untouched
-    assert jittered.covariance[1, 1] > 0.5  # p gained noise
-
+    assert jittered.covariance[1, 1] > 0.5
 
 def test_gaussian_state_rejects_unphysical_covariance():
     with pytest.raises(ValueError, match="uncertainty relation"):
@@ -298,6 +295,7 @@ def test_gaussian_state_rejects_unphysical_covariance():
             covariance=0.1 * np.eye(2),
         )
 
+# Channels
 
 def test_gaussian_state_rejects_nonsymmetric_covariance():
     covariance = np.array([[0.5, 0.1], [0.0, 0.5]])
@@ -308,7 +306,6 @@ def test_gaussian_state_rejects_nonsymmetric_covariance():
             covariance=covariance,
         )
 
-
 def test_gaussian_state_rejects_nonfinite_values():
     covariance = np.diag([np.inf, np.inf])
     with pytest.raises(ValueError, match="finite"):
@@ -317,7 +314,6 @@ def test_gaussian_state_rejects_nonfinite_values():
             displacement=np.zeros(2),
             covariance=covariance,
         )
-
 
 def test_gaussian_channel_rejects_non_cp_channel():
     # X=2I with no added noise amplifies phase space without the noise
@@ -330,7 +326,6 @@ def test_gaussian_channel_rejects_non_cp_channel():
             d0=np.zeros(2),
         )
 
-
 def test_gaussian_channel_rejects_nonsymmetric_noise():
     with pytest.raises(ValueError, match="symmetric"):
         GaussianChannel(
@@ -340,7 +335,6 @@ def test_gaussian_channel_rejects_nonsymmetric_noise():
             d0=np.zeros(2),
         )
 
-
 def test_thermal_loss_is_a_valid_gaussian_channel():
     channel = QBSChannels.thermal_loss(
         mode="a",
@@ -349,55 +343,37 @@ def test_thermal_loss_is_a_valid_gaussian_channel():
     )
     assert channel.X.shape == (2, 2)
 
-
-def test_correlated_thermal_noise_rejects_excessive_correlation():
-    with pytest.raises(ValueError, match="c_correlation"):
-        QBSChannels.correlated_thermal_noise(
-            "a",
-            "b",
-            eta=0.5,
-            n_thermal=0.5,
-            c_correlation=0.500001,
+@pytest.mark.parametrize(
+    ("n_thermal", "c_correlation", "valid"),
+    [
+        (0.5, 0.5, True),
+        (0.5, -0.5, True),
+        (0.5, 0.500001, False),
+        (0.0, 1e-6, False),
+    ],
+)
+def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation, valid):
+    if valid:
+        channel = QBSChannels.correlated_thermal_noise(
+            "a", "b", eta=0.5,
+            n_thermal=n_thermal,
+            c_correlation=c_correlation,
         )
+        assert channel.Y.shape == (4, 4)
+    else:
+        with pytest.raises(ValueError, match="c_correlation"):
+            QBSChannels.correlated_thermal_noise(
+                "a", "b", eta=0.5,
+                n_thermal=n_thermal,
+                c_correlation=c_correlation,
+            )
 
 
-def test_correlated_thermal_noise_accepts_physical_boundary():
-    channel = QBSChannels.correlated_thermal_noise(
-        "a",
-        "b",
-        eta=0.5,
-        n_thermal=0.5,
-        c_correlation=0.5,
-    )
-    assert channel.Y.shape == (4, 4)
-
-
-def test_correlated_thermal_noise_accepts_negative_physical_boundary():
-    channel = QBSChannels.correlated_thermal_noise(
-        "a",
-        "b",
-        eta=0.5,
-        n_thermal=0.5,
-        c_correlation=-0.5,
-    )
-    assert channel.Y.shape == (4, 4)
-
-
-def test_correlated_thermal_noise_rejects_correlation_without_thermal_occupation():
-    with pytest.raises(ValueError, match="c_correlation"):
-        QBSChannels.correlated_thermal_noise(
-            "a",
-            "b",
-            eta=0.5,
-            n_thermal=0.0,
-            c_correlation=1e-6,
-        )
-
+# Circuit validation and serialization
 
 def test_channel_dimension_validation():
     with pytest.raises(ValueError):
         GaussianChannel(target_modes=("a",), X=np.eye(2), Y=np.eye(3), d0=np.zeros(2))
-
 
 def test_circuit_matches_manual_operation_chain():
     manual = GaussianOperations.create_vacuum(modes=("a", "b"))
@@ -422,7 +398,6 @@ def test_circuit_matches_manual_operation_chain():
     np.testing.assert_allclose(compiled.displacement, manual.displacement, atol=1e-10)
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 
-
 def test_circuit_rejects_unregistered_mode():
     circuit = GaussianCircuit()
     circuit.add_mode("a")
@@ -430,11 +405,9 @@ def test_circuit_rejects_unregistered_mode():
     with pytest.raises(ValueError):
         circuit.compile_and_run()
 
-
 def test_circuit_rejects_empty_mode_set():
     with pytest.raises(ValueError):
         GaussianCircuit().compile_and_run()
-
 
 def test_circuit_extensible_via_registry():
     # New gates plug into the same dispatch the built-ins use — no need to
@@ -455,12 +428,6 @@ def test_circuit_extensible_via_registry():
     finally:
         del OPERATION_REGISTRY["MyCustomOp"]
 
-
-# ---------------------------------------------------------------------------
-# Serialization
-# ---------------------------------------------------------------------------
-
-
 def test_gaussian_state_roundtrips_through_dict():
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
     state = GaussianOperations.apply_squeezing(state, mode="a", r=0.4)
@@ -468,7 +435,6 @@ def test_gaussian_state_roundtrips_through_dict():
     assert restored.modes == state.modes
     np.testing.assert_allclose(restored.displacement, state.displacement)
     np.testing.assert_allclose(restored.covariance, state.covariance)
-
 
 def test_gaussian_state_roundtrips_through_file(tmp_path):
     state = GaussianOperations.create_vacuum(modes=("a",))
@@ -478,6 +444,7 @@ def test_gaussian_state_roundtrips_through_file(tmp_path):
     restored = GaussianState.load(path)
     np.testing.assert_allclose(restored.covariance, state.covariance)
 
+# Measurements
 
 def test_circuit_roundtrips_through_file(tmp_path):
     circuit = GaussianCircuit()
@@ -493,7 +460,6 @@ def test_circuit_roundtrips_through_file(tmp_path):
     restored_result = restored.compile_and_run()
     np.testing.assert_allclose(restored_result.covariance, original_result.covariance)
 
-
 def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
     circuit = GaussianCircuit()
     circuit.add_mode("a", alpha=0.5 + 1.3j).add_mode("b")
@@ -507,66 +473,6 @@ def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
     np.testing.assert_allclose(
         restored_result.displacement, original_result.displacement
     )
-
-
-# ---------------------------------------------------------------------------
-# Phase-space <-> Fock-space bridge (Williamson conversion)
-# ---------------------------------------------------------------------------
-
-
-def test_cv_channel_to_fock_purity_drops_with_loss():
-    state = GaussianOperations.create_vacuum(modes=("a", "b"))
-    state = GaussianOperations.apply_squeezing(state, mode="a", r=0.5)
-    state = GaussianOperations.apply_squeezing(state, mode="b", r=0.5, theta=np.pi / 2)
-    state = GaussianOperations.apply_beam_splitter(
-        state, mode_a="a", mode_b="b", eta=0.5
-    )
-
-    clean_rho = state.to_qutip(N_cutoff=18)
-    noisy_state = QBSChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(
-        state
-    )
-    noisy_rho = noisy_state.to_qutip(N_cutoff=18)
-
-    assert clean_rho.tr() == pytest.approx(1.0, abs=1e-6)
-    # NOTE: this particular covariance matrix hits a known, cutoff-independent
-    # precision limit of the sqrtm/logm-based symplectic decomposition in
-    # to_qutip (~0.7% trace error even at N_cutoff=35) — see the docstring on
-    # GaussianState.to_qutip. 1e-2 tolerance here reflects that limitation,
-    # not truncation error.
-    assert noisy_rho.tr() == pytest.approx(1.0, abs=1e-2)
-
-    # The two-mode state started pure (r=0.5 squeezing + a lossless BS is
-    # unitary). A non-unitary thermal-loss channel on top of it must make the
-    # *global* state strictly mixed. (Reduced-subsystem entropy on just mode
-    # A isn't a safe proxy here: loss on A both adds local noise, which raises
-    # its entropy, and weakens A-B entanglement, which lowers it — the two
-    # effects can go either way. Global purity has no such ambiguity.)
-    purity_clean = (clean_rho * clean_rho).tr().real
-    purity_noisy = (noisy_rho * noisy_rho).tr().real
-    assert purity_clean == pytest.approx(1.0, abs=1e-2)
-    assert purity_noisy < purity_clean - 1e-3
-
-
-def test_qo_epr_purity_drops_below_one_after_loss():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.6, theta=0.0).squeeze(
-        mode="b", r=0.6, theta=np.pi / 2
-    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5).thermal_loss(
-        mode="b", eta=0.7, n_thermal=0.3
-    )
-    final_cv_state = circuit.compile_and_run()
-    rho_qutip = final_cv_state.to_qutip(N_cutoff=15)
-
-    purity = (rho_qutip * rho_qutip).tr().real
-    assert 0.0 < purity < 1.0 - 1e-6
-
-
-# ---------------------------------------------------------------------------
-# Measurement
-# ---------------------------------------------------------------------------
-
 
 def test_homodyne_measurement_collapses_epr_correlation():
     circuit = GaussianCircuit()
@@ -587,7 +493,6 @@ def test_homodyne_measurement_collapses_epr_correlation():
     )
     assert np.sign(collapsed.displacement[0]) != np.sign(collapsed_neg.displacement[0])
 
-
 def test_homodyne_measurement_is_reproducible_with_seeded_rng():
     state = GaussianOperations.create_vacuum(modes=("a",))
     v1, _ = GaussianMeasurements.homodyne_measurement(
@@ -598,18 +503,18 @@ def test_homodyne_measurement_is_reproducible_with_seeded_rng():
     )
     assert v1 == v2
 
-
-def test_homodyne_rejects_nonfinite_phase_and_outcome():
-    state = GaussianOperations.create_vacuum(modes=("a",))
-
-    with pytest.raises(ValueError, match="phi must be finite"):
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"phi": np.nan}, "phi must be finite"),
+        ({"phi": 0.0, "outcome": np.inf}, "finite scalar"),
+    ],
+)
+def test_homodyne_rejects_nonfinite_inputs(kwargs, match):
+    state = GaussianOperations.create_vacuum(("a",))
+    with pytest.raises(ValueError, match=match):
         GaussianMeasurements.homodyne_measurement(
-            state, measured_mode="a", phi=np.nan
-        )
-
-    with pytest.raises(ValueError, match="finite scalar"):
-        GaussianMeasurements.homodyne_measurement(
-            state, measured_mode="a", phi=0.0, outcome=np.inf
+            state, measured_mode="a", **kwargs
         )
 
 
@@ -624,18 +529,20 @@ def test_homodyne_single_mode_returns_valid_empty_state():
     assert collapsed.displacement.shape == (0,)
     assert collapsed.covariance.shape == (0, 0)
 
+# Phase-space analysis
 
-def test_heterodyne_rejects_invalid_outcome_shape_and_nonfinite_values():
-    state = GaussianOperations.create_vacuum(modes=("a",))
-
-    with pytest.raises(ValueError, match=r"shape \(2,\)"):
+@pytest.mark.parametrize(
+    ("outcome", "match"),
+    [
+        (np.array([1.0]), r"shape \(2,\)"),
+        (np.array([1.0, np.nan]), "finite values"),
+    ],
+)
+def test_heterodyne_rejects_invalid_outcomes(outcome, match):
+    state = GaussianOperations.create_vacuum(("a",))
+    with pytest.raises(ValueError, match=match):
         GaussianMeasurements.heterodyne_measurement(
-            state, measured_mode="a", outcome=np.array([1.0])
-        )
-
-    with pytest.raises(ValueError, match="finite values"):
-        GaussianMeasurements.heterodyne_measurement(
-            state, measured_mode="a", outcome=np.array([1.0, np.nan])
+            state, measured_mode="a", outcome=outcome
         )
 
 
@@ -649,12 +556,6 @@ def test_heterodyne_single_mode_returns_valid_empty_state():
     assert collapsed.modes == ()
     assert collapsed.displacement.shape == (0,)
     assert collapsed.covariance.shape == (0, 0)
-
-
-# ---------------------------------------------------------------------------
-# Analytic phase-space plotting
-# ---------------------------------------------------------------------------
-
 
 def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
     circuit = GaussianCircuit()
@@ -674,7 +575,6 @@ def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
     if plot_enabled:
         plot_wigner(W, X, P, mode_name="a")
 
-
 def test_joint_correlation_computes_valid_grid(plot_enabled):
     circuit = GaussianCircuit()
     circuit.add_mode("a").add_mode("b")
@@ -688,12 +588,10 @@ def test_joint_correlation_computes_valid_grid(plot_enabled):
     if plot_enabled:
         plot_joint_correlation(P, X_a, X_b, "a", "b")
 
-
 def test_joint_correlation_rejects_invalid_quadrature():
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
     with pytest.raises(ValueError):
         compute_joint_correlation(state, "a", "b", quadrature="z")
-
 
 def test_joint_correlation_x_correlated_p_anticorrelated_for_epr_pair():
     # The whole point of an EPR pair: the SAME quadrature choice (x or p)
@@ -718,13 +616,7 @@ def test_joint_correlation_x_correlated_p_anticorrelated_for_epr_pair():
     assert empirical_cov_x == pytest.approx(epr.covariance[0, 2], rel=5e-3)
     assert empirical_cov_p == pytest.approx(epr.covariance[1, 3], rel=5e-3)
     assert empirical_cov_x > 0  # x_a, x_b: positively correlated
-    assert empirical_cov_p < 0  # p_a, p_b: anti-correlated
-
-
-# ---------------------------------------------------------------------------
-# Genuine CV entanglement: the Duan-Simon witness
-# ---------------------------------------------------------------------------
-
+    assert empirical_cov_p < 0
 
 def test_create_epr_pair_matches_manual_squeeze_squeeze_bs():
     manual = GaussianOperations.create_vacuum(("a", "b"))
@@ -739,7 +631,6 @@ def test_create_epr_pair_matches_manual_squeeze_squeeze_bs():
     np.testing.assert_allclose(epr.displacement, manual.displacement)
     np.testing.assert_allclose(epr.covariance, manual.covariance)
 
-
 def test_duan_witness_independent_vacua_saturate_separability_bound():
     # Two completely independent vacuum modes are the boundary case: no
     # correlation at all, so the witness sits exactly on the separability
@@ -747,7 +638,6 @@ def test_duan_witness_independent_vacua_saturate_separability_bound():
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
     witness = compute_duan_inseparability(state, "a", "b")
     assert witness == pytest.approx(DUAN_SEPARABILITY_BOUND)
-
 
 def test_duan_witness_confirms_genuine_entanglement_for_epr_pair():
     r = 1.0
@@ -758,7 +648,6 @@ def test_duan_witness_confirms_genuine_entanglement_for_epr_pair():
     assert witness == pytest.approx(2.0 * np.exp(-2.0 * r), rel=1e-6)
     assert witness < DUAN_SEPARABILITY_BOUND
 
-
 def test_duan_witness_strengthens_with_more_squeezing():
     weak = compute_duan_inseparability(
         GaussianOperations.create_epr_pair("a", "b", r=0.3), "a", "b"
@@ -767,7 +656,6 @@ def test_duan_witness_strengthens_with_more_squeezing():
         GaussianOperations.create_epr_pair("a", "b", r=1.2), "a", "b"
     )
     assert DUAN_SEPARABILITY_BOUND > weak > strong > 0.0
-
 
 def test_classical_correlation_does_not_violate_duan_bound():
     # A noise channel can visibly correlate two modes' quadratures (nonzero
@@ -783,8 +671,7 @@ def test_classical_correlation_does_not_violate_duan_bound():
 
     assert abs(correlated.covariance[0, 2]) > 1e-6  # visibly correlated in x...
     witness = compute_duan_inseparability(correlated, "a", "b")
-    assert witness >= DUAN_SEPARABILITY_BOUND - 1e-9  # ...but not entangled
-
+    assert witness >= DUAN_SEPARABILITY_BOUND - 1e-9
 
 def test_epr_entanglement_survives_but_weakens_under_loss():
     # A physically important consistency check: loss on just one arm of an
@@ -802,8 +689,7 @@ def test_epr_entanglement_survives_but_weakens_under_loss():
 
     assert witness_clean < witness_light_loss < witness_heavy_loss
     assert witness_light_loss < DUAN_SEPARABILITY_BOUND  # still entangled
-    assert witness_heavy_loss > DUAN_SEPARABILITY_BOUND  # heavy loss killed it
-
+    assert witness_heavy_loss > DUAN_SEPARABILITY_BOUND
 
 @pytest.mark.visual
 def test_epr_pair_entanglement_visualization_demo():
@@ -812,7 +698,6 @@ def test_epr_pair_entanglement_visualization_demo():
     # pair, while a classically-correlated control state shows same-sign
     # correlation in both -- the visual signature of "correlated but not
     # entangled" versus "genuinely entangled".
-    import matplotlib.pyplot as plt
 
     r = 1.0
     epr = GaussianOperations.create_epr_pair("a", "b", r=r)
@@ -858,44 +743,7 @@ def test_epr_pair_entanglement_visualization_demo():
     plt.tight_layout()
     plt.show()
 
-
-# ---------------------------------------------------------------------------
-# Non-Gaussian operations (single shared FockOperations implementation)
-# ---------------------------------------------------------------------------
-
-
-def test_photon_subtraction_state_and_rho_entry_points_agree():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a")
-    circuit.squeeze(mode="a", r=0.55)
-    gaussian_squeezed = circuit.compile_and_run()
-
-    via_state = NonGaussianOperations.photon_subtraction(
-        gaussian_squeezed, mode_name="a", N_cutoff=25
-    )
-    rho = gaussian_squeezed.to_qutip(N_cutoff=25)
-    via_rho = FockOperations.photon_subtraction(rho, mode_idx=0, N_cutoff=25)
-
-    assert via_state == via_rho  # both entry points dispatch to the same code
-    # A photon-subtracted squeezed vacuum should show Wigner negativity —
-    # i.e. it's genuinely non-Gaussian. Purity must still be < 1 (mixed by loss? No,
-    # it's pure) so instead check it's a valid, normalized state:
-    assert via_state.tr() == pytest.approx(1.0, abs=1e-6)
-
-
-def test_photon_subtraction_zero_probability_raises():
-    N_cutoff = 5
-    vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
-    with pytest.raises(ValueError):
-        FockOperations.photon_subtraction(vacuum, mode_idx=0, N_cutoff=N_cutoff)
-
-
-def test_qbs_simulator_photon_ops_delegate_to_fock_operations():
-    # QBSSimulator.photon_subtraction/addition must be the same function
-    # object as FockOperations' — not a second, drifting implementation.
-    assert QBSSimulator.photon_subtraction is FockOperations.photon_subtraction
-    assert QBSSimulator.photon_addition is FockOperations.photon_addition
-
+# Gaussian-to-Fock boundary
 
 def test_phase_rotation_preserves_photon_number_and_purity():
     state = GaussianOperations.create_vacuum(modes=("a",))
@@ -911,7 +759,6 @@ def test_phase_rotation_preserves_photon_number_and_purity():
     )
     np.testing.assert_allclose(full_turn.covariance, squeezed.covariance, atol=1e-9)
 
-
 def test_circuit_rotate_matches_manual_rotation():
     manual = GaussianOperations.create_vacuum(modes=("a",))
     manual = GaussianOperations.apply_squeezing(manual, mode="a", r=0.5)
@@ -922,7 +769,6 @@ def test_circuit_rotate_matches_manual_rotation():
     compiled = circuit.compile_and_run()
 
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
-
 
 def test_williamson_decomposition_is_genuinely_symplectic():
     rng = np.random.default_rng(1234)
@@ -935,7 +781,6 @@ def test_williamson_decomposition_is_genuinely_symplectic():
     assert np.all(nus >= 0.5 - 1e-10)
     np.testing.assert_allclose(S @ Omega @ S.T, Omega, atol=1e-8)
     np.testing.assert_allclose(S @ D @ S.T, covariance, atol=1e-8)
-
 
 def test_to_qutip_reconstructs_gaussian_covariance():
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
@@ -970,7 +815,6 @@ def test_to_qutip_reconstructs_gaussian_covariance():
     np.testing.assert_allclose(displacement, state.displacement, atol=2e-5)
     np.testing.assert_allclose(covariance, state.covariance, atol=2e-5)
 
-
 def test_to_qutip_handles_plain_vacuum_and_pure_displacement():
     # Regression test: to_qutip used to crash on any state with no squeezing
     # at all (H_cv stayed a plain int 0, which has no .expm()).
@@ -982,7 +826,6 @@ def test_to_qutip_handles_plain_vacuum_and_pure_displacement():
     displaced_only.displacement[0] = 1.5
     rho2 = displaced_only.to_qutip(N_cutoff=15)
     assert rho2.tr() == pytest.approx(1.0, abs=1e-9)
-
 
 def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
     # Regression test: a mixed, correlated covariance matrix should convert
@@ -1000,14 +843,12 @@ def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
     rho = noisy_state.to_qutip(N_cutoff=18)
     assert rho.tr() == pytest.approx(1.0, abs=1e-9)
 
-
 def test_to_qutip_rejects_invalid_n_cutoff():
     state = GaussianOperations.create_vacuum(modes=("a",))
     with pytest.raises(ValueError):
         state.to_qutip(N_cutoff=0)
     with pytest.raises(ValueError):
         state.to_qutip(N_cutoff=-5)
-
 
 def test_gaussian_channel_roundtrips_through_file(tmp_path):
     channel = QBSChannels.thermal_loss(mode="a", eta=0.8, n_thermal=0.1)
@@ -1020,6 +861,7 @@ def test_gaussian_channel_roundtrips_through_file(tmp_path):
     restored_out = restored.apply(state)
     np.testing.assert_allclose(restored_out.covariance, original_out.covariance)
 
+# Heterodyne checks
 
 def test_heterodyne_measurement_adds_vacuum_noise_and_collapses_to_coherent():
     state = GaussianOperations.create_vacuum(modes=("a", "b"))
@@ -1041,7 +883,6 @@ def test_heterodyne_measurement_adds_vacuum_noise_and_collapses_to_coherent():
     eigvals = np.linalg.eigvalsh(collapsed.covariance)
     assert (eigvals >= 0.5 - 1e-9).all()
 
-
 def test_heterodyne_measurement_is_reproducible_with_seeded_rng():
     state = GaussianOperations.create_vacuum(modes=("a",))
     v1, _ = GaussianMeasurements.heterodyne_measurement(
@@ -1051,330 +892,3 @@ def test_heterodyne_measurement_is_reproducible_with_seeded_rng():
         state, measured_mode="a", rng=np.random.default_rng(7)
     )
     np.testing.assert_allclose(v1, v2)
-
-
-# ---------------------------------------------------------------------------
-# Visual-only demos (no assertions beyond "it runs") -- opt in with --plot
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.visual
-def test_native_qutip_wigner_plot_demo():
-    import matplotlib.pyplot as plt
-
-    state = GaussianCircuit().add_mode("a")
-    state.squeeze(mode="a", r=0.6, theta=0.0)
-    cv_state = state.compile_and_run()
-    rho = cv_state.to_qutip(N_cutoff=15)
-
-    xvec = np.linspace(-5, 5, 150)
-    W = qt.wigner(rho, xvec, xvec)
-    plt.figure(figsize=(5, 4))
-    plt.contourf(xvec, xvec, W, 100, cmap="RdBu_r")
-    plt.title("Native QuTiP Wigner function (squeezed vacuum)")
-    qt.matrix_histogram(rho.full().real[:10, :10])
-    plt.show()
-
-
-@pytest.mark.visual
-def test_laser_pulse_cavity_plot_demo():
-    import matplotlib.pyplot as plt
-
-    N_cutoff = 15
-    rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
-    tlist = np.linspace(0, 5, 100)
-    states = QBSSimulator.run_cavity_with_pulse(
-        rho_init=rho_vacuum,
-        tlist=tlist,
-        K=0.3,
-        kappa=0.05,
-        amp=3.0,
-        t0=1.5,
-        sigma=0.5,
-        N_cutoff=N_cutoff,
-    )
-    n_op = qt.num(N_cutoff)
-    photon_numbers = [qt.expect(n_op, s) for s in states]
-
-    plt.figure(figsize=(6, 4))
-    plt.plot(tlist, photon_numbers)
-    plt.xlabel("time")
-    plt.ylabel("<n>")
-    plt.title("Driven Kerr cavity: photon number vs time")
-    plt.show()
-
-
-@pytest.mark.visual
-def test_full_cavity_multipanel_plot_demo():
-    import matplotlib.pyplot as plt
-
-    N_cutoff = 12
-    alpha = 1.5
-    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
-    theta_list = np.linspace(0, 2 * np.pi, 60)
-    results = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.2, N_cutoff=N_cutoff
-    )
-
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-    axes[0].plot(theta_list, results["n1"])
-    axes[0].set_title("Mean photon number, arm 1")
-    axes[1].plot(theta_list, results["n2"])
-    axes[1].set_title("Mean photon number, arm 2")
-    axes[2].plot(theta_list, results["parity1"])
-    axes[2].set_title("Parity, arm 1")
-    plt.tight_layout()
-    plt.show()
-
-
-# ---------------------------------------------------------------------------
-# Time-dependent simulation (slower, integration-style tests)
-# ---------------------------------------------------------------------------
-
-
-def test_triggered_cavity_end_to_end():
-    cv_circuit = GaussianCircuit().add_mode("c")
-    cv_circuit.squeeze(mode="c", r=0.1, theta=0.0)
-    initial_state = cv_circuit.compile_and_run()
-
-    N_fock = 15
-    rho_vacuum = initial_state.to_qutip(N_cutoff=N_fock)
-
-    tlist = np.linspace(0, 5, 60)
-    states = QBSSimulator.run_cavity_with_pulse(
-        rho_init=rho_vacuum,
-        tlist=tlist,
-        K=0.4,
-        kappa=0.05,
-        amp=3.5,
-        t0=1.5,
-        sigma=0.6,
-        N_cutoff=N_fock,
-    )
-    assert len(states) == len(tlist)
-    rho_kerr_cat = states[-1]
-    assert rho_kerr_cat.tr() == pytest.approx(1.0, abs=1e-6)
-
-    rho_final_non_gaussian = QBSSimulator.photon_subtraction(
-        rho_kerr_cat, N_cutoff=N_fock
-    )
-    purity = (rho_final_non_gaussian * rho_final_non_gaussian).tr().real
-    assert 0.0 < purity <= 1.0 + 1e-9
-
-
-def test_decoherence_mzi_parity_visibility_drops_with_loss():
-    start_time = perf_counter()
-    N_cutoff = 10
-    alpha = 1.5
-    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
-
-    # Loss has a fixed exposure time and is therefore independent of the
-    # scanned phase.  Compare the complete phase scan directly.
-    theta_list = np.linspace(0, 2 * np.pi, 80)
-    results_clean = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
-    )
-    results_noisy = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.4, N_cutoff=N_cutoff
-    )
-
-    tail = slice(len(theta_list) // 2, None)
-    visibility_clean = np.ptp(np.array(results_clean["parity1"])[tail])
-    visibility_noisy = np.ptp(np.array(results_noisy["parity1"])[tail])
-    # Loss must wash out (not enhance) the super-resolved parity fringes.
-    assert visibility_noisy < visibility_clean
-    print(f"MZI decoherence scan runtime: {perf_counter() - start_time:.2f}s")
-
-
-def test_mzi_phase_scan_is_independent_of_loss_when_exposure_time_is_zero():
-    N_cutoff = 10
-    alpha = 1.2
-    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
-    theta_list = np.array([-0.7, 0.0, 0.9])
-
-    clean = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
-    )
-    zero_exposure = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0
-    )
-
-    for key in ("n1", "n2", "parity1"):
-        np.testing.assert_allclose(
-            zero_exposure[key], clean[key], atol=1e-10, rtol=1e-10
-        )
-
-
-def test_mzi_negative_phase_is_not_clipped_to_zero():
-    N_cutoff = 12
-    alpha = 1.0
-    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
-
-    result = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, np.array([-0.8, 0.0, 0.8]), kappa=0.0, N_cutoff=N_cutoff
-    )
-
-    # A real phase scan must distinguish a negative phase from zero.
-    assert not np.allclose(result["n1"][0], result["n1"][1], atol=1e-8)
-
-
-def test_kerr_cat_state_generation(plot_enabled):
-    # A driven, weakly-damped Kerr cavity: a fast pulse loads the cavity with
-    # a coherent state, then the Kerr nonlinearity shears it into a cat
-    # state. Routed through QBSSimulator.run_cavity_with_pulse rather than
-    # hand-rolled here, so this test and test_triggered_cavity_end_to_end
-    # exercise the exact same code path the rest of the suite relies on.
-    N_cutoff = (
-        35  # Kerr cat states have wide Fock-number support -> needs a high cutoff.
-    )
-    rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
-    tlist = np.linspace(0, 6, 200)
-
-    states = QBSSimulator.run_cavity_with_pulse(
-        rho_init=rho_vacuum,
-        tlist=tlist,
-        K=0.5,  # Kerr nonlinearity strength
-        kappa=0.01,  # light damping -- cat states are fragile against loss
-        amp=5.0,
-        t0=2.0,
-        sigma=0.8,
-        N_cutoff=N_cutoff,
-    )
-    assert len(states) == len(tlist)
-    assert states[-1].tr() == pytest.approx(1.0, abs=1e-6)
-
-    if plot_enabled:
-        # Snapshots: pulse arriving, freshly-displaced coherent blob, Kerr
-        # shear starting to bend it, and the final cat state.
-        snapshot_indices = [10, 40, 110, -1]
-        snapshot_labels = [
-            "t ~ 0.3: pulse arriving",
-            "t ~ 1.2: displaced coherent blob",
-            "t ~ 3.3: Kerr shear setting in",
-            "t = 6.0: Kerr cat state",
-        ]
-
-        fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-        xvec = np.linspace(-5, 5, 200)
-        cont = None
-        for ax, idx, label in zip(axes.flat, snapshot_indices, snapshot_labels):
-            W = qt.wigner(states[idx], xvec, xvec)
-            cont = ax.contourf(xvec, xvec, W, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
-            ax.set_title(label)
-            ax.set_xlabel("x")
-            ax.set_ylabel("p")
-            ax.axis("equal")
-
-        fig.colorbar(cont, ax=axes[:, :], label="Wigner density")
-        plt.show()
-
-
-@pytest.mark.visual
-def test_cat_state_single_shot_through_mzi():
-    # Single-phase companion to test_decoherence_mzi_parity_visibility_drops_with_loss
-    # below: a loss-free MZI at one fixed theta, kept mainly to inspect the
-    # output Wigner functions -- so it belongs with the other visual-only
-    # demos and follows the same skip-when-not-plotting convention.
-
-    N_cutoff = 22
-    alpha = 2
-    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
-
-    a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
-    a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
-
-    # 50:50 beam splitter between the two arms: U_BS = exp(i*pi/4*(a1^dag*a2 + a1*a2^dag)).
-    H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
-    U_BS = H_BS.expm()
-
-    # MZI input: cat state on port 1, vacuum on port 2.
-    psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
-
-    # First beam splitter entangles the two arms.
-    psi_after_bs1 = U_BS * psi_in
-
-    # Phase shift theta in the upper arm (arm 1).
-    theta = np.pi / 4
-    U_phase = (1j * theta * a1.dag() * a1).expm()
-    psi_after_phase = U_phase * psi_after_bs1
-
-    # Second beam splitter recombines the arms.
-    psi_out = U_BS * psi_after_phase
-
-    rho_out_port1 = qt.ptrace(psi_out, 0)
-    rho_out_port2 = qt.ptrace(psi_out, 1)
-    assert rho_out_port1.tr() == pytest.approx(1.0, abs=1e-6)
-    assert rho_out_port2.tr() == pytest.approx(1.0, abs=1e-6)
-
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    xvec = np.linspace(-4, 4, 200)
-
-    W_port1 = qt.wigner(rho_out_port1, xvec, xvec)
-    axes[0].contourf(xvec, xvec, W_port1, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
-    axes[0].set_title(r"MZI output port 1 (shifted cat, $\theta=\pi/4$)")
-    axes[0].set_xlabel("x")
-    axes[0].set_ylabel("p")
-    axes[0].axis("equal")
-
-    W_port2 = qt.wigner(rho_out_port2, xvec, xvec)
-    axes[1].contourf(xvec, xvec, W_port2, 100, cmap="RdBu_r", vmin=-0.3, vmax=0.3)
-    axes[1].set_title("MZI output port 2 (out-of-phase interference)")
-    axes[1].set_xlabel("x")
-    axes[1].set_ylabel("p")
-    axes[1].axis("equal")
-
-    plt.tight_layout()
-    plt.show()
-
-
-@pytest.mark.visual
-def test_cat_mzi_phase_scan_fringes():
-    # Loss-free (kappa=0) phase scan of a cat state through the MZI -- the
-    # clean-case counterpart plotted alongside the noisy one in
-    # test_decoherence_mzi_parity_visibility_drops_with_loss. Routed through
-    # QBSSimulator.scan_mzi_with_loss instead of duplicating that loop here,
-    # so both tests exercise the same simulation code.
-
-    N_cutoff = 22
-    alpha = 4.0 + 2j
-    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
-    theta_list = np.linspace(0, 2 * np.pi, 200)
-
-    results = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
-    )
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-
-    ax1.plot(
-        theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2
-    )
-    ax1.plot(
-        theta_list / np.pi,
-        results["n2"],
-        label="Output port 2",
-        color="crimson",
-        lw=2,
-        ls="--",
-    )
-    ax1.set_ylabel(r"Mean photon number $\langle n \rangle$")
-    ax1.set_title("Mach-Zehnder interference fringes (intensity)")
-    ax1.grid(True, ls="--")
-    ax1.legend()
-
-    ax2.plot(
-        theta_list / np.pi,
-        results["parity1"],
-        label="Parity, port 1",
-        color="purple",
-        lw=2.5,
-    )
-    ax2.axhline(0, color="black", lw=0.5, ls="-")
-    ax2.set_xlabel(r"Phase shift $\theta$ ($\times \pi$)")
-    ax2.set_ylabel("Parity expectation value")
-    ax2.set_title("Quantum parity oscillation (super-resolution)")
-    ax2.grid(True, ls="--")
-    ax2.legend()
-
-    plt.tight_layout()
-    plt.show()

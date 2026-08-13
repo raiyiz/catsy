@@ -3,19 +3,16 @@ import json
 import numpy as np
 import pytest
 
-from .composition import OpticalSetup
-from .gaussian import (
+from catst.gaussian import (
     GaussianCircuit,
     GaussianOperations,
     compute_duan_inseparability,
     compute_joint_correlation,
 )
-from .journal import JournalEntry, SimulationJournal
+from catst.journal import JournalEntry, SimulationJournal
+from catst.optics import OpticalSetup
 
-# ---------------------------------------------------------------------------
 # JournalEntry.log_run
-# ---------------------------------------------------------------------------
-
 
 def test_log_run_requires_exactly_one_hardware_reference():
     entry = JournalEntry(title="No hardware given")
@@ -23,7 +20,6 @@ def test_log_run_requires_exactly_one_hardware_reference():
         entry.log_run("run")
     with pytest.raises(ValueError):
         entry.log_run("run", circuit=GaussianCircuit(), setup_layout_file="layout.json")
-
 
 def test_log_run_with_inline_circuit_embeds_full_definition():
     circuit = GaussianCircuit()
@@ -59,7 +55,6 @@ def test_log_run_with_inline_circuit_embeds_full_definition():
     np.testing.assert_array_equal(reconstructed.covariance, final_state.covariance)
     assert reconstructed.modes == final_state.modes
 
-
 def test_log_run_with_setup_layout_file_references_rather_than_embeds(tmp_path):
     layout_path = tmp_path / "mzi_node.json"
     OpticalSetup("MZI Node").beam_splitter(
@@ -92,7 +87,6 @@ def test_log_run_with_setup_layout_file_references_rather_than_embeds(tmp_path):
         entry.get_array(wigner_meta["npz_key"]), [[0.1, 0.2], [0.3, 0.4]]
     )
 
-
 def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
     entry = JournalEntry(title="Payload shapes")
     run = entry.log_run(
@@ -115,18 +109,15 @@ def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
         entry.get_array(annotated_meta["npz_key"]), [3.0, 4.0]
     )
 
-
 def test_log_run_rejects_array_dict_payload_missing_data_key():
     entry = JournalEntry(title="Bad payload")
     with pytest.raises(ValueError):
         entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": {"unit": "V"}})
 
-
 def test_get_array_raises_for_unknown_key():
     entry = JournalEntry(title="No arrays logged")
     with pytest.raises(KeyError):
         entry.get_array("nonexistent")
-
 
 def test_get_final_state_raises_when_run_has_none_logged():
     entry = JournalEntry(title="No final state")
@@ -134,6 +125,7 @@ def test_get_final_state_raises_when_run_has_none_logged():
     with pytest.raises(ValueError):
         entry.get_final_state(run)
 
+# JournalEntry serialization and persistence
 
 def test_journal_entry_initialization_generates_metadata():
     entry = JournalEntry(title="Entanglement Test Log", tags=["quantum", "unit-test"])
@@ -141,12 +133,6 @@ def test_journal_entry_initialization_generates_metadata():
     assert isinstance(entry.entry_id, str) and entry.entry_id
     assert entry.runs == []
     assert "quantum" in entry.tags
-
-
-# ---------------------------------------------------------------------------
-# JournalEntry.to_dict / save / load
-# ---------------------------------------------------------------------------
-
 
 def test_to_dict_matches_schema_and_excludes_array_data():
     entry = JournalEntry(title="Schema Test")
@@ -162,8 +148,7 @@ def test_to_dict_matches_schema_and_excludes_array_data():
     # The array metadata (shape/unit/npz_key) is there, but never the values.
     assert "npz_key" in serialized["runs"][0]["data_payloads"]["x"]
     assert "values" not in serialized["runs"][0]["data_payloads"]["x"]
-    assert json.dumps(serialized)  # whole thing is plain-JSON safe
-
+    assert json.dumps(serialized)
 
 def test_save_writes_only_json_when_entry_has_no_array_data(tmp_path):
     entry = JournalEntry(title="No arrays")
@@ -174,7 +159,6 @@ def test_save_writes_only_json_when_entry_has_no_array_data(tmp_path):
     assert saved_path.exists()
     assert saved_path.suffix == ".json"
     assert not saved_path.with_suffix(".npz").exists()
-
 
 def test_save_writes_a_companion_npz_when_arrays_are_logged(tmp_path):
     entry = JournalEntry(title="Has arrays")
@@ -187,7 +171,6 @@ def test_save_writes_a_companion_npz_when_arrays_are_logged(tmp_path):
     # No leftover .tmp files from the atomic-write step.
     assert list(tmp_path.glob("*.tmp")) == []
 
-
 def test_save_creates_missing_directories(tmp_path):
     deep_dir = tmp_path / "deep" / "nested" / "sub" / "folder"
     entry = JournalEntry(title="Deep Path Test")
@@ -197,7 +180,6 @@ def test_save_creates_missing_directories(tmp_path):
 
     assert saved_path.exists()
     assert deep_dir.is_dir()
-
 
 def test_save_and_load_roundtrip_preserves_runs_and_arrays(tmp_path):
     entry = JournalEntry(title="E2E Integration Test", tags=["e2e"])
@@ -228,7 +210,6 @@ def test_save_and_load_roundtrip_preserves_runs_and_arrays(tmp_path):
     assert quad_meta["unit"] == "Squeezing Level"
     np.testing.assert_array_equal(reloaded.get_array(quad_meta["npz_key"]), [5.6, 7.8])
 
-
 def test_resaving_after_reload_preserves_previously_logged_arrays(tmp_path):
     """Loading an entry back and logging a *new* run shouldn't lose the
     arrays that were already on disk from before the reload."""
@@ -247,11 +228,7 @@ def test_resaving_after_reload_preserves_previously_logged_arrays(tmp_path):
     np.testing.assert_array_equal(fully_reloaded.get_array(x_key), [1.0, 2.0])
     np.testing.assert_array_equal(fully_reloaded.get_array(y_key), [3.0, 4.0])
 
-
-# ---------------------------------------------------------------------------
 # SimulationJournal
-# ---------------------------------------------------------------------------
-
 
 def test_new_entry_is_pre_populated_with_title_tags_and_notes(tmp_path):
     journal = SimulationJournal(tmp_path / "runs")
@@ -264,7 +241,6 @@ def test_new_entry_is_pre_populated_with_title_tags_and_notes(tmp_path):
     assert entry.tags == ["entanglement", "epr", "gaussian"]
     assert entry.notes.startswith("Testing phase-space")
 
-
 def test_load_entry_resolves_the_id_to_its_saved_file(tmp_path):
     journal = SimulationJournal(tmp_path / "runs")
     entry = journal.new_entry(title="Findable entry")
@@ -276,7 +252,6 @@ def test_load_entry_resolves_the_id_to_its_saved_file(tmp_path):
     np.testing.assert_array_equal(
         reloaded.get_array(reloaded.runs[0].data_payloads["x"]["npz_key"]), [1.0]
     )
-
 
 def test_fetch_history_summary_orders_entries_most_recent_first(tmp_path):
     journal = SimulationJournal(tmp_path / "runs")
@@ -293,7 +268,6 @@ def test_fetch_history_summary_orders_entries_most_recent_first(tmp_path):
 
     summaries = journal.fetch_history_summary()
     assert [s["title"] for s in summaries] == ["Newer run", "Older run"]
-
 
 def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monkeypatch):
     journal = SimulationJournal(tmp_path / "runs")
@@ -314,11 +288,7 @@ def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monke
 
     assert summaries[0]["title"] == "Has a big array"
 
-
-# ---------------------------------------------------------------------------
-# Integration: journal + composition + states end to end
-# ---------------------------------------------------------------------------
-
+# End-to-end integration
 
 def test_journal_records_a_full_optical_bench_experiment(tmp_path):
     """An EPR pair run through a saved hardware layout, journaled end to

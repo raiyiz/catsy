@@ -1,20 +1,16 @@
 import numpy as np
 import pytest
 
-from .composition import OpticalComponent, OpticalSetup
-from .gaussian import GaussianOperations, compute_duan_inseparability
+from catst.gaussian import GaussianOperations, compute_duan_inseparability
+from catst.optics import OpticalComponent, OpticalSetup
 
-# ---------------------------------------------------------------------------
-# Layout assembly + serialization
-# ---------------------------------------------------------------------------
-
+# Layout assembly and serialization
 
 def test_beam_splitter_registers_both_ports():
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
     assert setup.registered_ports == {"a", "b"}
     assert setup.components[0].op_type == "BeamSplitter"
     assert setup.components[0].kwargs == {"eta": 0.5}
-
 
 def test_layout_roundtrips_through_file(tmp_path):
     setup = OpticalSetup("MZI Node")
@@ -32,51 +28,33 @@ def test_layout_roundtrips_through_file(tmp_path):
     assert loaded.registered_ports == {"line_1", "line_2"}
     assert loaded.components[2].kwargs == {"phi": 0.785}
 
-
 def test_component_to_dict_and_from_dict_agree():
     comp = OpticalComponent("BS1", "BeamSplitter", ("a", "b"), {"eta": 0.5})
     assert OpticalComponent.from_dict(comp.to_dict()) == comp
 
-
-def test_component_rejects_wrong_port_count():
-    with pytest.raises(ValueError, match="exactly 2 port"):
-        OpticalComponent("BS1", "BeamSplitter", ("a",), {"eta": 0.5})
-
-    with pytest.raises(ValueError, match="exactly 1 port"):
-        OpticalComponent("Loss", "Loss", ("a", "b"), {"eta": 0.9})
-
-
-def test_component_rejects_duplicate_ports():
-    with pytest.raises(ValueError, match="same port"):
-        OpticalComponent("BS1", "BeamSplitter", ("a", "a"), {"eta": 0.5})
-
-
-def test_component_rejects_invalid_parameters():
-    with pytest.raises(ValueError, match="eta"):
-        OpticalComponent("BS1", "BeamSplitter", ("a", "b"), {"eta": 1.1})
-
-    with pytest.raises(ValueError, match="finite"):
-        OpticalComponent(
-            "Phase", "PhaseRotation", ("a",), {"phi": np.inf}
-        )
+@pytest.mark.parametrize(
+    ("op_type", "ports", "kwargs", "match"),
+    [
+        ("BeamSplitter", ("a",), {"eta": 0.5}, "exactly 2 port"),
+        ("Loss", ("a", "b"), {"eta": 0.9}, "exactly 1 port"),
+        ("BeamSplitter", ("a", "a"), {"eta": 0.5}, "same port"),
+        ("BeamSplitter", ("a", "b"), {"eta": 1.1}, "eta"),
+        ("PhaseRotation", ("a",), {"phi": np.inf}, "finite"),
+        ("Unknown", ("a",), {}, "Unknown optical component"),
+    ],
+)
+def test_optical_component_rejects_invalid_definitions(op_type, ports, kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        OpticalComponent("component", op_type, ports, kwargs)
 
 
-def test_component_rejects_unknown_type():
-    with pytest.raises(ValueError, match="Unknown optical component"):
-        OpticalComponent("Mystery", "Unknown", ("a",), {})
-
-
-# ---------------------------------------------------------------------------
 # Execution
-# ---------------------------------------------------------------------------
-
 
 def test_process_beam_rejects_empty_setup():
     setup = OpticalSetup("Empty Bench")
     vacuum = GaussianOperations.create_vacuum(modes=("a",))
     with pytest.raises(ValueError):
         setup.process_beam(vacuum)
-
 
 def test_mzi_setup_preserves_purity_for_coherent_input():
     mzi = OpticalSetup("MZI Node")
@@ -91,7 +69,6 @@ def test_mzi_setup_preserves_purity_for_coherent_input():
     # A lossless 2-mode MZI (no fiber_loss component) is purity-preserving:
     # det(V) stays at the pure-state value of 0.5**(2*n_modes) == 0.0625.
     assert np.linalg.det(result.covariance) == pytest.approx(0.0625, rel=1e-9)
-
 
 def test_lossy_channel_setup_weakens_but_can_preserve_entanglement():
     setup = OpticalSetup("Lossy Channel")
@@ -109,23 +86,17 @@ def test_lossy_channel_setup_weakens_but_can_preserve_entanglement():
     # ...but 10% loss on one arm isn't enough to destroy r=1.2 entanglement.
     assert duan_after < 2.0
 
-
 def test_process_beam_rejects_input_state_missing_a_registered_port():
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
     mismatched = GaussianOperations.create_vacuum(modes=("a",))
     with pytest.raises(ValueError):
         setup.process_beam(mismatched)
 
-
-# ---------------------------------------------------------------------------
 # Schematic rendering
-# ---------------------------------------------------------------------------
-
 
 def test_render_schematic_of_empty_setup():
     schematic = OpticalSetup("Empty Bench").render_schematic()
     assert "Empty Bench Layout" in schematic
-
 
 def test_render_schematic_labels_each_component_and_input_state():
     setup = OpticalSetup("MZI Node")
@@ -143,7 +114,6 @@ def test_render_schematic_labels_each_component_and_input_state():
     assert "PHASE" in schematic
     assert "line_1" in schematic and "line_2" in schematic
 
-
 def test_render_schematic_bridges_ports_a_multi_port_component_skips_over():
     # 3 ports, but the beam splitter only touches the outer two -- the
     # middle port ("b") must be bridged, not silently dropped or crashed on
@@ -157,13 +127,11 @@ def test_render_schematic_bridges_ports_a_multi_port_component_skips_over():
     b_line = next(line for line in lines if "[b]" in line)
     assert "│" in b_line
 
-
 def test_draw_prints_the_rendered_schematic(capsys):
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
     setup.draw()
     captured = capsys.readouterr()
     assert captured.out.strip() == setup.render_schematic().strip()
-
 
 @pytest.mark.visual
 def test_visual_schematic_draw():
