@@ -1,19 +1,17 @@
 """Persistent experiment log for catst simulations.
 
-A `JournalEntry` records one experiment: its metadata (title, tags, notes)
-plus one or more logged simulation runs. Each run pairs a hardware
-description -- either an inline `GaussianCircuit` (full gate sequence
-embedded) or a reference to a saved `OpticalSetup` layout file (referenced,
-not duplicated) -- with its scalar results, its final `GaussianState` (if
-logged), and any heavy array payloads. `SimulationJournal` indexes a
-directory of saved entries.
+A `JournalEntry` records one experiment: its title, tags, notes, optional
+metadata, and one or more logged simulation runs. Each run may contain an
+inline `GaussianCircuit`, scalar results, a final `GaussianState`, and
+heavy array payloads. `SimulationJournal` indexes a directory of saved
+entries.
 
 Storage format: each entry is split across two files by access pattern --
 
-  - ``entry_<id>.json``: metadata, scalar results, and small per-array
-    annotations (unit, dimensions, shape, dtype). Always small; this is
-    what `SimulationJournal.fetch_history_summary` reads, and the only
-    file touched when just browsing entries.
+  - ``entry_<id>.json``: entry metadata, scalar results, and small per-array
+    annotations (description, unit, dimensions, shape, dtype). Always small;
+    this is what `SimulationJournal.fetch_history_summary` reads, and the
+    only file touched when just browsing entries.
   - ``entry_<id>.npz``: every numpy array logged against the entry (run
     results, final-state covariances/displacements), compressed. Only
     written when an entry actually has array data. Reading it back is
@@ -48,7 +46,7 @@ import numpy as np
 from .gaussian import GaussianCircuit
 from .gaussian import GaussianState
 
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "2.1.0"
 
 
 def _make_entry_id() -> str:
@@ -79,7 +77,7 @@ def _split_array_payload(payload: Any) -> tuple[np.ndarray, dict[str, Any]]:
     """Separates one array-ish `log_run` payload into its raw ndarray (to be
     stored in the entry's companion .npz) and its small JSON-safe metadata
     (unit, dimensions, shape, dtype). Accepts either a raw array/list or an
-    already-annotated ``{"data": ..., "unit": ..., "dimensions": ...}``
+    already-annotated ``{"data": ..., "description": ..., "unit": ..., "dimensions": ...}``
     mapping."""
     if isinstance(payload, dict):
         if "data" not in payload:
@@ -87,11 +85,14 @@ def _split_array_payload(payload: Any) -> tuple[np.ndarray, dict[str, Any]]:
         data = np.asarray(payload["data"])
         unit = payload.get("unit", "arbitrary_units")
         dimensions = payload.get("dimensions", [])
+        description = payload.get("description", "")
     else:
         data = np.asarray(payload)
         unit = "arbitrary_units"
         dimensions = []
+        description = ""
     meta = {
+        "description": description,
         "unit": unit,
         "dimensions": dimensions,
         "shape": list(data.shape),
@@ -113,10 +114,23 @@ class SimulationRun:
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
     circuit: dict[str, Any] | None = None
-    hardware_layout_reference: str | None = None
     final_state_cv: dict[str, Any] | None = None
     scalar_results: dict[str, Any] = field(default_factory=dict)
     data_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    @property
+    def results(self) -> dict[str, Any]:
+        """Scalar results keyed by the names supplied to ``log_run``."""
+        return self.scalar_results
+
+    @property
+    def arrays(self) -> dict[str, dict[str, Any]]:
+        """Array metadata keyed by the names supplied to ``log_run``.
+
+        Use ``JournalEntry.get_array`` with the stored ``npz_key`` to read
+        the numerical data.
+        """
+        return self.data_payloads
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -124,7 +138,6 @@ class SimulationRun:
             "run_name": self.run_name,
             "timestamp": self.timestamp,
             "circuit": self.circuit,
-            "hardware_layout_reference": self.hardware_layout_reference,
             "final_state_cv": self.final_state_cv,
             "scalar_results": self.scalar_results,
             "data_payloads": self.data_payloads,
@@ -132,6 +145,11 @@ class SimulationRun:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SimulationRun:
+        # ``hardware_layout_reference`` existed in the previous journal
+        # format. It is deliberately ignored when loading older entries;
+        # layouts are not part of the journal's current data model.
+        data = dict(data)
+        data.pop("hardware_layout_reference", None)
         return cls(**data)
 
 
@@ -149,6 +167,7 @@ class JournalEntry:
     timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
     tags: list[str] = field(default_factory=list)
     notes: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
     runs: list[SimulationRun] = field(default_factory=list)
 
     # Arrays logged but not yet flushed to a companion .npz by `save`.
@@ -169,16 +188,13 @@ class JournalEntry:
         run_name: str,
         *,
         circuit: GaussianCircuit | None = None,
-        setup_layout_file: str | Path | None = None,
         final_state: GaussianState | None = None,
         metrics: dict[str, Any] | None = None,
         arrays: dict[str, Any] | None = None,
     ) -> SimulationRun:
         """Logs one execution of a hardware setup.
 
-        Give either `circuit` (a `GaussianCircuit`; its full gate sequence
-        is embedded inline) or `setup_layout_file` (a path to a saved
-        `OpticalSetup` layout; referenced, not duplicated) -- not both.
+        `circuit` optionally records the `GaussianCircuit` used for the run.
         `final_state` optionally records the resulting `GaussianState`.
         `metrics` holds single-value results (e.g. ``{"purity": 0.98}``).
         `arrays` holds heavy numeric payloads keyed by name, each either a
@@ -187,17 +203,9 @@ class JournalEntry:
         data (from `final_state` and `arrays` alike) is held in memory and
         only written to disk on `save`.
         """
-        if circuit is not None and setup_layout_file is not None:
-            raise ValueError("Pass either `circuit` or `setup_layout_file`, not both.")
-        if circuit is None and setup_layout_file is None:
-            raise ValueError("Must supply either `circuit` or `setup_layout_file`.")
-
         run = SimulationRun(
             run_name=run_name,
             circuit=circuit.to_dict() if circuit is not None else None,
-            hardware_layout_reference=(
-                str(setup_layout_file) if setup_layout_file is not None else None
-            ),
             scalar_results=dict(metrics or {}),
         )
 
@@ -257,6 +265,7 @@ class JournalEntry:
                 "timestamp": self.timestamp,
                 "tags": self.tags,
                 "notes": self.notes,
+                "custom": self.metadata,
             },
             "runs": [run.to_dict() for run in self.runs],
         }
@@ -268,8 +277,9 @@ class JournalEntry:
             title=meta["title"],
             entry_id=meta["entry_id"],
             timestamp=meta["timestamp"],
-            tags=list(meta["tags"]),
-            notes=meta["notes"],
+            tags=list(meta.get("tags", [])),
+            notes=meta.get("notes", ""),
+            metadata=dict(meta.get("custom", meta.get("metadata", {}))),
         )
         entry.runs = [SimulationRun.from_dict(r) for r in data["runs"]]
         return entry
@@ -332,12 +342,41 @@ class SimulationJournal:
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
     def new_entry(
-        self, title: str, tags: list[str] | None = None, notes: str = ""
+        self,
+        title: str,
+        tags: list[str] | None = None,
+        notes: str = "",
+        metadata: dict[str, Any] | None = None,
     ) -> JournalEntry:
-        return JournalEntry(title=title, tags=list(tags or []), notes=notes)
+        return JournalEntry(
+            title=title,
+            tags=list(tags or []),
+            notes=notes,
+            metadata=dict(metadata or {}),
+        )
 
     def load_entry(self, entry_id: str) -> JournalEntry:
         return JournalEntry.load(self.storage_path / f"entry_{entry_id}.json")
+
+    def list_entries(self) -> list[dict[str, Any]]:
+        """Return saved entry summaries, newest first."""
+        return self.fetch_history_summary()
+
+    def get_entry(self, entry_id: str) -> JournalEntry:
+        """Load one saved entry by ID."""
+        return self.load_entry(entry_id)
+
+    def find(self, *, tag: str | None = None, title: str | None = None) -> list[dict[str, Any]]:
+        """Find saved entries by an optional tag and/or title substring."""
+        summaries = self.fetch_history_summary()
+        if tag is not None:
+            summaries = [summary for summary in summaries if tag in summary["tags"]]
+        if title is not None:
+            needle = title.casefold()
+            summaries = [
+                summary for summary in summaries if needle in summary["title"].casefold()
+            ]
+        return summaries
 
     def fetch_history_summary(self) -> list[dict[str, Any]]:
         """Scans the storage directory's entries for their index metadata.

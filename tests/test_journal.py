@@ -10,16 +10,15 @@ from catst.gaussian import (
     compute_joint_correlation,
 )
 from catst.journal import JournalEntry, SimulationJournal
-from catst.optics import OpticalSetup
 
 # JournalEntry.log_run
 
-def test_log_run_requires_exactly_one_hardware_reference():
-    entry = JournalEntry(title="No hardware given")
-    with pytest.raises(ValueError):
-        entry.log_run("run")
-    with pytest.raises(ValueError):
-        entry.log_run("run", circuit=GaussianCircuit(), setup_layout_file="layout.json")
+def test_log_run_can_record_a_run_without_a_circuit():
+    entry = JournalEntry(title="Fock calculation")
+    run = entry.log_run("Photon subtraction", metrics={"success": True})
+
+    assert run.circuit is None
+    assert run.results == {"success": True}
 
 def test_log_run_with_inline_circuit_embeds_full_definition():
     circuit = GaussianCircuit()
@@ -39,13 +38,10 @@ def test_log_run_with_inline_circuit_embeds_full_definition():
         arrays={"joint_prob_x": P, "grid_coords_xa": X_a, "grid_coords_xb": X_b},
     )
 
-    assert run.hardware_layout_reference is None
     assert run.circuit["modes"] == ["a", "b"]
     assert run.final_state_cv["modes"] == ["a", "b"]
 
-    # Array metadata sits in the run record; the array data itself is only
-    # reachable through get_array (it never touches the JSON side).
-    payload_meta = run.data_payloads["joint_prob_x"]
+    payload_meta = run.arrays["joint_prob_x"]
     assert payload_meta["shape"] == list(P.shape)
     assert payload_meta["unit"] == "arbitrary_units"
     np.testing.assert_array_equal(entry.get_array(payload_meta["npz_key"]), P)
@@ -55,37 +51,6 @@ def test_log_run_with_inline_circuit_embeds_full_definition():
     np.testing.assert_array_equal(reconstructed.covariance, final_state.covariance)
     assert reconstructed.modes == final_state.modes
 
-def test_log_run_with_setup_layout_file_references_rather_than_embeds(tmp_path):
-    layout_path = tmp_path / "mzi_node.json"
-    OpticalSetup("MZI Node").beam_splitter(
-        "BS1", port_a="line_1", port_b="line_2", eta=0.5
-    ).save_layout(layout_path)
-
-    entry = JournalEntry(title="MZI sweep")
-    run = entry.log_run(
-        "Sweep point A",
-        setup_layout_file=layout_path,
-        metrics={"purity": 0.99, "duan_score": 1.2},
-        arrays={
-            "wigner": {
-                "data": [[0.1, 0.2], [0.3, 0.4]],
-                "unit": "Wigner Density",
-                "dimensions": ["x", "p"],
-            }
-        },
-    )
-
-    assert run.circuit is None
-    assert run.hardware_layout_reference == str(layout_path)
-    assert run.scalar_results == {"purity": 0.99, "duan_score": 1.2}
-
-    wigner_meta = run.data_payloads["wigner"]
-    assert wigner_meta["unit"] == "Wigner Density"
-    assert wigner_meta["dimensions"] == ["x", "p"]
-    assert wigner_meta["shape"] == [2, 2]
-    np.testing.assert_array_equal(
-        entry.get_array(wigner_meta["npz_key"]), [[0.1, 0.2], [0.3, 0.4]]
-    )
 
 def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
     entry = JournalEntry(title="Payload shapes")
@@ -94,7 +59,7 @@ def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
         circuit=GaussianCircuit(),
         arrays={
             "raw": np.array([1.0, 2.0]),
-            "annotated": {"data": [3.0, 4.0], "unit": "V", "dimensions": ["t"]},
+            "annotated": {"data": [3.0, 4.0], "unit": "V", "dimensions": ["t"], "description": "test signal"},
         },
     )
     raw_meta = run.data_payloads["raw"]
@@ -105,6 +70,7 @@ def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
     annotated_meta = run.data_payloads["annotated"]
     assert annotated_meta["unit"] == "V"
     assert annotated_meta["dimensions"] == ["t"]
+    assert annotated_meta["description"] == "test signal"
     np.testing.assert_array_equal(
         entry.get_array(annotated_meta["npz_key"]), [3.0, 4.0]
     )
@@ -128,21 +94,30 @@ def test_get_final_state_raises_when_run_has_none_logged():
 # JournalEntry serialization and persistence
 
 def test_journal_entry_initialization_generates_metadata():
-    entry = JournalEntry(title="Entanglement Test Log", tags=["quantum", "unit-test"])
+    entry = JournalEntry(
+        title="Entanglement Test Log",
+        tags=["quantum", "unit-test"],
+        metadata={"purpose": "test"},
+    )
     assert entry.title == "Entanglement Test Log"
     assert isinstance(entry.entry_id, str) and entry.entry_id
     assert entry.runs == []
     assert "quantum" in entry.tags
+    assert entry.metadata["purpose"] == "test"
 
 def test_to_dict_matches_schema_and_excludes_array_data():
-    entry = JournalEntry(title="Schema Test")
+    entry = JournalEntry(
+        title="Schema Test",
+        metadata={"purpose": "regression", "temperature": 4.2},
+    )
     entry.log_run(
         "run", circuit=GaussianCircuit(), metrics={"purity": 1.0}, arrays={"x": [1, 2]}
     )
 
     serialized = entry.to_dict()
-    assert serialized["schema_version"] == "2.0.0"
+    assert serialized["schema_version"] == "2.1.0"
     assert serialized["metadata"]["title"] == "Schema Test"
+    assert serialized["metadata"]["custom"]["purpose"] == "regression"
     assert len(serialized["runs"]) == 1
     assert serialized["runs"][0]["scalar_results"] == {"purity": 1.0}
     # The array metadata (shape/unit/npz_key) is there, but never the values.
@@ -241,6 +216,15 @@ def test_new_entry_is_pre_populated_with_title_tags_and_notes(tmp_path):
     assert entry.tags == ["entanglement", "epr", "gaussian"]
     assert entry.notes.startswith("Testing phase-space")
 
+
+def test_new_entry_accepts_custom_metadata(tmp_path):
+    journal = SimulationJournal(tmp_path / "runs")
+    entry = journal.new_entry(
+        title="Metadata test",
+        metadata={"sample": "vacuum", "temperature": 4.2},
+    )
+    assert entry.metadata == {"sample": "vacuum", "temperature": 4.2}
+
 def test_load_entry_resolves_the_id_to_its_saved_file(tmp_path):
     journal = SimulationJournal(tmp_path / "runs")
     entry = journal.new_entry(title="Findable entry")
@@ -269,6 +253,34 @@ def test_fetch_history_summary_orders_entries_most_recent_first(tmp_path):
     summaries = journal.fetch_history_summary()
     assert [s["title"] for s in summaries] == ["Newer run", "Older run"]
 
+def test_list_entries_is_an_alias_for_history_summary(tmp_path):
+    journal = SimulationJournal(tmp_path / "runs")
+    entry = journal.new_entry(title="Listed entry", tags=["cat"])
+    entry.save(journal.storage_path)
+
+    assert journal.list_entries()[0]["entry_id"] == entry.entry_id
+
+
+def test_get_entry_loads_by_id(tmp_path):
+    journal = SimulationJournal(tmp_path / "runs")
+    entry = journal.new_entry(title="Get me")
+    entry.save(journal.storage_path)
+
+    loaded = journal.get_entry(entry.entry_id)
+    assert loaded.title == "Get me"
+
+
+def test_find_filters_by_tag_and_title(tmp_path):
+    journal = SimulationJournal(tmp_path / "runs")
+    first = journal.new_entry(title="Cat interferometer", tags=["cat", "mzi"])
+    first.save(journal.storage_path)
+    second = journal.new_entry(title="Gaussian EPR", tags=["epr"])
+    second.save(journal.storage_path)
+
+    assert [x["entry_id"] for x in journal.find(tag="cat")] == [first.entry_id]
+    assert [x["entry_id"] for x in journal.find(title="ePr")] == [second.entry_id]
+
+
 def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monkeypatch):
     journal = SimulationJournal(tmp_path / "runs")
     entry = journal.new_entry(title="Has a big array")
@@ -290,38 +302,34 @@ def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monke
 
 # End-to-end integration
 
-def test_journal_records_a_full_optical_bench_experiment(tmp_path):
-    """An EPR pair run through a saved hardware layout, journaled end to
-    end: build + save a layout, run a beam scenario through it, compute a
-    metric, log the run against the saved layout, and reload it from disk."""
-    layout_path = tmp_path / "layouts" / "interferometer_node.json"
-    node = OpticalSetup("Interferometer Node")
-    node.fiber_loss("Atmospheric Jitter A", port="line_1", eta=0.9)
-    node.fiber_loss("Atmospheric Jitter B", port="line_2", eta=1.0)
-    node.save_layout(layout_path)
-
-    epr_input = GaussianOperations.create_epr_pair(
-        mode_a="line_1", mode_b="line_2", r=1.2
-    )
-    result_epr = node.process_beam(epr_input)
-    duan_score = compute_duan_inseparability(result_epr, "line_1", "line_2")
+def test_journal_records_a_full_circuit_experiment(tmp_path):
+    circuit = GaussianCircuit()
+    circuit.add_mode("a").add_mode("b")
+    circuit.squeeze(mode="a", r=0.8, theta=0.0)
+    circuit.squeeze(mode="b", r=0.8, theta=np.pi / 2)
+    circuit.beam_splitter(mode_a="a", mode_b="b", eta=0.5)
+    result = circuit.compile_and_run()
+    duan_score = compute_duan_inseparability(result, "a", "b")
 
     journal = SimulationJournal(tmp_path / "journal_store")
-    entry = journal.new_entry(title="MZI EPR Witness", tags=["entanglement", "mzi"])
+    entry = journal.new_entry(
+        title="EPR Witness",
+        tags=["entanglement", "gaussian"],
+        metadata={"purpose": "integration test"},
+    )
     entry.log_run(
-        "EPR through lossy channel",
-        setup_layout_file=layout_path,
-        final_state=result_epr,
+        "EPR circuit",
+        circuit=circuit,
+        final_state=result,
         metrics={"duan_score": duan_score},
     )
     saved_path = entry.save(journal.storage_path)
 
-    reloaded = JournalEntry.load(saved_path)
+    reloaded = journal.get_entry(entry.entry_id)
     run = reloaded.runs[0]
-    assert run.scalar_results["duan_score"] == pytest.approx(duan_score)
-    assert run.hardware_layout_reference == str(layout_path)
+    assert reloaded.metadata["purpose"] == "integration test"
+    assert run.results["duan_score"] == pytest.approx(duan_score)
 
     reconstructed_state = reloaded.get_final_state(run)
-    np.testing.assert_allclose(reconstructed_state.covariance, result_epr.covariance)
-    # Entanglement survives a 10%-loss arm.
-    assert duan_score < 2.0
+    np.testing.assert_allclose(reconstructed_state.covariance, result.covariance)
+    assert saved_path.exists()
