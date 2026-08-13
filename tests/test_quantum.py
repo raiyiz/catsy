@@ -3,10 +3,12 @@ from time import perf_counter
 import numpy as np
 import pytest
 import qutip as qt
-from catst.fock import FockOperations
-from catst.gaussian import GaussianCircuit, GaussianOperations, LossChannels
-from catst.simulations import KerrCavity, MachZehnderInterferometer
 from matplotlib import pyplot as plt
+
+from catst.gaussian import GaussianCircuit, GaussianOperations, LossChannels
+from catst.fock import FockOperations
+from catst.simulations import KerrCavity, MachZehnderInterferometer
+
 
 # Fock-space operations
 
@@ -67,9 +69,8 @@ def test_photon_subtraction_state_and_rho_entry_points_agree():
     rho = gaussian_squeezed.to_qutip(N_cutoff=25)
     via_rho = FockOperations.photon_subtraction(rho, mode_idx=0, N_cutoff=25)
 
-    # A photon-subtracted squeezed vacuum should show Wigner negativity —
-    # i.e. it's genuinely non-Gaussian. Purity must still be < 1 (mixed by loss? No,
-    # it's pure) so instead check it's a valid, normalized state:
+    # The Fock API takes the QuTiP representation directly. The operation is
+    # heralded, so its output should remain a normalized density matrix.
     assert via_rho.tr() == pytest.approx(1.0, abs=1e-6)
 
 def test_photon_subtraction_zero_probability_raises():
@@ -77,6 +78,16 @@ def test_photon_subtraction_zero_probability_raises():
     vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     with pytest.raises(ValueError):
         FockOperations.photon_subtraction(vacuum, mode_idx=0, N_cutoff=N_cutoff)
+
+
+def test_fock_operations_reject_incompatible_cutoff_and_mode():
+    rho = qt.ket2dm(qt.fock(8, 0))
+
+    with pytest.raises(ValueError, match="N_cutoff"):
+        FockOperations.photon_subtraction(rho, N_cutoff=10)
+
+    with pytest.raises(ValueError, match="mode_idx"):
+        FockOperations.photon_subtraction(rho, mode_idx=1, N_cutoff=8)
 
 def test_fock_operations_are_the_single_implementation_for_photon_ops():
     assert FockOperations.photon_subtraction.__module__ == "catst.fock"
