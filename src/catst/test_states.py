@@ -5,25 +5,84 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from .states import (
-    DUAN_SEPARABILITY_BOUND,
+from .core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
+from .gaussian import (
     OPERATION_REGISTRY,
-    FockOperations,
     GaussianChannel,
     GaussianCircuit,
     GaussianMeasurements,
     GaussianOperations,
     GaussianState,
-    NonGaussianOperations,
     QBSChannels,
-    QBSSimulator,
     compute_duan_inseparability,
     compute_joint_correlation,
     compute_wigner_analytically,
     plot_joint_correlation,
     plot_wigner,
-    _williamson_decomposition,
 )
+from .quantum import FockOperations, NonGaussianOperations, QBSSimulator
+
+
+
+# ---------------------------------------------------------------------------
+# Analytic Gaussian primitive checks
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("r", [0.0, 0.25, 0.8, 1.2])
+def test_squeezing_has_expected_principal_variances(r):
+    state = GaussianOperations.create_vacuum(("a",))
+    squeezed = GaussianOperations.apply_squeezing(state, "a", r=r, theta=0.0)
+
+    expected = 0.5 * np.diag([np.exp(-2 * r), np.exp(2 * r)])
+    np.testing.assert_allclose(squeezed.covariance, expected, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("phi", "alpha"),
+    [(0.0, 0.7 + 0.2j), (np.pi / 2, 0.7 + 0.2j),
+     (np.pi, 0.7 + 0.2j), (-0.3, -0.4 + 0.9j)],
+)
+def test_phase_rotation_rotates_displacement(phi, alpha):
+    state = GaussianOperations.create_coherent(("a",), alpha)
+    rotated = GaussianOperations.apply_phase_rotation(state, "a", phi=phi)
+
+    x, p = state.displacement
+    expected = np.array([
+        np.cos(phi) * x - np.sin(phi) * p,
+        np.sin(phi) * x + np.cos(phi) * p,
+    ])
+    np.testing.assert_allclose(rotated.displacement, expected, atol=1e-12)
+    np.testing.assert_allclose(rotated.covariance, state.covariance, atol=1e-12)
+
+
+@pytest.mark.parametrize("eta", [0.0, 0.2, 0.5, 0.9, 1.0])
+def test_loss_matches_vacuum_environment_formula(eta):
+    state = GaussianOperations.apply_squeezing(
+        GaussianOperations.create_vacuum(("a",)), "a", r=0.6
+    )
+    lossy = GaussianOperations.apply_loss(state, "a", eta=eta)
+
+    expected = eta * state.covariance + (1.0 - eta) * 0.5 * np.eye(2)
+    np.testing.assert_allclose(lossy.covariance, expected, atol=1e-12)
+    np.testing.assert_allclose(lossy.displacement, np.sqrt(eta) * state.displacement)
+
+
+@pytest.mark.parametrize("eta", [0.0, 0.25, 0.5, 0.75, 1.0])
+def test_beam_splitter_has_expected_coherent_amplitude_map(eta):
+    alpha_a, alpha_b = 0.8 + 0.1j, -0.3 + 0.6j
+    state = GaussianOperations.create_coherent(("a", "b"), [alpha_a, alpha_b])
+    mixed = GaussianOperations.apply_beam_splitter(state, "a", "b", eta=eta)
+
+    t, r = np.sqrt(eta), np.sqrt(1.0 - eta)
+    expected = np.array([
+        np.sqrt(2.0) * np.real(t * alpha_a + r * alpha_b),
+        np.sqrt(2.0) * np.imag(t * alpha_a + r * alpha_b),
+        np.sqrt(2.0) * np.real(-r * alpha_a + t * alpha_b),
+        np.sqrt(2.0) * np.imag(-r * alpha_a + t * alpha_b),
+    ])
+    np.testing.assert_allclose(mixed.displacement, expected, atol=1e-12)
+    np.testing.assert_allclose(mixed.covariance, 0.5 * np.eye(4), atol=1e-12)
+
 
 # ---------------------------------------------------------------------------
 # Phase-space layer: gates, channels, circuit compiler

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from .composition import OpticalComponent, OpticalSetup
-from .states import GaussianOperations, compute_duan_inseparability
+from .gaussian import GaussianOperations, compute_duan_inseparability
 
 # ---------------------------------------------------------------------------
 # Layout assembly + serialization

@@ -1,260 +1,48 @@
-"""Continuous-variable (CV) Gaussian quantum optics toolkit.
+"""Gaussian-state simulation and analysis.
 
-Layered design:
-  - Phase-space layer (GaussianState / GaussianOperations / GaussianChannel /
-    GaussianCircuit): pure numpy + scipy, no Hilbert-space cost. This is where
-    almost all circuit-building work happens.
-  - Fock-space layer (to_qutip, NonGaussianOperations, QBSSimulator): only
-    imports qutip lazily, on first actual use, so building and manipulating
-    purely Gaussian circuits never pays for qutip's (slow) import or for
-    allocating a Hilbert space you don't need.
-
-Design notes for anyone extending this:
-  - New circuit gates/channels are added via `GaussianCircuit.register`
-    rather than by editing `compile_and_run` — see OPERATION_REGISTRY.
-  - All public entry points validate their inputs and raise ValueError /
-    KeyError with a specific message; nothing relies on `assert`, which
-    disappears under `python -O`.
-  - Progress/diagnostic messages go through the `logging` module at DEBUG
-    level rather than `print`, so they cost nothing unless a caller opts in
-    with `logging.getLogger("catst").setLevel(logging.DEBUG)`.
+This module contains the continuous-variable Gaussian layer: states and
+standard operations, general Gaussian channels, circuits, measurements, and
+phase-space diagnostics. QuTiP is a required core dependency of catst.
 """
 
 from __future__ import annotations
 
-import json
-import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 import scipy.linalg
 
+from .core import (
+    DUAN_SEPARABILITY_BOUND,
+    TOL_PHYSICALITY,
+    TOL_TRACE_WARN,
+    _apply_gaussian_transform,
+    _check_non_negative,
+    _check_thermal_correlation,
+    _check_unit_interval,
+    _check_positive_int,
+    _json_load,
+    _json_save,
+    _symplectic_form,
+    _validate_finite_array,
+    _validate_gaussian_channel,
+    _validate_physical_covariance,
+    _williamson_decomposition,
+)
+
 logger = logging.getLogger("catst")
 
-TOL_ZERO_ENTRY = (
-    1e-9  # negligible matrix-entry threshold when building qutip Hamiltonians
-)
-TOL_TRACE_WARN = (
-    1e-6  # deviation from tr(rho) == 1 worth warning about (truncation error)
-)
-# Centralized numerical tolerances.
-DUAN_SEPARABILITY_BOUND = (
-    2.0  # Duan-Simon witness threshold in this vacuum=0.5 convention -- see
-    # compute_duan_inseparability. Any separable (non-entangled) two-mode
-    # state satisfies Var(x_a-x_b) + Var(p_a+p_b) >= this value; two
-    # independent vacua exactly saturate it.
-)
-TOL_PHYSICALITY = 1e-10
 
 
-def _check_unit_interval(value: float, name: str) -> None:
-    if not np.isfinite(value) or not (0.0 <= value <= 1.0):
-        raise ValueError(f"{name} must lie in [0, 1], got {value}.")
-
-
-def _check_non_negative(value: float, name: str) -> None:
-    if not np.isfinite(value) or value < 0:
-        raise ValueError(f"{name} must be finite and >= 0, got {value}.")
-
-
-def _check_positive_int(value: int, name: str) -> None:
-    if not isinstance(value, (int, np.integer)) or value < 1:
-        raise ValueError(f"{name} must be a positive integer, got {value!r}.")
-
-
-def _symplectic_form(n_modes: int) -> np.ndarray:
-    """Return Omega for the (x1, p1, x2, p2, ...) convention."""
-    omega_1 = np.array([[0.0, 1.0], [-1.0, 0.0]])
-    return scipy.linalg.block_diag(*[omega_1 for _ in range(n_modes)])
-
-
-def _validate_finite_array(value: np.ndarray, name: str) -> None:
-    if not np.all(np.isfinite(value)):
-        raise ValueError(f"{name} must contain only finite values.")
-
-
-def _validate_physical_covariance(
-    covariance: np.ndarray, *, tol: float = TOL_PHYSICALITY
-) -> None:
-    """Validate V + i Omega / 2 >= 0 in the vacuum=0.5 convention."""
-    if covariance.ndim != 2:
-        raise ValueError("covariance must be a 2D array.")
-
-    dim = covariance.shape[0]
-    if dim % 2:
-        raise ValueError(f"covariance dimension must be even, got {dim}.")
-
-    _validate_finite_array(covariance, "covariance")
-    if dim == 0:
-        return
-
-    if not np.allclose(covariance, covariance.T, atol=tol, rtol=0.0):
-        raise ValueError("covariance must be symmetric.")
-
-    omega = _symplectic_form(dim // 2)
-    uncertainty_matrix = covariance + 0.5j * omega
-    min_eigenvalue = np.linalg.eigvalsh(uncertainty_matrix).min()
-
-    if min_eigenvalue < -tol:
-        raise ValueError(
-            "covariance violates the Gaussian uncertainty relation: "
-            f"minimum eigenvalue of V + iOmega/2 is {min_eigenvalue:.3e}."
-        )
-
-
-def _validate_gaussian_channel(
-    X: np.ndarray,
-    Y: np.ndarray,
-    d0: np.ndarray,
-    *,
-    expected_dim: int,
-    tol: float = TOL_PHYSICALITY,
-) -> None:
-    """Validate dimensions and complete positivity of a Gaussian channel."""
-    if X.shape != (expected_dim, expected_dim):
-        raise ValueError(
-            f"X must have shape ({expected_dim}, {expected_dim}), got {X.shape}."
-        )
-    if Y.shape != (expected_dim, expected_dim):
-        raise ValueError(
-            f"Y must have shape ({expected_dim}, {expected_dim}), got {Y.shape}."
-        )
-    if d0.shape != (expected_dim,):
-        raise ValueError(
-            f"d0 must have shape ({expected_dim},), got {d0.shape}."
-        )
-
-    _validate_finite_array(X, "X")
-    _validate_finite_array(Y, "Y")
-    _validate_finite_array(d0, "d0")
-
-    if not np.allclose(Y, Y.T, atol=tol, rtol=0.0):
-        raise ValueError("Gaussian channel noise matrix Y must be symmetric.")
-
-    omega = _symplectic_form(expected_dim // 2)
-    cp_matrix = Y + 0.5j * (omega - X @ omega @ X.T)
-    min_eigenvalue = np.linalg.eigvalsh(cp_matrix).min()
-
-    if min_eigenvalue < -tol:
-        raise ValueError(
-            "Gaussian channel violates complete positivity: "
-            "minimum eigenvalue of Y + i(Omega - XOmegaX^T)/2 is "
-            f"{min_eigenvalue:.3e}."
-        )
-
-
-def _check_thermal_correlation(
-    c_correlation: float, n_thermal: float
-) -> None:
-    """Validate cross-mode thermal covariance for the shared-bath model."""
-    if not np.isfinite(c_correlation):
-        raise ValueError(
-            f"c_correlation must be finite, got {c_correlation}."
-        )
-
-    # The underlying two-mode environment covariance is
-    # [[(n+1/2)I, cI], [cI, (n+1/2)I]].
-    # Its physicality condition is |c| <= n.
-    limit = n_thermal
-    if abs(c_correlation) > limit + TOL_PHYSICALITY:
-        raise ValueError(
-            "c_correlation is outside the physical range for the requested "
-            f"thermal occupation: |c_correlation| must be <= {limit}, "
-            f"got {c_correlation}."
-        )
-
-
-def _json_save(obj: Any, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(obj))
-
-
-def _json_load(path: str | Path) -> Any:
-    return json.loads(Path(path).read_text())
-
-
-def _apply_gaussian_transform(
-    state: GaussianState,
-    transform: np.ndarray,
-    noise: np.ndarray | None = None,
-    displacement: np.ndarray | None = None,
-) -> GaussianState:
-    """Apply d' = S d + d0 and V' = S V Sᵀ + Y."""
-    new_d = transform @ state.displacement
-    if displacement is not None:
-        new_d += displacement
-    new_V = transform @ state.covariance @ transform.T
-    if noise is not None:
-        new_V += noise
-    return GaussianState(state.modes, new_d, new_V)
-
-
-# ---------------------------------------------------------------------------
-# Phase-space state
-# ---------------------------------------------------------------------------
-
-
-def _williamson_decomposition(
-    covariance: np.ndarray,
-    *,
-    tol: float = 1e-10,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return symplectic eigenvalues, S and D with V = S D S.T.
-
-    The construction uses the positive square root of V followed by a real
-    Schur decomposition of sqrt(V) @ Omega @ sqrt(V).  This avoids treating a
-    generic matrix square root of V @ D^{-1} as though it were symplectic.
-    """
-    covariance = np.asarray(covariance, dtype=float)
-    dim = covariance.shape[0]
-    if dim == 0 or dim % 2:
-        raise ValueError("covariance dimension must be a positive even number")
-
-    n_modes = dim // 2
-    Omega = _symplectic_form(n_modes)
-
-    eigvals, eigvecs = np.linalg.eigh(covariance)
-    if np.min(eigvals) <= 0:
-        raise ValueError("covariance must be positive definite")
-    A = (eigvecs * np.sqrt(eigvals)) @ eigvecs.T
-
-    M = A @ Omega @ A
-    T, O = scipy.linalg.schur(M, output="real")
-
-    nus: list[float] = []
-    for i in range(0, dim, 2):
-        block = T[i : i + 2, i : i + 2]
-        offdiag = 0.5 * (block[0, 1] - block[1, 0])
-        nu = abs(float(offdiag))
-        if nu <= tol:
-            raise ValueError(
-                "covariance has a numerically singular symplectic eigenvalue"
-            )
-
-        # Normalize the Schur block to +nu * [[0,1],[-1,0]].
-        if offdiag < 0:
-            O[:, i : i + 2] = O[:, i : i + 2] @ np.diag([1.0, -1.0])
-        nus.append(nu)
-
-    D_diag = np.repeat(nus, 2)
-    D = np.diag(D_diag)
-    S = A @ O @ np.diag(1.0 / np.sqrt(D_diag))
-
-    symplectic_residual = np.max(np.abs(S @ Omega @ S.T - Omega))
-    covariance_residual = np.max(np.abs(S @ D @ S.T - covariance))
-    if symplectic_residual > 1e-8 or covariance_residual > 1e-8:
-        raise RuntimeError(
-            "Williamson decomposition residual too large: "
-            f"symplectic={symplectic_residual:.3e}, "
-            f"covariance={covariance_residual:.3e}."
-        )
-
-    return np.asarray(nus), S, D
-
+# ========================================================================
+# Gaussian
+# ========================================================================
 
 def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]):
     """Build a QuTiP unitary implementing an orthogonal symplectic O."""
@@ -264,9 +52,7 @@ def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]):
     C = O[1::2, 0::2]
     D = O[1::2, 1::2]
 
-    # For a passive symplectic transformation, a' = U a.
     U = 0.5 * (A + D + 1j * (C - B))
-    # Project tiny floating-point deviations back onto U(n).
     u, _, vh = np.linalg.svd(U)
     U = u @ vh
 
@@ -282,7 +68,6 @@ def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]):
 
     if H == 0:
         return qt.tensor(*[qt.qeye(a.dims[0][0]) for a in a_ops])
-
     return (-1j * H).expm()
 
 
@@ -384,10 +169,11 @@ class GaussianState:
         with a quadratic quadrature Hamiltonian.  The displacement is applied
         with QuTiP's ``displace`` primitive.
 
-        The Williamson and symplectic decompositions are performed in ordinary
-        floating-point phase space.  The only approximation that cannot be
-        removed by increasing ``N_cutoff`` is the finite Fock-space truncation.
+        The decompositions run in ordinary floating-point phase space, and the
+        returned density matrix is represented in a finite Fock-space cutoff.
+        Both numerical decomposition error and truncation can affect accuracy.
         """
+
         _check_positive_int(N_cutoff, "N_cutoff")
         n_modes = len(self.modes)
 
@@ -522,11 +308,6 @@ class GaussianState:
     @classmethod
     def load(cls, path: str | Path) -> GaussianState:
         return cls.from_dict(_json_load(path))
-
-
-# ---------------------------------------------------------------------------
-# Gaussian unitary operations (gates)
-# ---------------------------------------------------------------------------
 
 
 class GaussianOperations:
@@ -691,11 +472,9 @@ class GaussianOperations:
 
         return _apply_gaussian_transform(state, X, noise=Y)
 
-
-# ---------------------------------------------------------------------------
-# General Gaussian channels
-# ---------------------------------------------------------------------------
-
+# ========================================================================
+# Channels
+# ========================================================================
 
 @dataclass
 class GaussianChannel:
@@ -806,11 +585,11 @@ class QBSChannels:
         d0 = np.zeros(4)
         return GaussianChannel(target_modes=(mode_a, mode_b), X=X, Y=Y, d0=d0)
 
+# ========================================================================
+# Circuit
+# ========================================================================
 
-# ---------------------------------------------------------------------------
-# Circuit compiler
-# ---------------------------------------------------------------------------
-
+logger = logging.getLogger("catst")
 
 @dataclass
 class CircuitOperation:
@@ -857,9 +636,7 @@ def _op_thermal_loss(
     return QBSChannels.thermal_loss(mode=modes[0], **kwargs).apply(state)
 
 
-# Registry mapping a CircuitOperation.name -> (state, modes, **kwargs) -> state.
-# Extend the circuit vocabulary by adding entries here (or via
-# GaussianCircuit.register) instead of touching compile_and_run.
+# Registry maps serialized operation names to their state-transforming functions.
 OPERATION_REGISTRY: dict[str, Callable[..., GaussianState]] = {
     "Squeezing": _op_squeeze,
     "PhaseRotation": _op_rotate,
@@ -1025,11 +802,9 @@ class GaussianCircuit:
     def load(cls, path: str | Path) -> GaussianCircuit:
         return cls.from_dict(_json_load(path))
 
-
-# ---------------------------------------------------------------------------
+# ========================================================================
 # Measurements
-# ---------------------------------------------------------------------------
-
+# ========================================================================
 
 class GaussianMeasurements:
     @staticmethod
@@ -1152,11 +927,9 @@ class GaussianMeasurements:
         remaining_modes = tuple(m for m in state.modes if m != measured_mode)
         return measured_outcome, GaussianState(remaining_modes, d_cond, V_cond)
 
-
-# ---------------------------------------------------------------------------
-# phase-space plotting
-# ---------------------------------------------------------------------------
-
+# ========================================================================
+# Analysis
+# ========================================================================
 
 def compute_wigner_analytically(
     state: GaussianState, mode_name: str, x_max: float = 4.0, num_points: int = 150
@@ -1288,209 +1061,3 @@ def compute_duan_inseparability(
         V[idx_a + 1, idx_a + 1] + V[idx_b + 1, idx_b + 1] + 2 * V[idx_a + 1, idx_b + 1]
     )
     return var_x_diff + var_p_sum
-
-
-# ---------------------------------------------------------------------------
-# Fock-space (non-Gaussian) operations — single shared implementation
-# ---------------------------------------------------------------------------
-
-
-class FockOperations:
-    """Low-level Fock-space photon click operations, shared by
-    NonGaussianOperations (state-in/rho-out) and QBSSimulator (rho-in/rho-out)
-    so the math lives in exactly one place."""
-
-    @staticmethod
-    def _mode_operator(op_1mode, n_modes: int, mode_idx: int, N_cutoff: int):
-        if n_modes == 1:
-            return op_1mode
-        op_list = [qt.qeye(N_cutoff)] * n_modes
-        op_list[mode_idx] = op_1mode
-        return qt.tensor(*op_list)
-
-    @staticmethod
-    def _apply_and_renormalize(rho, op, label: str):
-        rho_new = op * rho * op.dag()
-        trace_val = rho_new.tr()
-        if abs(trace_val) < TOL_PHYSICALITY:
-            raise ValueError(
-                f"{label}: heralding success probability is numerically zero."
-            )
-        return rho_new / trace_val
-
-    @staticmethod
-    def photon_subtraction(rho, mode_idx: int = 0, N_cutoff: int = 20):
-        """rho -> a * rho * a^dagger (renormalized). Probabilistic heralding."""
-        _check_positive_int(N_cutoff, "N_cutoff")
-        n_modes = len(rho.dims[0])
-        a_op = FockOperations._mode_operator(
-            qt.destroy(N_cutoff), n_modes, mode_idx, N_cutoff
-        )
-        return FockOperations._apply_and_renormalize(rho, a_op, "photon_subtraction")
-
-    @staticmethod
-    def photon_addition(rho, mode_idx: int = 0, N_cutoff: int = 20):
-        """rho -> a^dagger * rho * a (renormalized)."""
-        _check_positive_int(N_cutoff, "N_cutoff")
-        n_modes = len(rho.dims[0])
-        adag_op = FockOperations._mode_operator(
-            qt.create(N_cutoff), n_modes, mode_idx, N_cutoff
-        )
-        return FockOperations._apply_and_renormalize(rho, adag_op, "photon_addition")
-
-
-class NonGaussianOperations:
-    """Convenience wrappers that take a GaussianState (converting to Fock
-    space internally) instead of an already-converted qutip Qobj."""
-
-    @staticmethod
-    def photon_subtraction(state: GaussianState, mode_name: str, N_cutoff: int = 20):
-        rho = state.to_qutip(N_cutoff=N_cutoff)
-        mode_idx = state.modes.index(mode_name)
-        return FockOperations.photon_subtraction(
-            rho, mode_idx=mode_idx, N_cutoff=N_cutoff
-        )
-
-    @staticmethod
-    def photon_addition(state: GaussianState, mode_name: str, N_cutoff: int = 20):
-        rho = state.to_qutip(N_cutoff=N_cutoff)
-        mode_idx = state.modes.index(mode_name)
-        return FockOperations.photon_addition(rho, mode_idx=mode_idx, N_cutoff=N_cutoff)
-
-
-# ---------------------------------------------------------------------------
-# Time-dependent / interferometric simulation
-# ---------------------------------------------------------------------------
-
-
-class QBSSimulator:
-    """Time-dependent master-equation and interferometer simulations."""
-
-    # Backward/forward-compatible entry points onto the single FockOperations
-    # implementation (useful when you already hold a converted rho, e.g. mid-
-    # simulation, and have no GaussianState to go back to).
-    photon_subtraction = staticmethod(FockOperations.photon_subtraction)
-    photon_addition = staticmethod(FockOperations.photon_addition)
-
-    @staticmethod
-    def run_cavity_with_pulse(
-        rho_init,
-        tlist: np.ndarray,
-        K: float,
-        kappa: float,
-        amp: float,
-        t0: float,
-        sigma: float,
-        N_cutoff: int,
-    ) -> list:
-        """Dissipative cavity with a Kerr nonlinearity, driven by a
-        time-dependent Gaussian pulse.
-
-        Parameters
-        ----------
-        rho_init : starting density matrix (e.g. from GaussianState.to_qutip())
-        tlist : time grid for the ODE solver
-        K : Kerr nonlinearity strength (K * adag^2 * a^2)
-        kappa : cavity photon-loss rate
-        amp, t0, sigma : Gaussian pulse-shape parameters
-        N_cutoff : Hilbert-space dimension
-        """
-        _check_positive_int(N_cutoff, "N_cutoff")
-        _check_non_negative(kappa, "kappa")
-        if len(tlist) < 2:
-            raise ValueError("tlist must contain at least 2 time points.")
-        if sigma <= 0:
-            raise ValueError(f"sigma must be > 0, got {sigma}.")
-
-        a = qt.destroy(N_cutoff)
-        H_kerr = K * a.dag() * a.dag() * a * a
-
-        def pulse_shape(t, amp, t0, sigma):
-            return amp * np.exp(-((t - t0) ** 2) / (2 * sigma**2))
-
-        H_total = [H_kerr, [a + a.dag(), pulse_shape]]
-        c_ops = [np.sqrt(kappa) * a] if kappa > 0 else []
-        args = {"amp": amp, "t0": t0, "sigma": sigma}
-
-        res = qt.mesolve(H_total, rho_init, tlist, c_ops=c_ops, args=args)
-        return res.states
-
-    @staticmethod
-    def scan_mzi_with_loss(
-        psi_cat_single,
-        theta_list: np.ndarray,
-        kappa: float,
-        N_cutoff: int,
-        *,
-        loss_time: float = 1.0,
-    ) -> dict:
-        """Scan a cat state through a noisy Mach-Zehnder interferometer.
-
-        ``theta_list`` is now a pure phase scan.  It no longer controls the
-        duration for which the arm is exposed to loss.  ``kappa`` is the
-        photon-loss rate and ``loss_time`` is the fixed physical exposure
-        time of the lossy arm, so its amplitude transmissivity is independent
-        of the scanned phase.
-
-        The model is: input -> 50:50 BS -> fixed-time amplitude damping on
-        arm 1 -> phase shift on arm 1 -> second 50:50 BS -> measurements.
-        Amplitude damping is phase-covariant, so applying the fixed loss before
-        the phase is physically equivalent to applying it after the phase.
-        """
-        _check_positive_int(N_cutoff, "N_cutoff")
-        _check_non_negative(kappa, "kappa")
-        _check_non_negative(loss_time, "loss_time")
-        theta_list = np.asarray(theta_list, dtype=float)
-        if theta_list.ndim != 1 or len(theta_list) < 1:
-            raise ValueError("theta_list must be a non-empty 1D array.")
-        if not np.all(np.isfinite(theta_list)):
-            raise ValueError("theta_list must contain only finite values.")
-
-        a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
-        a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
-
-        n1_op = a1.dag() * a1
-        n2_op = a2.dag() * a2
-        parity1_op = (1j * np.pi * n1_op).expm()
-
-        U_BS = ((1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())).expm()
-
-        psi_in = qt.tensor(psi_cat_single, qt.fock(N_cutoff, 0))
-        psi_after_BS1 = U_BS * psi_in
-
-        # The loss channel is independent of theta.  For amplitude damping
-        # generated by H=0 and collapse operator sqrt(kappa)*a, the fixed
-        # exposure time gives eta = exp(-kappa * loss_time).
-        c_ops = [np.sqrt(kappa) * a1] if kappa > 0 and loss_time > 0 else []
-        if c_ops:
-            loss_sim = qt.mesolve(
-                0 * n1_op,
-                psi_after_BS1,
-                [0.0, float(loss_time)],
-                c_ops=c_ops,
-            )
-            rho_after_loss = loss_sim.states[-1]
-            if rho_after_loss.isket:
-                rho_after_loss = qt.ket2dm(rho_after_loss)
-        elif psi_after_BS1.isket:
-            rho_after_loss = qt.ket2dm(psi_after_BS1)
-        else:
-            rho_after_loss = psi_after_BS1
-
-        results = {
-            "theta": theta_list,
-            "n1": [],
-            "n2": [],
-            "parity1": [],
-        }
-
-        for theta in theta_list:
-            U_phase = (1j * float(theta) * n1_op).expm()
-            rho_after_phase = U_phase * rho_after_loss * U_phase.dag()
-            rho_out = U_BS * rho_after_phase * U_BS.dag()
-
-            results["n1"].append(qt.expect(n1_op, rho_out))
-            results["n2"].append(qt.expect(n2_op, rho_out))
-            results["parity1"].append(qt.expect(parity1_op, rho_out).real)
-
-        return results

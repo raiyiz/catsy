@@ -27,7 +27,7 @@ serializes to several times its binary size as decimal-text JSON, and
 means listing/searching entries stays cheap regardless of how much array
 data is attached to them.
 
-Design notes (mirrors states.py):
+Design notes (mirrors the package's broad module layout):
   - All public entry points validate their inputs and raise ValueError with
     a specific message; nothing relies on `assert`.
   - Saves are atomic (write to a temp file, then `Path.replace`), so a
@@ -45,7 +45,8 @@ from typing import Any
 
 import numpy as np
 
-from .states import GaussianCircuit, GaussianState
+from .gaussian import GaussianCircuit
+from .gaussian import GaussianState
 
 SCHEMA_VERSION = "2.0.0"
 

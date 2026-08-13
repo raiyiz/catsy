@@ -2,7 +2,7 @@
 
 import pytest
 
-from .states import GaussianOperations
+from catst.gaussian import GaussianOperations
 
 
 def pytest_addoption(parser):

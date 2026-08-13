@@ -1,16 +1,4 @@
-"""Static optical-bench layouts.
-
-`OpticalSetup` composes named hardware components (beam splitters, loss
-channels, squeezers, phase shifters) into a reusable layout: build it once,
-save it to JSON, reload it later, and run any `GaussianState` through it.
-
-This is deliberately a different concern from `states.py`'s circuit
-compiler: `OpticalSetup` is a *layout* -- named components wired to port
-labels, independent of any particular input state -- while `GaussianCircuit`
-is what actually executes a fixed sequence of gates over a fixed mode set.
-`OpticalSetup.process_beam` bridges the two by compiling a throwaway
-`GaussianCircuit` from the layout on each call.
-"""
+"""Reusable optical-bench layouts."""
 
 from __future__ import annotations
 
@@ -21,7 +9,8 @@ from typing import Any
 
 import numpy as np
 
-from .gaussian import GaussianCircuit, GaussianState
+from .gaussian import GaussianCircuit
+from .gaussian import GaussianState
 
 # ---------------------------------------------------------------------------
 # Component blueprint

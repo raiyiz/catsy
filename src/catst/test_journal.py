@@ -4,13 +4,13 @@ import numpy as np
 import pytest
 
 from .composition import OpticalSetup
-from .journal import JournalEntry, SimulationJournal
-from .states import (
+from .gaussian import (
     GaussianCircuit,
     GaussianOperations,
     compute_duan_inseparability,
     compute_joint_correlation,
 )
+from .journal import JournalEntry, SimulationJournal
 
 # ---------------------------------------------------------------------------
 # JournalEntry.log_run
