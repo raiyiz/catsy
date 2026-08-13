@@ -542,7 +542,7 @@ class GaussianChannel:
         return cls.from_dict(_json_load(path))
 
 
-class QBSChannels:
+class LossChannels:
     """Factory for standard optical noise channels."""
 
     @staticmethod
@@ -633,7 +633,7 @@ def _op_loss(state: GaussianState, modes: tuple[str, ...], **kwargs) -> Gaussian
 def _op_thermal_loss(
     state: GaussianState, modes: tuple[str, ...], **kwargs
 ) -> GaussianState:
-    return QBSChannels.thermal_loss(mode=modes[0], **kwargs).apply(state)
+    return LossChannels.thermal_loss(mode=modes[0], **kwargs).apply(state)
 
 
 # Registry maps serialized operation names to their state-transforming functions.
@@ -1046,7 +1046,7 @@ def compute_duan_inseparability(
     with two independent vacua exactly saturating the bound. A value
     strictly below it is a *sufficient* condition for genuine, non-classical
     entanglement between mode_a and mode_b: no amount of classical
-    correlation (e.g. from `QBSChannels.correlated_thermal_noise`) can beat
+    correlation (e.g. from `LossChannels.correlated_thermal_noise`) can beat
     it, only a genuinely entangling operation like the beam splitter in
     `GaussianOperations.create_epr_pair` can. The bound is not necessary --
     some entangled states pass it undetected -- so failing to beat it does

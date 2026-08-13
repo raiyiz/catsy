@@ -4,7 +4,7 @@ from .gaussian import (
     GaussianState,
     GaussianOperations,
     GaussianChannel,
-    QBSChannels,
+    LossChannels,
     CircuitOperation,
     GaussianCircuit,
     GaussianMeasurements,
@@ -14,7 +14,8 @@ from .gaussian import (
     plot_joint_correlation,
     compute_duan_inseparability,
 )
-from .quantum import FockOperations, NonGaussianOperations, QBSSimulator
+from .fock import FockOperations, NonGaussianOperations
+from .simulations import KerrCavity, MachZehnderInterferometer
 from .optics import OpticalSetup
 from .journal import JournalEntry, SimulationJournal
 
@@ -22,7 +23,7 @@ __all__ = [
     "GaussianState",
     "GaussianOperations",
     "GaussianChannel",
-    "QBSChannels",
+    "LossChannels",
     "CircuitOperation",
     "GaussianCircuit",
     "GaussianMeasurements",
@@ -33,7 +34,8 @@ __all__ = [
     "compute_duan_inseparability",
     "FockOperations",
     "NonGaussianOperations",
-    "QBSSimulator",
+    "KerrCavity",
+    "MachZehnderInterferometer",
     "OpticalSetup",
     "JournalEntry",
     "SimulationJournal",

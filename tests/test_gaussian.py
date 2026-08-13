@@ -9,7 +9,7 @@ from catst.gaussian import (
     GaussianMeasurements,
     GaussianOperations,
     GaussianState,
-    QBSChannels,
+    LossChannels,
     compute_duan_inseparability,
     compute_joint_correlation,
     compute_wigner_analytically,
@@ -67,7 +67,7 @@ def test_thermal_loss_matches_environment_formula(eta, n_thermal):
         r=0.5,
         theta=0.2,
     )
-    lossy = QBSChannels.thermal_loss(
+    lossy = LossChannels.thermal_loss(
         mode="a", eta=eta, n_thermal=n_thermal
     ).apply(state)
 
@@ -282,7 +282,7 @@ def test_classical_phase_jitter_channel_applies():
     # which fails GaussianChannel's (2,2) validation. It must now apply cleanly
     # and only add noise to the p-quadrature.
     state = GaussianOperations.create_vacuum(modes=("a",))
-    channel = QBSChannels.classical_phase_jitter(mode="a", sigma_phi=0.3)
+    channel = LossChannels.classical_phase_jitter(mode="a", sigma_phi=0.3)
     jittered = channel.apply(state)
     assert jittered.covariance[0, 0] == pytest.approx(0.5)  # q untouched
     assert jittered.covariance[1, 1] > 0.5
@@ -336,7 +336,7 @@ def test_gaussian_channel_rejects_nonsymmetric_noise():
         )
 
 def test_thermal_loss_is_a_valid_gaussian_channel():
-    channel = QBSChannels.thermal_loss(
+    channel = LossChannels.thermal_loss(
         mode="a",
         eta=0.7,
         n_thermal=0.2,
@@ -354,7 +354,7 @@ def test_thermal_loss_is_a_valid_gaussian_channel():
 )
 def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation, valid):
     if valid:
-        channel = QBSChannels.correlated_thermal_noise(
+        channel = LossChannels.correlated_thermal_noise(
             "a", "b", eta=0.5,
             n_thermal=n_thermal,
             c_correlation=c_correlation,
@@ -362,7 +362,7 @@ def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation
         assert channel.Y.shape == (4, 4)
     else:
         with pytest.raises(ValueError, match="c_correlation"):
-            QBSChannels.correlated_thermal_noise(
+            LossChannels.correlated_thermal_noise(
                 "a", "b", eta=0.5,
                 n_thermal=n_thermal,
                 c_correlation=c_correlation,
@@ -384,7 +384,7 @@ def test_circuit_matches_manual_operation_chain():
     manual = GaussianOperations.apply_beam_splitter(
         manual, mode_a="a", mode_b="b", eta=0.5
     )
-    manual = QBSChannels.thermal_loss(mode="b", eta=0.7, n_thermal=0.3).apply(manual)
+    manual = LossChannels.thermal_loss(mode="b", eta=0.7, n_thermal=0.3).apply(manual)
 
     circuit = GaussianCircuit()
     circuit.add_mode("a").add_mode("b")
@@ -665,7 +665,7 @@ def test_classical_correlation_does_not_violate_duan_bound():
     # Duan-Simon bound the way a real entangling operation (the beam
     # splitter inside create_epr_pair) does.
     vacuum = GaussianOperations.create_vacuum(modes=("a", "b"))
-    correlated = QBSChannels.correlated_thermal_noise(
+    correlated = LossChannels.correlated_thermal_noise(
         "a", "b", eta=0.5, n_thermal=0.5, c_correlation=0.3
     ).apply(vacuum)
 
@@ -702,7 +702,7 @@ def test_epr_pair_entanglement_visualization_demo():
     r = 1.0
     epr = GaussianOperations.create_epr_pair("a", "b", r=r)
     vacuum = GaussianOperations.create_vacuum(("a", "b"))
-    classical = QBSChannels.correlated_thermal_noise(
+    classical = LossChannels.correlated_thermal_noise(
         "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
     ).apply(vacuum)
 
@@ -837,7 +837,7 @@ def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
     state = GaussianOperations.apply_beam_splitter(
         state, mode_a="a", mode_b="b", eta=0.5
     )
-    noisy_state = QBSChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(
+    noisy_state = LossChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(
         state
     )
     rho = noisy_state.to_qutip(N_cutoff=18)
@@ -851,7 +851,7 @@ def test_to_qutip_rejects_invalid_n_cutoff():
         state.to_qutip(N_cutoff=-5)
 
 def test_gaussian_channel_roundtrips_through_file(tmp_path):
-    channel = QBSChannels.thermal_loss(mode="a", eta=0.8, n_thermal=0.1)
+    channel = LossChannels.thermal_loss(mode="a", eta=0.8, n_thermal=0.1)
     path = tmp_path / "channel.json"
     channel.save(path)
     restored = GaussianChannel.load(path)

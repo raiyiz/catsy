@@ -5,8 +5,9 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catst.gaussian import GaussianCircuit, GaussianOperations, QBSChannels
-from catst.quantum import FockOperations, NonGaussianOperations, QBSSimulator
+from catst.gaussian import GaussianCircuit, GaussianOperations, LossChannels
+from catst.fock import FockOperations, NonGaussianOperations
+from catst.simulations import KerrCavity, MachZehnderInterferometer
 
 
 # Fock-space operations
@@ -20,7 +21,7 @@ def test_cv_channel_to_fock_purity_drops_with_loss():
     )
 
     clean_rho = state.to_qutip(N_cutoff=18)
-    noisy_state = QBSChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(
+    noisy_state = LossChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(
         state
     )
     noisy_rho = noisy_state.to_qutip(N_cutoff=18)
@@ -82,11 +83,10 @@ def test_photon_subtraction_zero_probability_raises():
     with pytest.raises(ValueError):
         FockOperations.photon_subtraction(vacuum, mode_idx=0, N_cutoff=N_cutoff)
 
-def test_qbs_simulator_photon_ops_delegate_to_fock_operations():
-    # QBSSimulator.photon_subtraction/addition must be the same function
-    # object as FockOperations' — not a second, drifting implementation.
-    assert QBSSimulator.photon_subtraction is FockOperations.photon_subtraction
-    assert QBSSimulator.photon_addition is FockOperations.photon_addition
+def test_fock_operations_are_the_single_implementation_for_photon_ops():
+    assert FockOperations.photon_subtraction.__module__ == "catst.fock"
+    assert FockOperations.photon_addition.__module__ == "catst.fock"
+
 
 # Visual diagnostics
 
@@ -114,15 +114,12 @@ def test_laser_pulse_cavity_plot_demo():
     N_cutoff = 15
     rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     tlist = np.linspace(0, 5, 100)
-    states = QBSSimulator.run_cavity_with_pulse(
+    states = KerrCavity(K=0.3, kappa=0.05, N_cutoff=N_cutoff).run(
         rho_init=rho_vacuum,
         tlist=tlist,
-        K=0.3,
-        kappa=0.05,
         amp=3.0,
         t0=1.5,
         sigma=0.5,
-        N_cutoff=N_cutoff,
     )
     n_op = qt.num(N_cutoff)
     photon_numbers = [qt.expect(n_op, s) for s in states]
@@ -142,9 +139,7 @@ def test_full_cavity_multipanel_plot_demo():
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 60)
-    results = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.2, N_cutoff=N_cutoff
-    )
+    results = MachZehnderInterferometer(kappa=0.2, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     axes[0].plot(theta_list, results["n1"])
@@ -167,21 +162,18 @@ def test_triggered_cavity_end_to_end():
     rho_vacuum = initial_state.to_qutip(N_cutoff=N_fock)
 
     tlist = np.linspace(0, 5, 60)
-    states = QBSSimulator.run_cavity_with_pulse(
+    states = KerrCavity(K=0.4, kappa=0.05, N_cutoff=N_fock).run(
         rho_init=rho_vacuum,
         tlist=tlist,
-        K=0.4,
-        kappa=0.05,
         amp=3.5,
         t0=1.5,
         sigma=0.6,
-        N_cutoff=N_fock,
     )
     assert len(states) == len(tlist)
     rho_kerr_cat = states[-1]
     assert rho_kerr_cat.tr() == pytest.approx(1.0, abs=1e-6)
 
-    rho_final_non_gaussian = QBSSimulator.photon_subtraction(
+    rho_final_non_gaussian = FockOperations.photon_subtraction(
         rho_kerr_cat, N_cutoff=N_fock
     )
     purity = (rho_final_non_gaussian * rho_final_non_gaussian).tr().real
@@ -196,12 +188,8 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     # Loss has a fixed exposure time and is therefore independent of the
     # scanned phase.  Compare the complete phase scan directly.
     theta_list = np.linspace(0, 2 * np.pi, 80)
-    results_clean = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
-    )
-    results_noisy = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.4, N_cutoff=N_cutoff
-    )
+    results_clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
+    results_noisy = MachZehnderInterferometer(kappa=0.4, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
     tail = slice(len(theta_list) // 2, None)
     visibility_clean = np.ptp(np.array(results_clean["parity1"])[tail])
@@ -216,12 +204,8 @@ def test_mzi_phase_scan_is_independent_of_loss_when_exposure_time_is_zero():
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.array([-0.7, 0.0, 0.9])
 
-    clean = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
-    )
-    zero_exposure = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0
-    )
+    clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
+    zero_exposure = MachZehnderInterferometer(kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0).scan(psi_cat, theta_list)
 
     for key in ("n1", "n2", "parity1"):
         np.testing.assert_allclose(
@@ -233,9 +217,9 @@ def test_mzi_negative_phase_is_not_clipped_to_zero():
     alpha = 1.0
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
 
-    result = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, np.array([-0.8, 0.0, 0.8]), kappa=0.0, N_cutoff=N_cutoff
-    )
+    result = MachZehnderInterferometer(
+        kappa=0.0, N_cutoff=N_cutoff
+    ).scan(psi_cat, np.array([-0.8, 0.0, 0.8]))
 
     # A real phase scan must distinguish a negative phase from zero.
     assert not np.allclose(result["n1"][0], result["n1"][1], atol=1e-8)
@@ -246,7 +230,7 @@ def test_mzi_negative_phase_is_not_clipped_to_zero():
 def test_kerr_cat_state_generation(plot_enabled):
     # A driven, weakly-damped Kerr cavity: a fast pulse loads the cavity with
     # a coherent state, then the Kerr nonlinearity shears it into a cat
-    # state. Routed through QBSSimulator.run_cavity_with_pulse rather than
+    # state. Routed through KerrCavity.run rather than
     # hand-rolled here, so this test and test_triggered_cavity_end_to_end
     # exercise the exact same code path the rest of the suite relies on.
     N_cutoff = (
@@ -255,15 +239,16 @@ def test_kerr_cat_state_generation(plot_enabled):
     rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     tlist = np.linspace(0, 6, 200)
 
-    states = QBSSimulator.run_cavity_with_pulse(
-        rho_init=rho_vacuum,
-        tlist=tlist,
+    states = KerrCavity(
         K=0.5,  # Kerr nonlinearity strength
         kappa=0.01,  # light damping -- cat states are fragile against loss
+        N_cutoff=N_cutoff,
+    ).run(
+        rho_init=rho_vacuum,
+        tlist=tlist,
         amp=5.0,
         t0=2.0,
         sigma=0.8,
-        N_cutoff=N_cutoff,
     )
     assert len(states) == len(tlist)
     assert states[-1].tr() == pytest.approx(1.0, abs=1e-6)
@@ -355,7 +340,7 @@ def test_cat_mzi_phase_scan_fringes():
     # Loss-free (kappa=0) phase scan of a cat state through the MZI -- the
     # clean-case counterpart plotted alongside the noisy one in
     # test_decoherence_mzi_parity_visibility_drops_with_loss. Routed through
-    # QBSSimulator.scan_mzi_with_loss instead of duplicating that loop here,
+    # MachZehnderInterferometer.scan instead of duplicating that loop here,
     # so both tests exercise the same simulation code.
 
     N_cutoff = 22
@@ -363,9 +348,7 @@ def test_cat_mzi_phase_scan_fringes():
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 200)
 
-    results = QBSSimulator.scan_mzi_with_loss(
-        psi_cat, theta_list, kappa=0.0, N_cutoff=N_cutoff
-    )
+    results = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
