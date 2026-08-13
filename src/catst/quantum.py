@@ -1,15 +1,14 @@
-"""Backward-compatible imports for the Fock and simulation APIs.
+"""Compatibility imports for the Fock and simulation APIs.
 
-New code should import FockOperations and NonGaussianOperations from
-``catst.fock`` and physical simulations from ``catst.simulations``.
+New code should import FockOperations from ``catst.fock`` and physical
+simulations from ``catst.simulations``.
 """
 
-from .fock import FockOperations, NonGaussianOperations
+from .fock import FockOperations
 from .simulations import KerrCavity, MachZehnderInterferometer
 
 __all__ = [
     "FockOperations",
-    "NonGaussianOperations",
     "KerrCavity",
     "MachZehnderInterferometer",
 ]

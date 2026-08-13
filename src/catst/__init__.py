@@ -14,7 +14,7 @@ from .gaussian import (
     plot_joint_correlation,
     compute_duan_inseparability,
 )
-from .fock import FockOperations, NonGaussianOperations
+from .fock import FockOperations
 from .simulations import KerrCavity, MachZehnderInterferometer
 from .optics import OpticalSetup
 from .journal import JournalEntry, SimulationJournal
@@ -33,7 +33,6 @@ __all__ = [
     "plot_joint_correlation",
     "compute_duan_inseparability",
     "FockOperations",
-    "NonGaussianOperations",
     "KerrCavity",
     "MachZehnderInterferometer",
     "OpticalSetup",

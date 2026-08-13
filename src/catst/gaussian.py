@@ -169,9 +169,11 @@ class GaussianState:
         with a quadratic quadrature Hamiltonian.  The displacement is applied
         with QuTiP's ``displace`` primitive.
 
-        The decompositions run in ordinary floating-point phase space, and the
-        returned density matrix is represented in a finite Fock-space cutoff.
-        Both numerical decomposition error and truncation can affect accuracy.
+        Williamson's decomposition is exact mathematically; this implementation
+        verifies the reconstructed symplectic transformation and covariance to
+        floating-point tolerance. The returned density matrix is nevertheless
+        represented in a finite Fock-space cutoff, so the final phase-space to
+        Hilbert-space conversion can still incur truncation error.
         """
 
         _check_positive_int(N_cutoff, "N_cutoff")

@@ -54,23 +54,3 @@ class FockOperations:
             qt.create(N_cutoff), n_modes, mode_idx, N_cutoff
         )
         return FockOperations._apply_and_renormalize(rho, adag_op, "photon_addition")
-
-
-class NonGaussianOperations:
-    """Convenience wrappers that take a GaussianState (converting to Fock
-    space internally) instead of an already-converted qutip Qobj."""
-
-    @staticmethod
-    def photon_subtraction(state: GaussianState, mode_name: str, N_cutoff: int = 20):
-        rho = state.to_qutip(N_cutoff=N_cutoff)
-        mode_idx = state.modes.index(mode_name)
-        return FockOperations.photon_subtraction(
-            rho, mode_idx=mode_idx, N_cutoff=N_cutoff
-        )
-
-    @staticmethod
-    def photon_addition(state: GaussianState, mode_name: str, N_cutoff: int = 20):
-        rho = state.to_qutip(N_cutoff=N_cutoff)
-        mode_idx = state.modes.index(mode_name)
-        return FockOperations.photon_addition(rho, mode_idx=mode_idx, N_cutoff=N_cutoff)
-
