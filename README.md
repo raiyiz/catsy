@@ -1,6 +1,6 @@
-# catst
+# catsy
 
-`catst` is a small continuous-variable (CV) quantum-optics toolkit built around
+`catsy` is a small continuous-variable (CV) quantum-optics toolkit built around
 Gaussian states in the interleaved phase-space convention
 `(x1, p1, x2, p2, ...)`.
 
@@ -8,7 +8,7 @@ The project is intentionally compact: the Gaussian phase-space layer handles
 most circuit construction without allocating a Hilbert-space state, while
 QuTiP provides the required Fock-space representation and non-Gaussian
 calculations. QuTiP is an essential runtime dependency and is imported when
-`catst` is loaded.
+`catsy` is loaded.
 
 ## Conventions
 
@@ -64,7 +64,7 @@ and the same transformation for the `p` quadratures.
 ## Typical workflow
 
 ```python
-from catst import GaussianCircuit, GaussianOperations
+from catsy import GaussianCircuit, GaussianOperations
 
 # Build an EPR state and run it through a small Gaussian circuit.
 initial = GaussianOperations.create_epr_pair("a", "b", r=0.7)
@@ -80,7 +80,7 @@ final = circuit.compile_and_run(initial_state=initial)
 For direct gate-by-gate work:
 
 ```python
-from catst import GaussianOperations
+from catsy import GaussianOperations
 
 state = GaussianOperations.create_vacuum(("a",))
 state = GaussianOperations.apply_squeezing(state, "a", r=0.5)
@@ -92,7 +92,7 @@ state = GaussianOperations.apply_displacement(state, "a", alpha=0.4 + 0.2j)
 The implementation is grouped into a few broad layers:
 
 ```text
-catst/
+catsy/
 ├── core.py        shared numerical helpers and phase-space conventions
 ├── gaussian.py    Gaussian states, operations, channels, circuits,
 │                  measurements, and phase-space analysis
@@ -102,7 +102,7 @@ catst/
 ```
 
 The package does not maintain a compatibility facade yet. Imports should use
-these modules directly, or the public names re-exported from `catst`.
+these modules directly, or the public names re-exported from `catsy`.
 
 ## Testing
 

@@ -2,7 +2,7 @@
 
 This module contains the continuous-variable Gaussian layer: states and
 standard operations, general Gaussian channels, circuits, measurements, and
-phase-space diagnostics. QuTiP is a required core dependency of catst.
+phase-space diagnostics. QuTiP is a required core dependency of catsy.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from .core import (
     _williamson_decomposition,
 )
 
-logger = logging.getLogger("catst")
+logger = logging.getLogger("catsy")
 
 
 
@@ -591,7 +591,7 @@ class LossChannels:
 # Circuit
 # ========================================================================
 
-logger = logging.getLogger("catst")
+logger = logging.getLogger("catsy")
 
 @dataclass
 class CircuitOperation:

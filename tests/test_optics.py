@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from catst.gaussian import GaussianOperations, compute_duan_inseparability
-from catst.optics import OpticalComponent, OpticalSetup
+from catsy.gaussian import GaussianOperations, compute_duan_inseparability
+from catsy.optics import OpticalComponent, OpticalSetup
 
 # Layout assembly and serialization
 

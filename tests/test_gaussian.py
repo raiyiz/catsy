@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 import qutip as qt
-from catst.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
-from catst.gaussian import (
+from catsy.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
+from catsy.gaussian import (
     OPERATION_REGISTRY,
     GaussianChannel,
     GaussianCircuit,

@@ -1,7 +1,7 @@
 """Compatibility imports for the Fock and simulation APIs.
 
-New code should import FockOperations from ``catst.fock`` and physical
-simulations from ``catst.simulations``.
+New code should import FockOperations from ``catsy.fock`` and physical
+simulations from ``catsy.simulations``.
 """
 
 from .fock import FockOperations

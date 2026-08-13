@@ -5,9 +5,9 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catst.gaussian import GaussianCircuit, GaussianOperations, LossChannels
-from catst.fock import FockOperations
-from catst.simulations import KerrCavity, MachZehnderInterferometer
+from catsy.gaussian import GaussianCircuit, GaussianOperations, LossChannels
+from catsy.fock import FockOperations
+from catsy.simulations import KerrCavity, MachZehnderInterferometer
 
 
 # Fock-space operations
@@ -90,8 +90,8 @@ def test_fock_operations_reject_incompatible_cutoff_and_mode():
         FockOperations.photon_subtraction(rho, mode_idx=1, N_cutoff=8)
 
 def test_fock_operations_are_the_single_implementation_for_photon_ops():
-    assert FockOperations.photon_subtraction.__module__ == "catst.fock"
-    assert FockOperations.photon_addition.__module__ == "catst.fock"
+    assert FockOperations.photon_subtraction.__module__ == "catsy.fock"
+    assert FockOperations.photon_addition.__module__ == "catsy.fock"
 
 
 # Visual diagnostics

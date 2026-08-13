@@ -11,7 +11,7 @@ class FockOperations:
     """Primitive photon operations acting directly on QuTiP states.
 
     The Fock layer deliberately operates on QuTiP objects.  Conversion from a
-    :class:`~catst.gaussian.GaussianState` belongs at the phase-space/Fock
+    :class:`~catsy.gaussian.GaussianState` belongs at the phase-space/Fock
     boundary via ``GaussianState.to_qutip()``; no second convenience layer is
     maintained here.
     """

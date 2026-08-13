@@ -1,8 +1,8 @@
-"""Shared pytest fixtures and options for the catst test suite."""
+"""Shared pytest fixtures and options for the catsy test suite."""
 
 import pytest
 
-from catst.gaussian import GaussianOperations
+from catsy.gaussian import GaussianOperations
 
 
 def pytest_addoption(parser):

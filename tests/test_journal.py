@@ -3,13 +3,13 @@ import json
 import numpy as np
 import pytest
 
-from catst.gaussian import (
+from catsy.gaussian import (
     GaussianCircuit,
     GaussianOperations,
     compute_duan_inseparability,
     compute_joint_correlation,
 )
-from catst.journal import JournalEntry, SimulationJournal
+from catsy.journal import JournalEntry, SimulationJournal
 
 # JournalEntry.log_run
 

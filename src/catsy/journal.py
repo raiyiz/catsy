@@ -1,4 +1,4 @@
-"""Persistent experiment log for catst simulations.
+"""Persistent experiment log for catsy simulations.
 
 A `JournalEntry` records one experiment: its title, tags, notes, optional
 metadata, and one or more logged simulation runs. Each run may contain an
