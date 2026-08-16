@@ -68,7 +68,9 @@ def homodyne_measurement(
 
     # 4. Compute the conditioned state (Wigner collapse)
     # The displacement shifts proportionally to the deviation from the expectation value
-    d_cond = d_rot[remaining_indices] + V_RM * (1.0 / V_MM) * (measured_value - d_rot[idx_x])
+    d_cond = d_rot[remaining_indices] + V_RM * (1.0 / V_MM) * (
+        measured_value - d_rot[idx_x]
+    )
     # The new covariance matrix shrinks; uncertainty is reduced by information extraction
     V_cond = V_RR - np.outer(V_RM, V_MR) / V_MM
 
@@ -87,7 +89,7 @@ Heterodyne (or dual-homodyne) detection measures both conjugate quadratures ($q$
 Physically, heterodyne measurement corresponds to splitting the target mode on a 50:50 beam splitter whose second input is populated with an uncorrelated vacuum state. The two outputs are then each homodyne-detected (one measures $q$, the other $p$).
 
 This intrinsic quantum noise is simulated elegantly and efficiently in the code, without needing to explicitly construct the beam splitter in phase space: the vacuum noise is added directly as an additive term to the measurement block:
-$ V_("eff") = V_(M M) + 1/2 I_2 $
+$ V_("eff") = V_(M M) + 1/2 bb(1)_2 $
 
 === Implementation & noise injection
 Because of this noise injection, the measured mode does not collapse onto an infinitely squeezed eigenstate, but onto a coherent state (projection onto coherent states / *Husimi Q representation*).
@@ -117,12 +119,16 @@ def heterodyne_measurement(
     # Multivariate sampling over the noisy distribution
     if outcome is None:
         rng = rng if rng is not None else np.random.default_rng()
-        measured_vector = rng.multivariate_normal(mean=state.displacement[idx_m : idx_m + 2], cov=V_eff)
+        measured_vector = rng.multivariate_normal(
+            mean=state.displacement[idx_m : idx_m + 2], cov=V_eff
+        )
     else:
         measured_vector = np.asarray(outcome, dtype=float)
 
     # Matrix conditioning via the noisy Schur complement
-    d_cond = state.displacement[remaining_indices] + V_RM @ V_eff_inv @ (measured_vector - state.displacement[idx_m : idx_m + 2])
+    d_cond = state.displacement[remaining_indices] + V_RM @ V_eff_inv @ (
+        measured_vector - state.displacement[idx_m : idx_m + 2]
+    )
     V_cond = V_RR - V_RM @ V_eff_inv @ V_MR
 
     remaining_modes = tuple(m for m in state.modes if m != measured_mode)

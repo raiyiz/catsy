@@ -14,7 +14,7 @@ Each factory method constructs a state *declaratively* from the vacuum, by compo
 === Vacuum and coherent states
 
 The $n$-mode vacuum state trivially has no displacement and the isotropic shot-noise covariance:
-$ d = 0, quad V = 1/2 I_(2n) $
+$ d = 0, quad V = 1/2 bb(1)_(2n) $
 
 A coherent state $ket(alpha)$ is a vacuum displaced by $alpha$. The `create_coherent` factory method achieves this by repeatedly calling `apply_displacement`:
 
@@ -102,7 +102,7 @@ O = P_inv @ S
 
 The passive part is realized as a photon-number-conserving Hamiltonian $H_"passive" = sum_(i j) h_(i j) hat(a)_i^dagger hat(a)_j$ (see `_qutip_passive_unitary`), whose generating matrix $h$ follows from the complex logarithm of a unitary matrix constructed from $O$. The positive (squeezing) part is implemented as a quadratic quadrature operator
 $ H_"positive" = 1/2 sum_(i j) G_(i j) hat(r)_i hat(r)_j, quad G = -Omega log(P) $
-and likewise exponentiated. Both unitaries are applied in sequence, so that the total transformation $P dot O = S$ is reproduced exactly — both intermediate steps are checked in the code against the residuals $O^T O = I$, $O Omega O^T = Omega$, and $P Omega P^T = Omega$.
+and likewise exponentiated. Both unitaries are applied in sequence, so that the total transformation $P dot O = S$ is reproduced exactly — both intermediate steps are checked in the code against the residuals $O^T O = bb(1)$, $O Omega O^T = Omega$, and $P Omega P^T = Omega$.
 
 === Step 3 — Displacement
 

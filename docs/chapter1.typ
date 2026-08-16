@@ -6,16 +6,16 @@ This framework is optimized for the highly efficient simulation of continuous-va
 
 == Symplectic conventions
 For a system of $n$ optical modes we define the vector of Hermitian quadrature operators as:
-$r = "matrix"(q_1, p_1, q_2, p_2, dots, q_n, p_n)^T$
+$r = vec(q_1, p_1, q_2, p_2, dots.v, q_n, p_n)$
 
 The operators satisfy the canonical commutation relations (CCR), expressed symplectically as:
 $[r_i, r_j] = i Omega_(i j)$
 
-where $Omega$ is the fundamental symplectic form. The toolkit implements $Omega$ as an orthogonal sum (bigoplus) of $2 times 2$ blocks across the full mode count:
- Omega = col.big(oplus, k=1, n) pmatrix(0, 1; -1, 0) 
+where $Omega$ is the fundamental symplectic form. The toolkit implements $Omega$ as a block-diagonal matrix built from $n$ repeated $2 times 2$ blocks $J = mat(0, 1; -1, 0)$, one per mode:
+$ Omega = mat(J, , dots.h; , dots.down, ; dots.v, , J) $
 
 Using the convention $hbar = 1$, the shot-noise limit of the quantum-mechanical vacuum is defined by the covariance matrix:
-$V_0 = 1/2 I_(2n)$
+$V_0 = 1/2 bb(1)_(2n)$
 
 == Mathematical state specification (`GaussianState`)
 A quantum state $rho$ is fully characterized in phase space by its displacement vector $d$ and its covariance matrix $V$, provided its Wigner function is Gaussian.

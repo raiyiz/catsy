@@ -27,7 +27,9 @@ _COMPONENT_SPECS = {
 `OpticalSetup` collects components in registration order and offers a fluent, chainable builder API for doing so:
 
 ```python
-def beam_splitter(self, name: str, port_a: str, port_b: str, eta: float = 0.5) -> OpticalSetup:
+def beam_splitter(
+    self, name: str, port_a: str, port_b: str, eta: float = 0.5
+) -> OpticalSetup:
     return self.add_component(
         OpticalComponent(name, "BeamSplitter", (port_a, port_b), {"eta": eta})
     )
@@ -44,7 +46,9 @@ Every call returns `self`, so a setup can be expressed as a readable chain, e.g.
 
 ```python
 _CIRCUIT_BUILDERS = {
-    "BeamSplitter": lambda circuit, ports, kwargs: circuit.beam_splitter(ports[0], ports[1], **kwargs),
+    "BeamSplitter": lambda circuit, ports, kwargs: circuit.beam_splitter(
+        ports[0], ports[1], **kwargs
+    ),
     "Loss": lambda circuit, ports, kwargs: circuit.loss(ports[0], **kwargs),
     "Squeezing": lambda circuit, ports, kwargs: circuit.squeeze(ports[0], **kwargs),
     "PhaseRotation": lambda circuit, ports, kwargs: circuit.rotate(ports[0], **kwargs),

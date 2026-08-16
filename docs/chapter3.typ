@@ -25,12 +25,16 @@ The decoupling between gate invocation and mathematical backend is realized via 
 
 ```python
 class CircuitOpCallable(Protocol):
-    def __call__(self, state: GaussianState, modes: tuple[str, ...], **kwargs: Any) -> GaussianState: ...
+    def __call__(
+        self, state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+    ) -> GaussianState: ...
 
 OPERATION_REGISTRY: dict[str, CircuitOpCallable] = {
     "Squeezing": lambda s, m, **kw: GaussianOperations.apply_squeezing(s, m, **kw),
     "PhaseRotation": lambda s, m, **kw: GaussianOperations.apply_phase_rotation(s, m, **kw),
-    "BeamSplitter": lambda s, m, **kw: GaussianOperations.apply_beam_splitter(s, m, m, **kw),
+    "BeamSplitter": lambda s, m, **kw: GaussianOperations.apply_beam_splitter(
+        s, m, m, **kw
+    ),
     "Loss": lambda s, m, **kw: GaussianOperations.apply_loss(s, m, **kw),
     "ThermalLossChannel": lambda s, m, **kw: QBSChannels.thermal_loss(m, **kw).apply(s),
 }
@@ -41,7 +45,7 @@ A new gate type (e.g. a custom error or hardware model) can be injected at runti
 == Compilation and sequential execution
 The `compile_and_run` method turns the abstract gate chain into a concrete phase-space evolution. Before the actual computation, the compiler performs a two-stage validation:
 1. *Mode validation:* checks that every gate's target modes are registered in the circuit.
-2. *Vacuum initialization:* if no `initial_state` is given, an exact multi-mode vacuum state $V_0 = 1/2 I_(2n)$ is generated.
+2. *Vacuum initialization:* if no `initial_state` is given, an exact multi-mode vacuum state $V_0 = 1/2 bb(1)_(2n)$ is generated.
 
 The sequential computation loop is implemented in the source as follows:
 
@@ -50,7 +54,11 @@ def compile_and_run(self, initial_state: GaussianState | None = None) -> Gaussia
     if not self.modes:
         raise ValueError("Circuit has no registered modes.")
     
-    current_state = GaussianOperations.create_vacuum(self.modes) if initial_state is None else initial_state
+    current_state = (
+        GaussianOperations.create_vacuum(self.modes)
+        if initial_state is None
+        else initial_state
+    )
     if set(current_state.modes) != set(self.modes):
         raise ValueError("Initial state modes mismatch circuit modes.")
 

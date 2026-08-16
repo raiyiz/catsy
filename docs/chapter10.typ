@@ -48,7 +48,7 @@ All modules share the same underlying physical conventions, regardless of which 
   [*Convention*], [*Value / definition*],
   [Quadrature ordering], [$(q_1, p_1, q_2, p_2, dots)$ -- interleaved, not block-wise.],
   [Units], [$hbar = 1$, $[q, p] = i$.],
-  [Vacuum covariance], [$V_"vac" = 1/2 I$.],
+  [Vacuum covariance], [$V_"vac" = 1/2 bb(1)$.],
   [Displacement / amplitude], [$alpha = (x + i p) / sqrt(2)$.],
   [Covariance definition], [symmetrized second moments: $V_(i j) = 1/2 chevron.l \{r_i - d_i, r_j - d_j\} chevron.r$.],
   [Beam splitter], [power transmissivity $eta$, see Chapter 2.],
