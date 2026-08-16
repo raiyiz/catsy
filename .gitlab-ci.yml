@@ -1,5 +1,21 @@
-compile_docs:
-  image: 
+stages:
+  - test
+  - build
+
+pytest:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.13-bookworm
+  script:
+    - uv sync
+    - uv run pytest --junitxml=pytest-results.xml
+  artifacts:
+    when: always
+    reports:
+      junit: pytest-results.xml
+
+typst:
+  stage: build
+  image:
     name: ghcr.io/typst/typst:latest
     entrypoint: [""]
   script:
