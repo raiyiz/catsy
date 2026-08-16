@@ -1,16 +1,10 @@
+
 # catsy
 
+`catsy` is a Python toolkit for continuous-variable quantum optics, built around Gaussian states in phase space.
 
-`catsy` is a small continuous-variable (CV) quantum-optics toolkit built around
-Gaussian states in the interleaved phase-space convention `(x1, p1, x2, p2, ...)`.
+The main idea is to keep Gaussian calculations in phase space where possible, describe experiments as reusable circuits, and move to a truncated Fock-space representation when needed.
 
-The idea is simple:
-
-- keep Gaussian experiments in phase space as long as possible;
-- describe reusable experiments as circuits;
-- cross into Fock space only when a calculation actually needs it.
-
-QuTiP provides the Fock-space representation used by `catsy`.
 
 ### For a more detailed documentation, check the latest build of the [Specs](https://gitlab.uni-hannover.de/afam/catsy/-/artifacts)
 
@@ -20,9 +14,8 @@ QuTiP provides the Fock-space representation used by `catsy`.
 
 ---
 
-## Quick start
 
-Create an EPR pair, send one mode through loss, and inspect the result:
+## Quick start
 
 ```python
 from catsy import GaussianCircuit, GaussianOperations
@@ -37,144 +30,53 @@ circuit = (
 )
 
 final = circuit.compile_and_run(initial_state=initial)
-
-print(final)
 final.plot_covariance()
 ```
 
-For a two-mode EPR state, `r` controls the squeezing strength. Here `eta=0.9`
-means that mode `a` has 10% vacuum-coupled loss.
+Here `r` is the squeezing strength and `eta` is the power transmissivity of the loss channel.
 
-## Choose your starting point
+## Where to start
 
-| If you want to... | Start with |
-| --- | --- |
-| Create vacuum, coherent, or EPR states | `GaussianOperations` |
-| Apply individual Gaussian gates | `GaussianOperations` |
-| Build a reusable experiment | `GaussianCircuit` |
-| Add loss or thermal noise | `LossChannels` / `GaussianChannel` |
-| Condition a state on a measurement | `GaussianMeasurements` |
-| Inspect a covariance matrix | `GaussianState.plot_covariance()` |
-| Compute a Gaussian Wigner function | `compute_wigner_analytically()` |
-| Convert to a Fock-space density matrix | `GaussianState.to_qutip()` |
-| Describe a reusable optical layout | `OpticalSetup` |
-| Persist experiment results | `SimulationJournal` |
+| If you want to...                           | Use                               |
+| ------------------------------------------- | --------------------------------- |
+| Create Gaussian states                      | `GaussianOperations`              |
+| Apply Gaussian operations                   | `GaussianOperations`              |
+| Build a sequence of operations              | `GaussianCircuit`                 |
+| Model loss and thermal noise                | `LossChannels`, `GaussianChannel` |
+| Perform homodyne or heterodyne measurements | `GaussianMeasurements`            |
+| Inspect a covariance matrix                 | `GaussianState`                   |
+| Calculate a Wigner function                 | `compute_wigner_analytically()`   |
+| Convert to Fock space                       | `GaussianState.to_qutip()`        |
+| Define an optical layout                    | `OpticalSetup`                    |
+| Save states and experiments                 | `SimulationJournal`               |
 
-## A few recipes
+## Gaussian states
 
-### Squeezing
+States are represented in phase space by their first moments and covariance matrix. Common operations include:
+
+* vacuum, coherent, and EPR states
+* squeezing and displacement
+* phase shifts and beam splitters
+* loss and thermal channels
+* homodyne and heterodyne measurements
+
+For example:
 
 ```python
 from catsy import GaussianOperations
 
 state = GaussianOperations.create_vacuum(("a",))
 state = GaussianOperations.apply_squeezing(state, "a", r=0.5)
-```
-
-At `theta=0`, squeezing reduces `Var(x)` by `exp(-2r)` and increases
-`Var(p)` by `exp(2r)`.
-
-### Displacement
-
-```python
 state = GaussianOperations.apply_displacement(
     state,
     "a",
     alpha=0.4 + 0.2j,
 )
 ```
-
-The amplitude convention is
-
-`alpha = (x + i p) / sqrt(2)`.
-
-Displacement changes the first moments but leaves the covariance unchanged.
-
-### Beam splitter
-
-```python
-state = GaussianOperations.apply_beam_splitter(
-    state,
-    mode_a="a",
-    mode_b="b",
-    eta=0.5,
-)
-```
-
-`eta` is the power transmissivity. `eta=0.5` is a balanced beam splitter.
-
-### Loss
-
-```python
-state = GaussianOperations.apply_loss(state, "a", eta=0.9)
-```
-
-This is vacuum-coupled loss. For a thermal environment, use:
-
-```python
-from catsy import LossChannels
-
-channel = LossChannels.thermal_loss(
-    mode="a",
-    eta=0.9,
-    n_thermal=0.2,
-)
-state = channel.apply(state)
-```
-
-### Homodyne measurement
-
-```python
-from catsy import GaussianMeasurements
-
-outcome, remaining = GaussianMeasurements.homodyne_measurement(
-    state,
-    measured_mode="a",
-    phi=0.0,
-    outcome=0.2,
-)
-```
-
-Passing an explicit `outcome` is useful for deterministic examples and tests.
-Omit it to sample a measurement result.
-
-### Heterodyne measurement
-
-```python
-outcome, remaining = GaussianMeasurements.heterodyne_measurement(
-    state,
-    measured_mode="a",
-    outcome=[0.2, -0.1],
-)
-```
-
-The outcome is a two-vector `(x, p)`.
-
-### Gaussian to Fock space
-
-```python
-rho = state.to_qutip(N_cutoff=20)
-```
-
-The Gaussian state itself is represented exactly by `(d, V)`, but the returned
-QuTiP density matrix is truncated. Increase `N_cutoff` until the quantity you
-care about has converged.
 
 ## Circuits
 
-For exploratory work, direct operations are convenient:
-
-```python
-state = GaussianOperations.create_vacuum(("a",))
-state = GaussianOperations.apply_squeezing(state, "a", r=0.5)
-state = GaussianOperations.apply_displacement(
-    state,
-    "a",
-    alpha=0.4 + 0.2j,
-)
-```
-
-For a reproducible experiment, describe the sequence explicitly:
+For a sequence of operations that you want to keep as a reusable experiment, `GaussianCircuit` provides an explicit representation:
 
 ```python
 from catsy import GaussianCircuit, GaussianOperations
@@ -195,104 +97,83 @@ circuit = (
 final = circuit.compile_and_run(initial_state=initial)
 ```
 
-A circuit stores the recipe, then `compile_and_run()` executes it in order.
-If no initial state is supplied, `add_mode(..., alpha=...)` can define the
-initial coherent amplitudes.
+Circuits can also be serialized and restored.
 
-## Conventions
+## Fock-space calculations
 
-`catsy` uses:
-
-- `hbar = 1` and `[x, p] = i`;
-- vacuum covariance `V_vac = I / 2`;
-- quadratures ordered as `(x1, p1, x2, p2, ...)`;
-- covariance matrices defined from symmetrized second moments;
-- coherent amplitudes `alpha = (x + i p) / sqrt(2)`.
-
-For a single-mode squeezed vacuum at `theta=0`:
-
-```text
-Var(x) = exp(-2r) / 2
-Var(p) = exp(2r) / 2
-```
-
-These conventions are part of the API: changing them changes numerical factors
-throughout the Gaussian and Fock-space layers.
-
-## Optical layouts
-
-`OpticalSetup` describes a reusable optical-bench layout. Execution still uses
-the Gaussian layer.
-
-```python
-from catsy import OpticalSetup
-
-setup = (
-    OpticalSetup("Example interferometer")
-    .beam_splitter("Input BS", "a", "b", eta=0.5)
-    .inline_squeezer("Squeezer A", "a", r=0.6)
-    .phase_shifter("Phase A", "a", phi=0.7853981633974483)
-    .fiber_loss("Fiber", "a", eta=0.92)
-)
-```
-
-Run a layout with an existing state:
-
-```python
-final = setup.process_beam(initial)
-```
-
-## Saving states and circuits
-
-Gaussian states and circuits can be serialized:
-
-```python
-state.save("state.json")
-state = GaussianState.load("state.json")
-
-circuit.save("circuit.json")
-circuit = GaussianCircuit.load("circuit.json")
-```
-
-For compact in-memory data, use `to_dict()` / `from_dict()`.
-
-## Fock-space boundary
-
-Most Gaussian experiments should stay in phase space. Use:
+Gaussian states can be converted to QuTiP density matrices when an explicit Fock-space representation is useful:
 
 ```python
 rho = state.to_qutip(N_cutoff=20)
 ```
 
-when you need an explicit Fock-space state. The cutoff is numerical, not
-physical: increasing it should leave your observable of interest unchanged
-within the desired tolerance.
+The cutoff is numerical, so it should be increased until the quantity of interest has converged.
 
-## Project layout
+`catsy` uses [QuTiP](https://qutip.org/) for this part of the calculation.
+
+## Conventions
+
+The phase-space convention used throughout the package is
+
+* $\hbar = 1$
+* $[x,p] = i$
+* $V_\mathrm{vac} = I/2$
+* quadratures ordered as `(x1, p1, x2, p2, ...)`
+* $\alpha = (x + ip)/\sqrt{2}$
+
+For a single-mode squeezed vacuum with $\theta=0$,
+
+$$
+\operatorname{Var}(x) = \frac{e^{-2r}}{2},
+\qquad
+\operatorname{Var}(p) = \frac{e^{2r}}{2}.
+$$
+
+These conventions are used consistently by the Gaussian and Fock-space interfaces.
+
+## Installation
+
+The project uses [uv](https://docs.astral.sh/uv/) for dependency management.
+
+```bash
+git clone https://github.com/raiyiz/catsy.git
+cd catsy
+uv sync
+```
+
+Run Python or the test suite through the project environment:
+
+```bash
+uv run python
+uv run pytest
+```
+
+For tests involving plots:
+
+```bash
+uv run pytest --plot
+```
+
+## Project structure
 
 ```text
 src/catsy/
 ├── core.py       conventions, validation, numerical helpers
-├── gaussian.py   states, operations, channels, circuits, measurements, analysis
+├── gaussian.py   states, operations, channels, circuits, measurements
 ├── quantum.py    Fock-space functionality
 ├── optics.py     reusable optical layouts
 └── journal.py    experiment persistence
 ```
 
-## Testing
+## Documentation
 
-```bash
-pytest
-pytest --plot
-```
+The [documentation](https://gitlab.uni-hannover.de/) contains the more detailed API and usage information.
 
-The test suite checks physical invariants, analytic reference values,
-serialization, measurements, and the Gaussian/Fock boundary.
+The repository also contains examples and tests that can be useful when exploring particular operations.
 
-## Scope
+## Status
 
-`catsy` is deliberately focused rather than a complete quantum-computing
-framework. Its priority is readable CV quantum-optics mathematics, explicit
-conventions, and small composable building blocks.
+`catsy` is focused on continuous-variable quantum optics rather than providing a general-purpose quantum-computing framework. The API is still developing, but the core conventions and numerical operations are covered by the test suite.
+
 
 <sub>cats & states & oha & phos & nothingness, very pur so</sub>
