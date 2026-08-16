@@ -1,5 +1,6 @@
 # catsy
 
+
 `catsy` is a small continuous-variable (CV) quantum-optics toolkit built around
 Gaussian states in the interleaved phase-space convention `(x1, p1, x2, p2, ...)`.
 
@@ -10,6 +11,13 @@ The idea is simple:
 - cross into Fock space only when a calculation actually needs it.
 
 QuTiP provides the Fock-space representation used by `catsy`.
+
+### For a more detailed documentation, check the latest build of the [Specs](https://gitlab.uni-hannover.de/afam/catsy/-/artifacts)
+
+***⚠ ATTENTION, this package was build with heavy use of AI!***
+
+
+---
 
 ## Quick start
 
@@ -286,4 +294,4 @@ serialization, measurements, and the Gaussian/Fock boundary.
 framework. Its priority is readable CV quantum-optics mathematics, explicit
 conventions, and small composable building blocks.
 
-cats & states & oha & phos & nothingness, very pure so
+<sub>cats & states & oha & phos & nothingness, very pur so</sub>

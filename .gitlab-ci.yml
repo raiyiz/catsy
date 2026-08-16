@@ -1,0 +1,10 @@
+compile_docs:
+  image: 
+    name: ghcr.io/typst/typst:latest
+    entrypoint: [""]
+  script:
+    - typst compile docs/book.typ architectural_specs.pdf
+  artifacts:
+    paths:
+      - architectural_specs.pdf
+    expire_in: 1 week
