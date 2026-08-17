@@ -58,6 +58,8 @@ typst:
     - when: manual
   allow_failure: true
   script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends fonts-liberation
     - typst compile docs/book.typ architectural_specs.pdf
   artifacts:
     expose_as: "Architectural specs PDF"
