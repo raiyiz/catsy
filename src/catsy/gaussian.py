@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 import logging
 
 import matplotlib.pyplot as plt
@@ -19,9 +19,7 @@ import qutip as qt
 import scipy.linalg
 
 from .core import (
-    DUAN_SEPARABILITY_BOUND,
     TOL_PHYSICALITY,
-    TOL_TRACE_WARN,
     _apply_gaussian_transform,
     _check_non_negative,
     _check_thermal_correlation,
@@ -893,7 +891,6 @@ class GaussianMeasurements:
 
         V_MM = state.covariance[idx_m : idx_m + 2, idx_m : idx_m + 2]
         V_MR = state.covariance[idx_m : idx_m + 2, remaining_indices]
-        V_RM = V_MR.T
         V_RR = state.covariance[np.ix_(remaining_indices, remaining_indices)]
         d_M = state.displacement[idx_m : idx_m + 2]
         d_R = state.displacement[remaining_indices]

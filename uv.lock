@@ -16,22 +16,30 @@ name = "catsy"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "ipython" },
-    { name = "isort" },
     { name = "matplotlib" },
     { name = "numpy" },
-    { name = "pytest" },
     { name = "qutip" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ipython" },
+    { name = "isort" },
+    { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "ipython", specifier = ">=9.16.1" },
-    { name = "isort", specifier = ">=8.0.1" },
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "numpy", specifier = ">=2.5.2" },
-    { name = "pytest", specifier = ">=9.1.1" },
     { name = "qutip", specifier = ">=5.3.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ipython", specifier = ">=9.16.1" },
+    { name = "isort", specifier = ">=8.0.1" },
+    { name = "pytest", specifier = ">=9.1.1" },
 ]
 
 [[package]]

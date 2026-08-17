@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 import scipy.linalg
+
+if TYPE_CHECKING:
+    from .gaussian import GaussianState
+
 
 TOL_ZERO_ENTRY = 1e-9
 TOL_TRACE_WARN = 1e-6

@@ -5,7 +5,6 @@ import pytest
 
 from catsy.gaussian import (
     GaussianCircuit,
-    GaussianOperations,
     compute_duan_inseparability,
     compute_joint_correlation,
 )
