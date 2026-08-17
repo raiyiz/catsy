@@ -68,7 +68,7 @@
   #v(2cm)
   #text(size: 26pt, weight: "bold", fill: rgb("#1a3a5f"))[Architecture & Mathematical Specification] \
   #v(0.5em)
-  #text(size: 14pt, style: "italic", fill: gray.darken(30%))[Documentation of the Continuous-Variable Quantum Optics Toolkit]
+  #text(size: 14pt, style: "italic", fill: gray.darken(30%))[:: pHoCk aRouNd anD fiNd ouT ::]
   #v(2cm)
 ]
 
@@ -77,8 +77,7 @@
   gutter: 1cm,
   [
     *Developed for:* \
-    Core Software Engineering \
-    Quantum Optics Simulation Unit
+    tHe Inksty toot phore Narmelite
   ],
   align(right)[
     *Document version:* 1.1 (Iterative) \
