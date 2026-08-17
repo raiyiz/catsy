@@ -6,7 +6,7 @@
 The main idea is to keep Gaussian calculations in phase space where possible, describe experiments as reusable circuits, and move to a truncated Fock-space representation when needed.
 
 
-### For a more detailed documentation, check the latest build of the [Specs](https://gitlab.uni-hannover.de/afam/catsy/-/artifacts)
+### For a more detailed documentation, check the latest build of the [Specs (PDF)](https://gitlab.uni-hannover.de/afam/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst)
 
 ---
 
@@ -168,7 +168,7 @@ src/catsy/
 
 ## Documentation
 
-The [documentation](https://gitlab.uni-hannover.de/) contains the more detailed API and usage information.
+The [documentation](https://gitlab.uni-hannover.de/afam/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the more detailed API and usage information.
 
 The repository also contains examples and tests that can be useful when exploring particular operations.
 

@@ -1,26 +1,66 @@
+# Avoid running the pipeline twice for the same commit (once as a branch
+# pipeline, once as a merge-request pipeline).
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
 stages:
   - test
-  - build
+  - docs
+
+.uv-job:
+  image: ghcr.io/astral-sh/uv:python3.13-bookworm
+  variables:
+    UV_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/uv"
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .cache/uv/
+  interruptible: true
 
 pytest:
+  extends: .uv-job
   stage: test
-  image: ghcr.io/astral-sh/uv:python3.13-bookworm
+  # Skip the whole test job when a change only touches docs/CI files that
+  # can't affect it -- keeps unrelated MRs (README, typst sources) fast.
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - src/**/*
+        - tests/**/*
+        - pyproject.toml
+        - uv.lock
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
-    - uv sync
+    - uv sync --group dev
     - uv run pytest --junitxml=pytest-results.xml
   artifacts:
     when: always
     reports:
       junit: pytest-results.xml
+    expire_in: 1 week
 
+# Compiles the architectural-specs PDF from docs/book.typ. Manual/on-demand
+# only (press "Run" in the pipeline view or MR widget) -- it doesn't gate
+# merges and shouldn't run on every push. `expose_as` surfaces a direct link
+# to the built PDF on the MR widget once it has been triggered; see the
+# README for a standing link to the latest build on the default branch.
 typst:
-  stage: build
+  stage: docs
   image:
     name: ghcr.io/typst/typst:latest
     entrypoint: [""]
+  rules:
+    - when: manual
+  allow_failure: true
   script:
     - typst compile docs/book.typ architectural_specs.pdf
   artifacts:
+    expose_as: "Compiled docs (PDF)"
     paths:
       - architectural_specs.pdf
-    expire_in: 1 week
+    expire_in: 30 days
