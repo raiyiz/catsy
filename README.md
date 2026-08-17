@@ -6,7 +6,7 @@
 The main idea is to keep Gaussian calculations in phase space where possible, describe experiments as reusable circuits, and move to a truncated Fock-space representation when needed.
 
 
-### For a more detailed documentation, check the latest build of the [Specs (PDF)](https://gitlab.uni-hannover.de/afam/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst)
+### For a more detailed documentation, check the latest build of the [Specs (PDF)](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst)
 
 ---
 
