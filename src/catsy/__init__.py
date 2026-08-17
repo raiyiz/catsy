@@ -15,8 +15,7 @@ from .gaussian import (
     compute_duan_inseparability,
 )
 from .fock import FockOperations
-from .simulations import KerrCavity, MachZehnderInterferometer
-from .optics import OpticalSetup
+from .optics import KerrCavity, MachZehnderInterferometer, OpticalSetup
 from .journal import JournalEntry, SimulationJournal
 
 __all__ = [

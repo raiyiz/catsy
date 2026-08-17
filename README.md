@@ -160,8 +160,9 @@ uv run pytest --plot
 src/catsy/
 ├── core.py       conventions, validation, numerical helpers
 ├── gaussian.py   states, operations, channels, circuits, measurements
-├── quantum.py    Fock-space functionality
-├── optics.py     reusable optical layouts
+├── fock.py       Fock-space functionality
+├── optics.py     optical layouts and QuTiP-based cavity/interferometer
+│                 simulations
 └── journal.py    experiment persistence
 ```
 
