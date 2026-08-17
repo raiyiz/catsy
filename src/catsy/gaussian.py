@@ -7,11 +7,11 @@ phase-space diagnostics. QuTiP is a required core dependency of catsy.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
-import logging
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,9 +22,9 @@ from .core import (
     TOL_PHYSICALITY,
     _apply_gaussian_transform,
     _check_non_negative,
+    _check_positive_int,
     _check_thermal_correlation,
     _check_unit_interval,
-    _check_positive_int,
     _json_load,
     _json_save,
     _symplectic_form,
@@ -284,6 +284,7 @@ class GaussianState:
         plt.xticks(range(len(ticks)), ticks)
         plt.yticks(range(len(ticks)), ticks)
         plt.title("Multi-mode covariance matrix V")
+        plt.show()
 
     # -- Serialization ----------------------------------------------------
 

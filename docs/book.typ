@@ -17,10 +17,14 @@
 #set text(
   font: "Liberation Serif",
   size: 11pt,
-  lang: "en"
+  lang: "en",
 )
 
-#show heading: set text(fill: rgb("#1a3a5f"), font: "Liberation Sans")
+#show heading: set text(
+  fill: rgb("#1a3a5f"),
+  font: "Liberation Sans",
+)
+
 #show heading.where(level: 1): it => {
   v(1.5em, weak: true)
   it
