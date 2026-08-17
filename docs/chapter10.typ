@@ -1,4 +1,5 @@
 #import "@preview/physica:0.9.8": *
+#import "links.typ": src-link
 
 // ==========================================
 // CHAPTER 10
@@ -16,16 +17,14 @@ This closing chapter distills the previous nine chapters into a practical overvi
   align: (left, left),
   stroke: 0.5pt + gray.lighten(40%),
   [*Module*], [*Contents*],
-  [`core.py`], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
-  [`gaussian.py`], [`GaussianState`, `GaussianOperations`, `GaussianChannel`/`LossChannels`, `GaussianCircuit`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
-  [`fock.py`], [`FockOperations`: photon addition/subtraction on QuTiP states (Chapter 7).],
-  [`quantum.py`], [Compatibility re-export of `FockOperations`, `KerrCavity`, `MachZehnderInterferometer`.],
-  [`simulations/`], [`KerrCavity`, `MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7).],
-  [`optics.py`], [`OpticalSetup`/`OpticalComponent`: reusable bench layouts (Chapter 8).],
-  [`journal.py`], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
+  [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
+  [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianOperations`, `GaussianChannel`/`LossChannels`, `GaussianCircuit`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/fock.py")], [`FockOperations`: photon addition/subtraction on QuTiP states (Chapter 7).],
+  [#src-link("src/catsy/optics.py")], [`OpticalSetup`/`OpticalComponent`: reusable bench layouts (Chapter 8); `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7).],
+  [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 
-`quantum.py` is explicitly declared a compatibility layer; new code should import `FockOperations` directly from `catsy.fock` and the simulation classes from `catsy.simulations`. The package currently maintains no further facade beyond this — imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
+There is no separate compatibility-shim or simulation-only module: `FockOperations` lives in `catsy.fock`, and `KerrCavity`/`MachZehnderInterferometer` live alongside `OpticalSetup` in `catsy.optics`, since all three model specific pieces of optical hardware rather than generic phase-space transformations. Imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
 
 ```python
 from catsy import (

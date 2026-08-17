@@ -39,16 +39,16 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | `GaussianOperations`              |
-| Apply Gaussian operations                   | `GaussianOperations`              |
-| Build a sequence of operations              | `GaussianCircuit`                 |
-| Model loss and thermal noise                | `LossChannels`, `GaussianChannel` |
-| Perform homodyne or heterodyne measurements | `GaussianMeasurements`            |
-| Inspect a covariance matrix                 | `GaussianState`                   |
-| Calculate a Wigner function                 | `compute_wigner_analytically()`   |
-| Convert to Fock space                       | `GaussianState.to_qutip()`        |
-| Define an optical layout                    | `OpticalSetup`                    |
-| Save states and experiments                 | `SimulationJournal`               |
+| Create Gaussian states                      | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L314) |
+| Apply Gaussian operations                   | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L314) |
+| Build a sequence of operations              | [`GaussianCircuit`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L652) |
+| Model loss and thermal noise                | [`LossChannels`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L546), [`GaussianChannel`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L481) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L810) |
+| Inspect a covariance matrix                 | [`GaussianState`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L73) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L934) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L159) |
+| Define an optical layout                    | [`OpticalSetup`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/optics.py#L151) |
+| Save states and experiments                 | [`SimulationJournal`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/journal.py#L337) |
 
 ## Gaussian states
 
@@ -156,19 +156,17 @@ uv run pytest --plot
 
 ## Project structure
 
-```text
-src/catsy/
-├── core.py       conventions, validation, numerical helpers
-├── gaussian.py   states, operations, channels, circuits, measurements
-├── fock.py       Fock-space functionality
-├── optics.py     optical layouts and QuTiP-based cavity/interferometer
-│                 simulations
-└── journal.py    experiment persistence
-```
+| Module                                                                                                       | Contents                                                            |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [`core.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/core.py)         | conventions, validation, numerical helpers                          |
+| [`gaussian.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py) | states, operations, channels, circuits, measurements                |
+| [`fock.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/fock.py)         | Fock-space functionality                                             |
+| [`optics.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/optics.py)     | optical layouts and QuTiP-based cavity/interferometer simulations   |
+| [`journal.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/journal.py)   | experiment persistence                                               |
 
 ## Documentation
 
-The [documentation](https://gitlab.uni-hannover.de/afam/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the more detailed API and usage information.
+The [documentation](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the more detailed API and usage information.
 
 The repository also contains examples and tests that can be useful when exploring particular operations.
 

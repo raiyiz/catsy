@@ -49,6 +49,9 @@ pytest:
 # merges and shouldn't run on every push. `expose_as` surfaces a direct link
 # to the built PDF on the MR widget once it has been triggered; see the
 # README for a standing link to the latest build on the default branch.
+# `repo-url`/`commit-sha` are passed through so the PDF's source-code links
+# (docs/links.typ) point at the exact commit this build was compiled from,
+# rather than going stale as the default branch moves on.
 typst:
   stage: docs
   image:
@@ -58,8 +61,11 @@ typst:
     - when: manual
   allow_failure: true
   script:
-    - apk add --no-cache ttf-liberation
-    - typst compile docs/book.typ architectural_specs.pdf
+    - apk add --no-cache ttf-liberation ttf-dejavu
+    - typst compile
+      --input repo-url="${CI_PROJECT_URL}"
+      --input commit-sha="${CI_COMMIT_SHA}"
+      docs/book.typ architectural_specs.pdf
   artifacts:
     expose_as: "Architectural specs PDF"
     paths:
