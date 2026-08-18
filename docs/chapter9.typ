@@ -84,7 +84,7 @@ Since only the small `.json` files are opened here, browsing (`find`, filterable
 ---
 
 
-== Scientific literature
+== Literature
 This chapter is principally about software and data management rather than quantum-optical theory. Its reproducibility and persistence goals are aligned with:
 
 - #link("https://doi.org/10.1038/sdata.2016.18")[M. D. Wilkinson et al., “The FAIR Guiding Principles for scientific data management and stewardship,” *Scientific Data* 3, 160018 (2016).]

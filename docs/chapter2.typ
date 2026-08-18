@@ -87,5 +87,5 @@ The toolkit provides standard physical channels through the factory object `Loss
 
 
 
-== Scientific literature
+== Literature
 The Gaussian-unitary and Gaussian-channel formulas in this chapter draw on the same background literature as Chapter 1 (Weedbrook et al. 2012; Braunstein and van Loock 2005; Serafini 2023), which also cover the physical interpretation of symplectic transformations, loss and thermal channels, and the complete-positivity constraints on Gaussian channels.
