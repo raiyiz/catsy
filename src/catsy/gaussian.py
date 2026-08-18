@@ -811,7 +811,8 @@ class GaussianCircuit:
             "modes": list(self.modes),
             # Stored as [re, im] pairs -- complex isn't JSON-serializable.
             "initial_alphas": {
-                m: [float(np.real(a)), float(np.imag(a))] for m, a in self._initial_alphas.items()
+                m: [float(np.real(a)), float(np.imag(a))]
+                for m, a in self._initial_alphas.items()
             },
             "operations": [
                 {"name": op.name, "modes": list(op.modes), "kwargs": op.kwargs}

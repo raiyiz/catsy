@@ -15,9 +15,9 @@ from .gaussian import GaussianCircuit, GaussianState
 from .types import (
     FloatArray,
     Modes,
+    OperationParameters,
     OpticalComponentData,
     OpticalSetupData,
-    OperationParameters,
 )
 
 # ---------------------------------------------------------------------------

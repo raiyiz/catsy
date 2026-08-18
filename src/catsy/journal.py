@@ -158,7 +158,9 @@ class SimulationRun:
             circuit=data.get("circuit"),
             final_state_cv=data.get("final_state_cv"),
             scalar_results=data.get("scalar_results", {}),
-            data_payloads=cast(dict[str, dict[str, object]], data.get("data_payloads", {})),
+            data_payloads=cast(
+                dict[str, dict[str, object]], data.get("data_payloads", {})
+            ),
         )
 
 
@@ -185,7 +187,9 @@ class JournalEntry:
     )
     # Companion .npz of a loaded (or already-saved) entry, opened lazily --
     # np.load on an .npz doesn't decompress an array until it's indexed.
-    _npz_file: np.lib.npyio.NpzFile | None = field(default=None, init=False, repr=False, compare=False)
+    _npz_file: np.lib.npyio.NpzFile | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def _store_array(self, key: str, payload: object) -> dict[str, object]:
         data, meta = _split_array_payload(payload)
