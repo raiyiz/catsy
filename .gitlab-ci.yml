@@ -2,6 +2,7 @@
 # pipeline, once as a merge-request pipeline).
 workflow:
   rules:
+    - when: manual
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
