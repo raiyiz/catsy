@@ -8,6 +8,13 @@ The main idea is to keep Gaussian calculations in phase space where possible, de
 
 ### For a more detailed documentation, check the latest build of the [Specs (PDF)](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst)
 
+
+### Coverage
+
+[![Coverage](https://gitlab.uni-hannover.de/inl/catsy/badges/main/coverage.svg)](https://inl.gitlab-pages.uni-hannover.de/catsy/) [Latest HTML coverage report](https://inl.gitlab-pages.uni-hannover.de/catsy/)
+
+The default branch publishes the latest interactive HTML coverage report through GitLab Pages. The CI pipeline also uploads the Cobertura XML report so GitLab can show the coverage percentage and line-by-line coverage annotations in merge requests.
+
 ---
 
 ***⚠ ATTENTION! This package was build with heavy use of AI***
@@ -176,3 +183,21 @@ The repository also contains examples and tests that can be useful when explorin
 
 
 <sub>cats & states & oha & phos & nothingness, very pur so</sub>
+
+## Test coverage
+
+Coverage is collected with [`pytest-cov`](https://pytest-cov.readthedocs.io/) and is intentionally configured as a development concern rather than a runtime dependency. Locally, run:
+
+If the development dependencies have changed, refresh the lockfile first with `uv lock`. Then run:
+
+```bash
+uv sync --group dev
+uv run pytest --cov=src/catsy --cov-report=term-missing --cov-report=html:coverage/html --cov-report=xml:coverage/coverage.xml
+```
+
+This enables branch coverage and reports missing lines. The HTML report is written to `coverage/html/`; the XML report is written to `coverage/coverage.xml`.
+
+The GitLab CI test job runs the same coverage-enabled test suite. GitLab receives the Cobertura-compatible XML report and uses it for both the coverage percentage and line-by-line coverage annotations in merge requests. The percentage is configured with the CI `coverage` keyword, while `artifacts:reports:coverage_report` provides the line annotations. urlGitLab coverage reporting documentationhttps://docs.gitlab.com/ci/testing/code_coverage/coverage_reporting/ urlGitLab coverage visualization documentationhttps://docs.gitlab.com/ci/testing/code_coverage/coverage_visualization/
+
+There is deliberately **no minimum coverage gate yet**. This gives the project a reliable baseline first; a `--cov-fail-under` threshold can be introduced once the initial coverage level is known and the test suite has been expanded accordingly.
+
