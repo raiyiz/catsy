@@ -39,11 +39,12 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import numpy as np
 
 from .gaussian import GaussianCircuit, GaussianState
+from .types import GaussianCircuitData, JsonObject
 
 SCHEMA_VERSION = "2.1.0"
 
@@ -75,7 +76,7 @@ def _atomic_write_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
     tmp_path.replace(path)
 
 
-def _split_array_payload(payload: Any) -> tuple[np.ndarray, dict[str, Any]]:
+def _split_array_payload(payload: object) -> tuple[np.ndarray, dict[str, object]]:
     """Separates one array-ish `log_run` payload into its raw ndarray (to be
     stored in the entry's companion .npz) and its small JSON-safe metadata
     (unit, dimensions, shape, dtype). Accepts either a raw array/list or an
@@ -85,9 +86,9 @@ def _split_array_payload(payload: Any) -> tuple[np.ndarray, dict[str, Any]]:
         if "data" not in payload:
             raise ValueError("Array payload dict must contain a 'data' key.")
         data = np.asarray(payload["data"])
-        unit = payload.get("unit", "arbitrary_units")
-        dimensions = payload.get("dimensions", [])
-        description = payload.get("description", "")
+        unit = cast(str, payload.get("unit", "arbitrary_units"))
+        dimensions = cast(list[str], payload.get("dimensions", []))
+        description = cast(str, payload.get("description", ""))
     else:
         data = np.asarray(payload)
         unit = "arbitrary_units"
@@ -115,18 +116,18 @@ class SimulationRun:
     run_name: str
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
-    circuit: dict[str, Any] | None = None
-    final_state_cv: dict[str, Any] | None = None
-    scalar_results: dict[str, Any] = field(default_factory=dict)
-    data_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
+    circuit: GaussianCircuitData | None = None
+    final_state_cv: dict[str, object] | None = None
+    scalar_results: JsonObject = field(default_factory=dict)
+    data_payloads: dict[str, dict[str, object]] = field(default_factory=dict)
 
     @property
-    def results(self) -> dict[str, Any]:
+    def results(self) -> JsonObject:
         """Scalar results keyed by the names supplied to ``log_run``."""
         return self.scalar_results
 
     @property
-    def arrays(self) -> dict[str, dict[str, Any]]:
+    def arrays(self) -> dict[str, dict[str, object]]:
         """Array metadata keyed by the names supplied to ``log_run``.
 
         Use ``JournalEntry.get_array`` with the stored ``npz_key`` to read
@@ -134,7 +135,7 @@ class SimulationRun:
         """
         return self.data_payloads
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "run_id": self.run_id,
             "run_name": self.run_name,
@@ -146,13 +147,19 @@ class SimulationRun:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> SimulationRun:
+    def from_dict(cls, data: dict[str, object]) -> SimulationRun:
         # ``hardware_layout_reference`` existed in the previous journal
         # format. It is deliberately ignored when loading older entries;
         # layouts are not part of the journal's current data model.
-        data = dict(data)
-        data.pop("hardware_layout_reference", None)
-        return cls(**data)
+        return cls(
+            run_id=data["run_id"],
+            run_name=data["run_name"],
+            timestamp=data["timestamp"],
+            circuit=data.get("circuit"),
+            final_state_cv=data.get("final_state_cv"),
+            scalar_results=data.get("scalar_results", {}),
+            data_payloads=cast(dict[str, dict[str, object]], data.get("data_payloads", {})),
+        )
 
 
 @dataclass
@@ -169,7 +176,7 @@ class JournalEntry:
     timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
     tags: list[str] = field(default_factory=list)
     notes: str = ""
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: JsonObject = field(default_factory=dict)
     runs: list[SimulationRun] = field(default_factory=list)
 
     # Arrays logged but not yet flushed to a companion .npz by `save`.
@@ -178,9 +185,9 @@ class JournalEntry:
     )
     # Companion .npz of a loaded (or already-saved) entry, opened lazily --
     # np.load on an .npz doesn't decompress an array until it's indexed.
-    _npz_file: Any = field(default=None, init=False, repr=False, compare=False)
+    _npz_file: np.lib.npyio.NpzFile | None = field(default=None, init=False, repr=False, compare=False)
 
-    def _store_array(self, key: str, payload: Any) -> dict[str, Any]:
+    def _store_array(self, key: str, payload: object) -> dict[str, object]:
         data, meta = _split_array_payload(payload)
         self._pending_arrays[key] = data
         return {"npz_key": key, **meta}
@@ -191,8 +198,8 @@ class JournalEntry:
         *,
         circuit: GaussianCircuit | None = None,
         final_state: GaussianState | None = None,
-        metrics: dict[str, Any] | None = None,
-        arrays: dict[str, Any] | None = None,
+        metrics: JsonObject | None = None,
+        arrays: dict[str, object] | None = None,
     ) -> SimulationRun:
         """Logs one execution of a hardware setup.
 
@@ -257,7 +264,7 @@ class JournalEntry:
 
     # -- Serialization --------------------------------------------------------
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "schema_version": SCHEMA_VERSION,
             "metadata": {
@@ -272,8 +279,8 @@ class JournalEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> JournalEntry:
-        meta = data["metadata"]
+    def from_dict(cls, data: dict[str, object]) -> JournalEntry:
+        meta = cast(dict[str, object], data["metadata"])
         entry = cls(
             title=meta["title"],
             entry_id=meta["entry_id"],
@@ -299,7 +306,7 @@ class JournalEntry:
         _atomic_write_text(json_path, json.dumps(self.to_dict(), indent=2))
 
         if self._pending_arrays or self._npz_file is not None:
-            combined = {}
+            combined: dict[str, np.ndarray] = {}
             if self._npz_file is not None:
                 combined.update({k: self._npz_file[k] for k in self._npz_file.files})
                 self._npz_file.close()
@@ -317,7 +324,7 @@ class JournalEntry:
         isn't decompressed until `get_array` / `get_final_state` asks for
         it."""
         json_path = Path(json_path)
-        entry = cls.from_dict(json.loads(json_path.read_text()))
+        entry = cls.from_dict(cast(dict[str, object], json.loads(json_path.read_text())))
         npz_path = json_path.with_suffix(".npz")
         if npz_path.exists():
             entry._npz_file = np.load(npz_path)
@@ -347,7 +354,7 @@ class SimulationJournal:
         title: str,
         tags: list[str] | None = None,
         notes: str = "",
-        metadata: dict[str, Any] | None = None,
+        metadata: JsonObject | None = None,
     ) -> JournalEntry:
         return JournalEntry(
             title=title,
@@ -359,7 +366,7 @@ class SimulationJournal:
     def load_entry(self, entry_id: str) -> JournalEntry:
         return JournalEntry.load(self.storage_path / f"entry_{entry_id}.json")
 
-    def list_entries(self) -> list[dict[str, Any]]:
+    def list_entries(self) -> list[JsonObject]:
         """Return saved entry summaries, newest first."""
         return self.fetch_history_summary()
 
@@ -369,7 +376,7 @@ class SimulationJournal:
 
     def find(
         self, *, tag: str | None = None, title: str | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> list[JsonObject]:
         """Find saved entries by an optional tag and/or title substring."""
         summaries = self.fetch_history_summary()
         if tag is not None:
@@ -381,14 +388,14 @@ class SimulationJournal:
             ]
         return summaries
 
-    def fetch_history_summary(self) -> list[dict[str, Any]]:
+    def fetch_history_summary(self) -> list[JsonObject]:
         """Scans the storage directory's entries for their index metadata.
         Only reads each entry's small .json -- the companion .npz files
         (which can be arbitrarily large) are never opened here."""
         summaries = []
         for file in self.storage_path.glob("entry_*.json"):
             with open(file) as f:
-                meta = json.load(f)["metadata"]
+                meta = cast(dict[str, object], json.load(f)["metadata"])
             summaries.append(
                 {
                     "entry_id": meta["entry_id"],

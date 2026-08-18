@@ -5,13 +5,20 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict, cast
 
 import numpy as np
 import qutip as qt
 
 from .core import _check_non_negative, _check_positive_int
 from .gaussian import GaussianCircuit, GaussianState
+from .types import (
+    FloatArray,
+    Modes,
+    OpticalComponentData,
+    OpticalSetupData,
+    OperationParameters,
+)
 
 # ---------------------------------------------------------------------------
 # Component blueprint
@@ -40,8 +47,8 @@ class OpticalComponent:
 
     name: str  # e.g. "50:50 BS", "Fiber Loss", "Squeezer"
     op_type: str  # one of "BeamSplitter", "Loss", "Squeezing", "PhaseRotation"
-    ports: tuple[str, ...]  # the ordered port/channel names it connects to
-    kwargs: dict[str, Any] = field(default_factory=dict)
+    ports: Modes  # the ordered port/channel names it connects to
+    kwargs: OperationParameters = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate the structural contract of a layout component.
@@ -103,7 +110,7 @@ class OpticalComponent:
                     f"{self.op_type} parameter 'eta' must be in [0, 1], got {eta}."
                 )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> OpticalComponentData:
         return {
             "name": self.name,
             "op_type": self.op_type,
@@ -112,7 +119,7 @@ class OpticalComponent:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> OpticalComponent:
+    def from_dict(cls, data: OpticalComponentData) -> OpticalComponent:
         return cls(
             name=data["name"],
             op_type=data["op_type"],
@@ -210,7 +217,7 @@ class OpticalSetup:
 
     # -- Serialization --------------------------------------------------------
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> OpticalSetupData:
         return {
             "layout_name": self.name,
             "components": [c.to_dict() for c in self.components],
@@ -223,7 +230,7 @@ class OpticalSetup:
 
     @classmethod
     def load_layout(cls, file_path: str | Path) -> OpticalSetup:
-        data = json.loads(Path(file_path).read_text())
+        data = cast(OpticalSetupData, json.loads(Path(file_path).read_text()))
         setup = cls(name=data["layout_name"])
         for c in data["components"]:
             setup.add_component(OpticalComponent.from_dict(c))
@@ -340,12 +347,12 @@ class KerrCavity:
 
     def run(
         self,
-        rho_init: Any,
-        tlist: np.ndarray,
+        rho_init: qt.Qobj,
+        tlist: FloatArray,
         amp: float,
         t0: float,
         sigma: float,
-    ) -> list[Any]:
+    ) -> list[qt.Qobj]:
         """Evolve ``rho_init`` under the driven Kerr-cavity master equation.
 
         ``amp``, ``t0`` and ``sigma`` define the Gaussian drive pulse.
@@ -373,8 +380,15 @@ class KerrCavity:
         args = {"amp": amp, "t0": t0, "sigma": sigma}
 
         result = qt.mesolve(H_total, rho_init, tlist, c_ops=c_ops, args=args)
-        states: list[Any] = result.states
+        states: list[qt.Qobj] = result.states
         return states
+
+
+class ObservableScanData(TypedDict):
+    theta: FloatArray
+    n1: list[float]
+    n2: list[float]
+    parity1: list[float]
 
 
 class MachZehnderInterferometer:
@@ -399,7 +413,7 @@ class MachZehnderInterferometer:
         self.N_cutoff = N_cutoff
         self.loss_time = loss_time
 
-    def scan(self, psi_cat_single: Any, theta_list: np.ndarray) -> dict[str, Any]:
+    def scan(self, psi_cat_single: qt.Qobj, theta_list: FloatArray) -> ObservableScanData:
         """Scan the phase of the lossy arm and return output observables.
 
         The model is input -> 50:50 beam splitter -> fixed-time amplitude
@@ -444,7 +458,7 @@ class MachZehnderInterferometer:
         else:
             rho_after_loss = psi_after_BS1
 
-        results: dict[str, Any] = {
+        results: ObservableScanData = {
             "theta": theta_list,
             "n1": [],
             "n2": [],

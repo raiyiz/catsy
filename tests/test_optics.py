@@ -138,6 +138,7 @@ def test_render_schematic_labels_each_component_and_input_state():
     assert "LOSS" in schematic
     assert "PHASE" in schematic
     assert "line_1" in schematic and "line_2" in schematic
+    # print(schematic)
 
 
 def test_render_schematic_bridges_ports_a_multi_port_component_skips_over():
