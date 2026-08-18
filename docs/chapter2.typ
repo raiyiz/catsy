@@ -2,7 +2,7 @@
 
 = Chapter 2: Gaussian Unitary Transformations & Channels
 
-Gaussian operations are defined by the fact that they leave the Gaussian structure of the Wigner function invariant. Mathematically, unitary operators of this class correspond to affine symplectic transformations in phase space. Non-unitary processes (decoherence and noise) are modeled as CPTP maps (*Completely Positive Trace-Preserving Maps*) via Gaussian channels.
+Gaussian operations are defined by the fact that they leave the Gaussian structure of the Wigner function invariant. Mathematically, unitary operators of this class correspond to affine symplectic transformations in phase space. Non-unitary processes (decoherence and noise) are modeled as CPTP maps (*Completely Positive Trace-Preserving Maps*) via Gaussian channels. This is the standard Gaussian-operation/channel framework of continuous-variable quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
 == Unitary gate transformations (`GaussianOperations`)
 Every purely Gaussian unitary transformation $hat(U)$ induces a linear transformation in phase space, expressed via a symplectic matrix $S in S_p(2n, RR)$. For the displacement vector $d$ and the covariance matrix $V$:
@@ -15,7 +15,7 @@ $S Omega S^T = Omega$
 The toolkit implements three fundamental basis transformations in `GaussianOperations`:
 
 1. *Squeezing operator ($hat(S)_k (r, theta)$):*
-   The local squeeze operator on mode $k$ reduces the variance in one quadrature below the shot-noise limit, while amplifying the conjugate quadrature. The local symplectic matrix is:
+   The local squeeze operator on mode $k$ reduces the variance in one quadrature below the shot-noise limit, while amplifying the conjugate quadrature. Squeezing, passive rotations, and beam splitters are canonical examples of Gaussian unitaries; their symplectic representation is developed systematically in the references above and in Serafini’s graduate-level treatment. The local symplectic matrix is:
    $ S_("local") = mat(cos(theta), -sin(theta); sin(theta), cos(theta)) mat(e^(-r), 0; 0, e^r) mat(cos(theta), sin(theta); -sin(theta), cos(theta)) $
 
 2. *Phase rotation ($hat(R)_k (phi)$):*
@@ -85,3 +85,13 @@ The toolkit provides standard physical channels through the factory object `Loss
 
 ---
 
+
+
+== Scientific literature
+The Gaussian-unitary and Gaussian-channel formulas in this chapter are covered in:
+
+- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
+- #link("https://doi.org/10.1103/RevModPhys.77.513")[S. L. Braunstein and P. van Loock, “Quantum information with continuous variables,” *Reviews of Modern Physics* 77, 513–577 (2005).]
+- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2024).]
+
+In particular, these sources provide the physical interpretation of symplectic transformations, loss and thermal channels, and the complete-positivity constraints on Gaussian channels.

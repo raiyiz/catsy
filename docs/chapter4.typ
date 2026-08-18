@@ -5,10 +5,10 @@
 // ==========================================
 = Chapter 4: Quantum Measurement Processes & State Conditioning
 
-Measurements on continuous variables induce a genuine, irreversible projection of the overall quantum state. Since the toolkit operates in the Gaussian phase-space layer, the mathematical description of wavefunction collapse (*Wigner collapse*) must manage without infinite-dimensional projection operators. The framework solves this via an exact implementation of the symplectic Schur complement in the `GaussianMeasurements` class.
+Measurements on continuous variables induce a genuine, irreversible conditional state update of the overall quantum state. Since the toolkit operates in the Gaussian phase-space layer, the update can be expressed directly in terms of conditional Gaussian moments rather than explicit infinite-dimensional projection operators. The framework implements this using the covariance-matrix conditioning (Schur-complement) formulas standard in Gaussian quantum measurement theory. See #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
 == Homodyne measurement (`homodyne_measurement`)
-Homodyne detection measures a freely chosen linear combination of the canonical quadrature operators $q$ and $p$ of a target mode. This process is intrinsically stochastic: the system collapses onto the eigenstate of the quadrature operator, and the remaining modes are *conditioned* (entangled subsystems adjust their statistics instantaneously).
+Homodyne detection measures a freely chosen linear combination of the canonical quadrature operators $q$ and $p$ of a target mode. This process is intrinsically stochastic: the idealized measurement projects onto a quadrature eigenstate, while the remaining modes are *conditioned* on the measurement result. In a physical implementation, the conditional update is the relevant operational statement; the phase-space treatment avoids requiring an explicit infinite-energy eigenstate representation.
 
 === Mathematical transformation & mode rotation
 To generalize the measurement to an arbitrary local-oscillator angle $phi$ (where $phi=0$ corresponds to the position quadrature $q$ and $phi=pi/2$ to the momentum quadrature $p$), the code first transforms the system via a global passive rotation matrix $R_("global")$ into the eigenbasis of the measurement apparatus. This reduces every homodyne detection mathematically to a pure measurement of the first quadrature ($q$) of the target mode.
@@ -24,7 +24,7 @@ $ V_("rot") = mat(V_(M M), V_(M R); V_(R M), V_(R R)) $
 If no explicit measurement value (`outcome`) is given, the toolkit computes the physically correct stochastic measurement outcome. The probability distribution of the outcome $x_m$ is a Gaussian centered on the rotated mean of the quadrature, with a width given by the quantum variance:
 $x_m "sim" N(d_M, sqrt(V_(M M)))$
 
-The collapse of the remaining modes is then computed via the *Schur complement*. The evolution of the displacement vector $d_("cond")$ and the covariance matrix $V_("cond")$ is implemented in the code exactly as follows:
+The conditional state of the remaining modes is then computed via the *Schur complement*, which is the classical-looking matrix form taken by Gaussian quantum conditioning. The evolution of the displacement vector $d_("cond")$ and the covariance matrix $V_("cond")$ is implemented in the code exactly as follows:
 
 ```python
 @staticmethod
@@ -140,3 +140,14 @@ def heterodyne_measurement(
 - *`V_cond = V_RR - V_RM @ V_eff_inv @ V_MR`*: because the measurement noise means less information can be extracted about the system than with a homodyne measurement, the modified `V_eff_inv` ensures the variances of the remaining system $V_("cond")$ shrink less strongly. The eigenvalues of the resulting covariance matrix remain guaranteed to stay above the vacuum limit ($>= 0.5$).
 
 ---
+
+
+== Scientific literature
+For homodyne and heterodyne detection, Gaussian conditioning, and continuous-variable measurements, see:
+
+- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
+- #link("https://doi.org/10.1103/RevModPhys.77.513")[S. L. Braunstein and P. van Loock, “Quantum information with continuous variables,” *Reviews of Modern Physics* 77, 513–577 (2005).]
+- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2024).]
+- #link("https://doi.org/10.1002/3527602976.ch3")[W. P. Schleich, *Quantum Optics in Phase Space*, especially the chapters on Wigner functions and quantum-state reconstruction.]
+
+These references also provide useful background for the distinction between ideal homodyne projection and the noisy coherent-state POVM associated with heterodyne detection.

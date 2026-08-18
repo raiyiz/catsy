@@ -5,7 +5,7 @@
 // ==========================================
 = Chapter 8: Optical Bench Layouts (`OpticalSetup`)
 
-`GaussianCircuit` (Chapter 3) describes a *gate sequence* — abstract and unrelated to any physical setup. `optics.py` adds a layer on top that models a reusable, named *hardware bench layout*: components with fixed ports that can be run repeatedly against different input states, saved/loaded, and visualized as a text schematic.
+`GaussianCircuit` (Chapter 3) describes a *gate sequence* — abstract and independent of a particular laboratory layout. `optics.py` adds a layer on top that models a reusable, named *hardware bench layout*: components with fixed ports that can be run repeatedly against different input states, saved/loaded, and visualized as a text schematic. The physical component vocabulary is consistent with standard linear/Gaussian optical processing; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)].
 
 == The component blueprint (`OpticalComponent`)
 
@@ -77,3 +77,13 @@ This pattern deliberately mirrors the `OPERATION_REGISTRY` from Chapter 3: exten
 Like `GaussianCircuit`, `OpticalSetup` is JSON-persistent via `to_dict`/`save_layout`/`load_layout`. In addition, `render_schematic` provides a pure, deterministic text visualization of the setup (one port per line, components left to right in registration order), which `draw` simply passes to `print`. The purity of `render_schematic` — no side effects, just a returned string — makes the schematic directly assertable in tests, while `draw` serves the interactive notebook use case.
 
 ---
+
+
+== Scientific literature
+The component-level interpretation of beam splitters, phase rotations, squeezing, and loss is standard Gaussian/linear quantum optics. Useful references are:
+
+- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
+- #link("https://doi.org/10.1103/RevModPhys.77.513")[S. L. Braunstein and P. van Loock, “Quantum information with continuous variables,” *Reviews of Modern Physics* 77, 513–577 (2005).]
+- #link("https://doi.org/10.1002/3527602976.ch13")[W. P. Schleich, *Quantum Optics in Phase Space*, chapter on optical interferometry (Wiley-VCH, 2001).]
+
+The `OpticalSetup` and serialization abstractions themselves are software-design decisions of `catsy`; the references above support the physical meaning of the modeled optical components.

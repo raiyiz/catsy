@@ -14,7 +14,7 @@ Not every interesting operation in CV quantum optics stays within the Gaussian c
 
 === Subtraction and addition
 
-Applying the annihilation or creation operator to a density matrix is in general not a trace-preserving process — it models a *heralded*, success-conditioned operation (e.g. photon subtraction via a weakly reflecting beam splitter with a single-photon detector in the reflected arm). The state must therefore be renormalized after application:
+Applying the annihilation or creation operator to a density matrix is in general not a trace-preserving process — it models a *heralded*, success-conditioned operation. Photon subtraction is commonly implemented conceptually by a weakly reflecting beam splitter followed by conditional detection in the reflected arm; see #link("https://doi.org/10.1103/PhysRevA.61.032302")[Opatrný, Kurizki, and Welsch (2000)]. The state must therefore be renormalized after application:
 $ rho -->^"subtraction" (hat(a) rho hat(a)^dagger) / "tr"(hat(a) rho hat(a)^dagger), quad rho -->^"addition" (hat(a)^dagger rho hat(a)) / "tr"(hat(a)^dagger rho hat(a)) $
 
 ```python
@@ -41,7 +41,7 @@ The denominator $"tr"(hat(a) rho hat(a)^dagger)$ is simultaneously the physical 
 
 == Driven, dissipative Kerr cavity (`KerrCavity`)
 
-`KerrCavity` (in #src-link("src/catsy/optics.py", line: 323, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard model for generating non-classical (e.g. Schrödinger-cat-like) states beyond the Gaussian class. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
+`KerrCavity` (in #src-link("src/catsy/optics.py", line: 323, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
 $ hat(H)(t) = K hat(a)^(dagger 2) hat(a)^2 + Omega(t)(hat(a) + hat(a)^dagger), quad Omega(t) = A exp(-(t - t_0)^2 / (2 sigma^2)) $
 
 Dissipation is modeled via a single Lindblad collapse operator $sqrt(kappa) hat(a)$, and the full master equation is integrated in time with `qutip.mesolve`:
@@ -90,6 +90,17 @@ if c_ops:
     rho_after_loss = loss_sim.states[-1]
 ```
 
-Afterwards, for each value of the supplied phase list `theta_list`, the phase operator $hat(U)_theta = exp(i theta hat(n)_1)$ is applied to the (already lossy) state, followed by the second beam splitter; the outputs read out are the mean photon number of each port ($chevron.l hat(n)_1 chevron.r$, $chevron.l hat(n)_2 chevron.r$) and the parity expectation $chevron.l exp(i pi hat(n)_1) chevron.r$ of the first output — the latter being the characteristic, high-resolution interference signature for cat states.
+Afterwards, for each value of the supplied phase list `theta_list`, the phase operator $hat(U)_theta = exp(i theta hat(n)_1)$ is applied to the (already lossy) state, followed by the second beam splitter; the outputs read out are the mean photon number of each port ($chevron.l hat(n)_1 chevron.r$, $chevron.l hat(n)_2 chevron.r$) and the parity expectation $chevron.l exp(i pi hat(n)_1) chevron.r$ of the first output — the latter being a parity-sensitive interference observable that is particularly useful for resolving nonclassical phase-space structure and cat-like states. Its interpretation should be understood as a metrological/diagnostic choice rather than as a universal definition of a cat state.
 
 ---
+
+
+== Scientific literature
+The non-Gaussian operations and dynamical models in this chapter are connected to the following primary literature and advanced references:
+
+- #link("https://doi.org/10.1103/PhysRevA.61.032302")[T. Opatrný, G. Kurizki, and D.-G. Welsch, “Improvement on teleportation of continuous variables by photon subtraction via conditional measurement,” *Physical Review A* 61, 032302 (2000).]
+- #link("https://doi.org/10.1103/PhysRevA.72.033822")[J. Fiurášek, R. García-Patrón, and N. J. Cerf, “Conditional generation of arbitrary single-mode quantum states of light by repeated photon subtractions,” *Physical Review A* 72, 033822 (2005).]
+- #link("https://doi.org/10.1038/nature11902")[G. Kirchmair et al., “Observation of quantum state collapse and revival due to the single-photon Kerr effect,” *Nature* 495, 205–209 (2013).]
+- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012)] provides the Gaussian/non-Gaussian boundary that motivates this chapter.
+
+The first two references are particularly relevant to the physical interpretation of the `a rho a^dagger` and `a^dagger rho a` maps as conditional operations. The Kerr reference provides an experimental benchmark for the collapse/revival physics represented by `KerrCavity`.
