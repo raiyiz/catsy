@@ -87,7 +87,7 @@ Since only the small `.json` files are opened here, browsing (`find`, filterable
 == Scientific literature
 This chapter is principally about software and data management rather than quantum-optical theory. Its reproducibility and persistence goals are aligned with:
 
-- #link("https://doi.org/10.1038/sdata.2016.18")[M. D. Wilkinson et al. et al., “The FAIR Guiding Principles for scientific data management and stewardship,” *Scientific Data* 3, 160018 (2016).]
+- #link("https://doi.org/10.1038/sdata.2016.18")[M. D. Wilkinson et al., “The FAIR Guiding Principles for scientific data management and stewardship,” *Scientific Data* 3, 160018 (2016).]
 - #link("https://doi.org/10.1371/journal.pcbi.1005510")[G. Wilson et al., “Good enough practices in scientific computing,” *PLoS Computational Biology* 13, e1005510 (2017).]
 
 These references motivate the emphasis on machine-readable metadata, explicit provenance, reproducible storage, and separation of data from descriptive metadata. They do not prescribe the exact JSON/NPZ format used by `catsy`.

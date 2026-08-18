@@ -6,7 +6,7 @@
 // ==========================================
 = Chapter 10: Practical Guide
 
-This closing chapter distills the previous nine chapters into a practical overview: how to import the package, how the modules relate to each other, which conventions apply package-wide, and how to run the test suite. The emphasis on explicit conventions, tests, and reproducible workflows is consistent with established guidance for scientific computing, including #link("https://doi.org/10.1371/journal.pcbi.1005510")[Wilson et al. (2017)].
+This closing chapter summarizes the previous nine chapters into a practical overview: how to import the package, how the modules relate to each other, which conventions apply package-wide, and how to run the test suite. The emphasis on explicit conventions, tests, and reproducible workflows is consistent with established guidance for scientific computing, including #link("https://doi.org/10.1371/journal.pcbi.1005510")[Wilson et al. (2017)].
 
 == Module overview
 
@@ -100,7 +100,7 @@ pytest --plot
 
 == Scope and boundaries
 
-`catsy` is deliberately a focused tool, not a full quantum-computing framework. Priority is given to readable CV quantum-optics mathematics, explicit conventions, and small, composable building blocks -- over the broadest possible gate catalog. Where genuine Fock-space physics is required (Chapter 7), the package deliberately delegates to QuTiP rather than maintaining its own, redundant Hilbert-space layer.
+`catsy` is deliberately a focused tool, not a full quantum-computing framework. Priority is given to readable CV quantum-optics mathematics, explicit conventions, and small, composable building blocks -- over the broadest possible gate catalog. Where Fock-space physics is required (Chapter 7), the package deliberately delegates to QuTiP rather than maintaining its own, redundant Hilbert-space layer.
 
 ---
 
@@ -109,6 +109,6 @@ pytest --plot
 The practical workflow recommended here is supported by:
 
 - #link("https://doi.org/10.1371/journal.pcbi.1005510")[G. Wilson et al., “Good enough practices in scientific computing,” *PLoS Computational Biology* 13, e1005510 (2017).]
-- #link("https://doi.org/10.1038/sdata.2016.18")[M. D. Wilkinson et al. et al., “The FAIR Guiding Principles for scientific data management and stewardship,” *Scientific Data* 3, 160018 (2016).]
+- #link("https://doi.org/10.1038/sdata.2016.18")[M. D. Wilkinson et al., “The FAIR Guiding Principles for scientific data management and stewardship,” *Scientific Data* 3, 160018 (2016).]
 
-For the underlying continuous-variable physics, the recommended entry points are #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[Serafini (2024)].
+For the underlying continuous-variable physics, the recommended entry points are #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[Serafini (2023)].

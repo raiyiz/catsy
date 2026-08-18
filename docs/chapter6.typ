@@ -9,7 +9,7 @@ The free functions at the end of `gaussian.py` (`compute_wigner_analytically`, `
 
 == Analytical Wigner function
 
-For a Gaussian state, the Wigner quasi-probability distribution is itself a Gaussian function in phase space and is therefore non-negative. Negativity is a genuinely non-Gaussian feature of Wigner representations; the Gaussian case is reviewed by #link("https://doi.org/10.1140/epjst/e2012-01532-4")[Olivares (2012)] and #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)]. For a single mode with local displacement vector $d$ and local covariance $V$, it holds exactly that:
+For a Gaussian state, the Wigner quasi-probability distribution is itself a Gaussian function in phase space and is therefore non-negative. Negativity is a non-Gaussian feature of Wigner representations; the Gaussian case is reviewed by #link("https://doi.org/10.1140/epjst/e2012-01532-4")[Olivares (2012)] and #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)]. For a single mode with local displacement vector $d$ and local covariance $V$, it holds exactly that:
 $ W(x, p) = 1 / (2 pi sqrt(det V)) exp(-1/2 (r - d)^T V^(-1) (r - d)), quad r = vec(x, p) $
 
 `compute_wigner_analytically` evaluates this formula directly on a grid, without constructing any Fock-space representation:
@@ -65,7 +65,7 @@ Both the covariance matrix and the correlation plots show *correlation*, but on 
 
 $ "Var"(q_a - q_b) + "Var"(p_a + p_b) >= 2 quad "(every separable state)" $
 
-In the convention used by the toolkit (vacuum $= 1/2$), two independent vacua exactly saturate this bound at $2$ (`DUAN_SEPARABILITY_BOUND` in `core.py`). A measured value *strictly below* $2$ is a *sufficient* condition for genuine, non-classical entanglement between `mode_a` and `mode_b` — no classical correlation can undercut this bound, only a genuinely entangling operation such as the beam splitter in `create_epr_pair` can. For the two-mode Gaussian states considered here, that last caveat should be read carefully: the Duan criterion is equivalent to the Gaussian PPT/separability test. Simon’s independent phase-space formulation of the PPT criterion gives the corresponding necessary-and-sufficient separability condition for bipartite Gaussian states. For non-Gaussian states, the simple Duan test is only a sufficient witness.
+In the convention used by the toolkit (vacuum $= 1/2$), two independent vacua exactly saturate this bound at $2$ (`DUAN_SEPARABILITY_BOUND` in `core.py`). A measured value *strictly below* $2$ is a *sufficient* condition for non-classical entanglement between `mode_a` and `mode_b` — no classical correlation can undercut this bound, only an entangling operation such as the beam splitter in `create_epr_pair` can. For the two-mode Gaussian states considered here, that last caveat should be read carefully: the Duan criterion is equivalent to the Gaussian PPT/separability test. Simon’s independent phase-space formulation of the PPT criterion gives the corresponding necessary-and-sufficient separability condition for bipartite Gaussian states. For non-Gaussian states, the simple Duan test is only a sufficient witness.
 
 ```python
 def compute_duan_inseparability(
@@ -88,10 +88,9 @@ The signs of the cross terms directly mirror the structure of the EPR state: the
 
 
 == Scientific literature
-The diagnostics in this chapter connect directly to the standard literature on Gaussian phase space and continuous-variable entanglement:
+The diagnostics in this chapter connect directly to the standard literature on Gaussian phase space and continuous-variable entanglement cited in Chapter 1 (Weedbrook et al. 2012), plus specifically:
 
 - #link("https://doi.org/10.1140/epjst/e2012-01532-4")[S. Olivares, “Quantum optics in the phase space: A tutorial on Gaussian states,” *EPJ Special Topics* 203, 3–24 (2012).]
-- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
 - #link("https://doi.org/10.1103/PhysRevLett.84.2722")[L.-M. Duan, G. Giedke, J. I. Cirac, and P. Zoller, “Inseparability criterion for continuous variable systems,” *Physical Review Letters* 84, 2722–2725 (2000).]
 - #link("https://doi.org/10.1103/PhysRevLett.84.2726")[R. Simon, “Peres-Horodecki separability criterion for continuous variable systems,” *Physical Review Letters* 84, 2726–2729 (2000).]
 

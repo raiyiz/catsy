@@ -2,7 +2,7 @@
 
 = Chapter 1: Mathematical Foundations & Phase-Space Representation
 
-This framework is optimized for the highly efficient simulation of continuous-variable (CV) quantum optics. In contrast to an explicit representation in the infinite-dimensional Fock space, the Gaussian phase-space layer uses an exact parametrization via the first and second statistical moments. This is the standard Gaussian-state description used throughout continuous-variable quantum information; see the reviews by Weedbrook et al. and Braunstein and van Loock for a broader treatment. #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)] are the principal background references for the conventions used here.
+This framework is designed for efficient simulation of continuous-variable (CV) quantum optics. In contrast to an explicit representation in the infinite-dimensional Fock space, the Gaussian phase-space layer uses an exact parametrization via the first and second statistical moments. This is the standard Gaussian-state description used throughout continuous-variable quantum information; see the reviews by Weedbrook et al. and Braunstein and van Loock for a broader treatment. #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)] are background references for the conventions used here.
 
 == Symplectic conventions
 For a system of $n$ optical modes we define the vector of Hermitian quadrature operators as:
@@ -74,6 +74,6 @@ The mathematical conventions in this chapter are standard in Gaussian quantum in
 - #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
 - #link("https://doi.org/10.1103/RevModPhys.77.513")[S. L. Braunstein and P. van Loock, “Quantum information with continuous variables,” *Reviews of Modern Physics* 77, 513–577 (2005).]
 - #link("https://doi.org/10.1140/epjst/e2012-01532-4")[S. Olivares, “Quantum optics in the phase space: A tutorial on Gaussian states,” *EPJ Special Topics* 203, 3–24 (2012).]
-- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2024).]
+- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2023).]
 
 These references provide derivations of the covariance-matrix formalism, uncertainty constraints, symplectic structure, purity, and Gaussian-state parametrization used by `GaussianState`.

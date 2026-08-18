@@ -5,7 +5,7 @@
 // ==========================================
 = Chapter 4: Quantum Measurement Processes & State Conditioning
 
-Measurements on continuous variables induce a genuine, irreversible conditional state update of the overall quantum state. Since the toolkit operates in the Gaussian phase-space layer, the update can be expressed directly in terms of conditional Gaussian moments rather than explicit infinite-dimensional projection operators. The framework implements this using the covariance-matrix conditioning (Schur-complement) formulas standard in Gaussian quantum measurement theory. See #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
+Measurements on continuous variables induce an irreversible conditional state update of the overall quantum state. Since the toolkit operates in the Gaussian phase-space layer, the update can be expressed directly in terms of conditional Gaussian moments rather than explicit infinite-dimensional projection operators. The framework implements this using the covariance-matrix conditioning (Schur-complement) formulas standard in Gaussian quantum measurement theory. See #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
 == Homodyne measurement (`homodyne_measurement`)
 Homodyne detection measures a freely chosen linear combination of the canonical quadrature operators $q$ and $p$ of a target mode. This process is intrinsically stochastic: the idealized measurement projects onto a quadrature eigenstate, while the remaining modes are *conditioned* on the measurement result. In a physical implementation, the conditional update is the relevant operational statement; the phase-space treatment avoids requiring an explicit infinite-energy eigenstate representation.
@@ -88,7 +88,7 @@ Heterodyne (or dual-homodyne) detection measures both conjugate quadratures ($q$
 === The mathematical vacuum-port model
 Physically, heterodyne measurement corresponds to splitting the target mode on a 50:50 beam splitter whose second input is populated with an uncorrelated vacuum state. The two outputs are then each homodyne-detected (one measures $q$, the other $p$).
 
-This intrinsic quantum noise is simulated elegantly and efficiently in the code, without needing to explicitly construct the beam splitter in phase space: the vacuum noise is added directly as an additive term to the measurement block:
+This intrinsic quantum noise is simulated directly in the code, without needing to explicitly construct the beam splitter in phase space: the vacuum noise is added directly as an additive term to the measurement block:
 $ V_("eff") = V_(M M) + 1/2 bb(1)_2 $
 
 === Implementation & noise injection
@@ -143,11 +143,8 @@ def heterodyne_measurement(
 
 
 == Scientific literature
-For homodyne and heterodyne detection, Gaussian conditioning, and continuous-variable measurements, see:
+For homodyne and heterodyne detection and Gaussian conditioning, see the general background in Chapter 1 (Weedbrook et al. 2012; Braunstein and van Loock 2005; Serafini 2023), plus specifically:
 
-- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
-- #link("https://doi.org/10.1103/RevModPhys.77.513")[S. L. Braunstein and P. van Loock, “Quantum information with continuous variables,” *Reviews of Modern Physics* 77, 513–577 (2005).]
-- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2024).]
 - #link("https://doi.org/10.1002/3527602976.ch3")[W. P. Schleich, *Quantum Optics in Phase Space*, especially the chapters on Wigner functions and quantum-state reconstruction.]
 
-These references also provide useful background for the distinction between ideal homodyne projection and the noisy coherent-state POVM associated with heterodyne detection.
+This reference provides useful background for the distinction between ideal homodyne projection and the noisy coherent-state POVM associated with heterodyne detection.

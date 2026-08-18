@@ -15,7 +15,7 @@ $S Omega S^T = Omega$
 The toolkit implements three fundamental basis transformations in `GaussianOperations`:
 
 1. *Squeezing operator ($hat(S)_k (r, theta)$):*
-   The local squeeze operator on mode $k$ reduces the variance in one quadrature below the shot-noise limit, while amplifying the conjugate quadrature. Squeezing, passive rotations, and beam splitters are canonical examples of Gaussian unitaries; their symplectic representation is developed systematically in the references above and in Serafini’s graduate-level treatment. The local symplectic matrix is:
+   The local squeeze operator on mode $k$ reduces the variance in one quadrature below the shot-noise limit, while amplifying the conjugate quadrature. Squeezing, passive rotations, and beam splitters are standard examples of Gaussian unitaries; their symplectic representation is developed systematically in the references above and in Serafini’s graduate-level treatment. The local symplectic matrix is:
    $ S_("local") = mat(cos(theta), -sin(theta); sin(theta), cos(theta)) mat(e^(-r), 0; 0, e^r) mat(cos(theta), sin(theta); -sin(theta), cos(theta)) $
 
 2. *Phase rotation ($hat(R)_k (phi)$):*
@@ -88,10 +88,4 @@ The toolkit provides standard physical channels through the factory object `Loss
 
 
 == Scientific literature
-The Gaussian-unitary and Gaussian-channel formulas in this chapter are covered in:
-
-- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
-- #link("https://doi.org/10.1103/RevModPhys.77.513")[S. L. Braunstein and P. van Loock, “Quantum information with continuous variables,” *Reviews of Modern Physics* 77, 513–577 (2005).]
-- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2024).]
-
-In particular, these sources provide the physical interpretation of symplectic transformations, loss and thermal channels, and the complete-positivity constraints on Gaussian channels.
+The Gaussian-unitary and Gaussian-channel formulas in this chapter draw on the same background literature as Chapter 1 (Weedbrook et al. 2012; Braunstein and van Loock 2005; Serafini 2023), which also cover the physical interpretation of symplectic transformations, loss and thermal channels, and the complete-positivity constraints on Gaussian channels.

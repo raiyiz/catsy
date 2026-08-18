@@ -6,7 +6,7 @@
 // ==========================================
 = Chapter 7: Non-Gaussian Operations & Physical Simulations
 
-Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require genuine Fock-space structure. These operations consistently live outside `gaussian.py`: #src-link("src/catsy/fock.py") provides primitive photon operations on already-existing QuTiP states, while #src-link("src/catsy/optics.py") implements concrete, time-resolved hardware models (a driven Kerr cavity, a Mach-Zehnder interferometer) alongside the Gaussian-optics `OpticalSetup` layouts -- both describe specific pieces of optical hardware rather than generic phase-space transformations, which is why they share a module.
+Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require Fock-space structure. These operations consistently live outside `gaussian.py`: #src-link("src/catsy/fock.py") provides primitive photon operations on already-existing QuTiP states, while #src-link("src/catsy/optics.py") implements concrete, time-resolved hardware models (a driven Kerr cavity, a Mach-Zehnder interferometer) alongside the Gaussian-optics `OpticalSetup` layouts -- both describe specific pieces of optical hardware rather than generic phase-space transformations, which is why they share a module.
 
 == Primitive photon operations (`FockOperations`)
 
@@ -96,11 +96,10 @@ Afterwards, for each value of the supplied phase list `theta_list`, the phase op
 
 
 == Scientific literature
-The non-Gaussian operations and dynamical models in this chapter are connected to the following primary literature and advanced references:
+The non-Gaussian operations and dynamical models in this chapter are connected to the following primary literature; Weedbrook et al. (2012, Chapter 1) provides the Gaussian/non-Gaussian boundary that motivates the chapter:
 
 - #link("https://doi.org/10.1103/PhysRevA.61.032302")[T. Opatrný, G. Kurizki, and D.-G. Welsch, “Improvement on teleportation of continuous variables by photon subtraction via conditional measurement,” *Physical Review A* 61, 032302 (2000).]
 - #link("https://doi.org/10.1103/PhysRevA.72.033822")[J. Fiurášek, R. García-Patrón, and N. J. Cerf, “Conditional generation of arbitrary single-mode quantum states of light by repeated photon subtractions,” *Physical Review A* 72, 033822 (2005).]
 - #link("https://doi.org/10.1038/nature11902")[G. Kirchmair et al., “Observation of quantum state collapse and revival due to the single-photon Kerr effect,” *Nature* 495, 205–209 (2013).]
-- #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012)] provides the Gaussian/non-Gaussian boundary that motivates this chapter.
 
 The first two references are particularly relevant to the physical interpretation of the `a rho a^dagger` and `a^dagger rho a` maps as conditional operations. The Kerr reference provides an experimental benchmark for the collapse/revival physics represented by `KerrCavity`.

@@ -45,7 +45,7 @@ A single scalar `alphas` is broadcast across all modes simultaneously — useful
 
 === The EPR pair (`create_epr_pair`)
 
-The canonical recipe for *genuine* (non-classical) continuous-variable entanglement first creates two orthogonally squeezed vacua and then mixes them on a 50:50 beam splitter. This construction is the standard two-mode-squeezing/EPR resource construction in CV quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[Serafini (2024)].
+The standard recipe for non-classical continuous-variable entanglement first creates two orthogonally squeezed vacua and then mixes them on a 50:50 beam splitter. This construction is the standard two-mode-squeezing/EPR resource construction in CV quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[Serafini (2023)].
 
 ```python
 @staticmethod
@@ -64,7 +64,7 @@ def create_epr_pair(mode_a: str, mode_b: str, r: float) -> GaussianState:
 Mode `mode_a` is squeezed in $q$ ($theta=0$), mode `mode_b` in $p$ ($theta=pi/2$); the subsequent beam splitter fully entangles both modes. For any $r > 0$, the result satisfies:
 $ "Var"(q_a - q_b) = "Var"(p_a + p_b) = e^(-2r) < 1 $
 
-Both combined quadratures thus lie below the shot-noise limit of $1$ — a necessary signature of genuine EPR correlation, quantitatively verified in Chapter 6 via the Duan-Simon witness. It is important to distinguish this from classically correlated states (e.g. from `LossChannels.correlated_thermal_noise`, Chapter 2): these can look similar in a scatter plot, but never violate the Duan-Simon bound.
+Both combined quadratures thus lie below the shot-noise limit of $1$ — a necessary signature of EPR correlation, quantitatively verified in Chapter 6 via the Duan-Simon witness. It is important to distinguish this from classically correlated states (e.g. from `LossChannels.correlated_thermal_noise`, Chapter 2): these can look similar in a scatter plot, but never violate the Duan-Simon bound.
 
 == The Gaussian-Fock bridge: `GaussianState.to_qutip`
 
@@ -74,7 +74,7 @@ The phase-space layer stores a state compactly as $(d, V) in RR^(2n) times RR^(2
 
 Every physical covariance matrix can be symplectically diagonalized:
 $ V = S D S^T, quad D = "diag"(nu_1, nu_1, dots, nu_n, nu_n), quad S in "Sp"(2n, RR) $
-The *symplectic eigenvalues* $nu_k >= 1/2$ are the invariants of the state under Gaussian unitaries: $nu_k = 1/2$ for all $k$ if and only if the state is pure. Williamson normal form is a central structural theorem for Gaussian states and is treated in detail by Serafini and Weedbrook et al. The diagonal state $rho_D$ is thus a pure tensor product of thermal states with mean photon number $overline(n)_k = nu_k - 1/2$:
+The *symplectic eigenvalues* $nu_k >= 1/2$ are the invariants of the state under Gaussian unitaries: $nu_k = 1/2$ for all $k$ if and only if the state is pure. Williamson normal form is a key theorem for Gaussian states and is treated in detail by Serafini and Weedbrook et al. The diagonal state $rho_D$ is thus a pure tensor product of thermal states with mean photon number $overline(n)_k = nu_k - 1/2$:
 
 ```python
 symplectic_values, S, D = _williamson_decomposition(self.covariance)
@@ -147,9 +147,9 @@ def reorder_modes(self, modes: tuple[str, ...] | list[str]) -> GaussianState:
 == Scientific literature
 The preparation of coherent, squeezed, and EPR states and the phase-space/Fock-space bridge are treated in depth in:
 
-- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2024).]
+- #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2023).]
 - #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]
 - #link("https://doi.org/10.1140/epjst/e2012-01532-4")[S. Olivares, “Quantum optics in the phase space: A tutorial on Gaussian states,” *EPJ Special Topics* 203, 3–24 (2012).]
 - #link("https://doi.org/10.1002/3527602976.ch4")[W. P. Schleich, “Quantum States in Phase Space,” in *Quantum Optics in Phase Space* (Wiley-VCH, 2001).]
 
-Serafini is the principal advanced reference for Williamson decomposition, symplectic spectra, Gaussian operations, and the relation between phase-space and Hilbert-space descriptions.
+Serafini is an advanced reference for Williamson decomposition, symplectic spectra, Gaussian operations, and the relation between phase-space and Hilbert-space descriptions.
