@@ -25,7 +25,11 @@ requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
-line-length = 110
+line-length = 90
+# ruff format also reformats fenced Python code blocks in Markdown by
+# default; exclude docs so the README's illustrative formatting (e.g. the
+# multi-line builder-pattern example) isn't rewritten on every run.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 # E4/E7/E9/F: ruff's own default set. I: import sorting (replaces the

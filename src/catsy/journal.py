@@ -220,9 +220,7 @@ class JournalEntry:
             }
 
         for name, payload in (arrays or {}).items():
-            run.data_payloads[name] = self._store_array(
-                f"{run.run_id}__{name}", payload
-            )
+            run.data_payloads[name] = self._store_array(f"{run.run_id}__{name}", payload)
 
         self.runs.append(run)
         return run
@@ -365,7 +363,9 @@ class SimulationJournal:
         """Load one saved entry by ID."""
         return self.load_entry(entry_id)
 
-    def find(self, *, tag: str | None = None, title: str | None = None) -> list[dict[str, Any]]:
+    def find(
+        self, *, tag: str | None = None, title: str | None = None
+    ) -> list[dict[str, Any]]:
         """Find saved entries by an optional tag and/or title substring."""
         summaries = self.fetch_history_summary()
         if tag is not None:

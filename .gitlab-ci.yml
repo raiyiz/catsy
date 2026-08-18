@@ -60,6 +60,7 @@ ruff:
   script:
     - uv sync --group dev
     - uv run ruff check .
+    - uv run ruff format --check .
 
 # Compiles the architectural-specs PDF from docs/book.typ. Manual/on-demand
 # only (press "Run" in the pipeline view or MR widget) -- it doesn't gate

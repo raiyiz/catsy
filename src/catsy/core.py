@@ -18,6 +18,7 @@ TOL_TRACE_WARN = 1e-6
 TOL_PHYSICALITY = 1e-10
 DUAN_SEPARABILITY_BOUND = 2.0
 
+
 def _check_unit_interval(value: float, name: str) -> None:
     if not np.isfinite(value) or not (0.0 <= value <= 1.0):
         raise ValueError(f"{name} must lie in [0, 1], got {value}.")
@@ -91,9 +92,7 @@ def _validate_gaussian_channel(
             f"Y must have shape ({expected_dim}, {expected_dim}), got {Y.shape}."
         )
     if d0.shape != (expected_dim,):
-        raise ValueError(
-            f"d0 must have shape ({expected_dim},), got {d0.shape}."
-        )
+        raise ValueError(f"d0 must have shape ({expected_dim},), got {d0.shape}.")
 
     _validate_finite_array(X, "X")
     _validate_finite_array(Y, "Y")
@@ -114,14 +113,10 @@ def _validate_gaussian_channel(
         )
 
 
-def _check_thermal_correlation(
-    c_correlation: float, n_thermal: float
-) -> None:
+def _check_thermal_correlation(c_correlation: float, n_thermal: float) -> None:
     """Validate cross-mode thermal covariance for the shared-bath model."""
     if not np.isfinite(c_correlation):
-        raise ValueError(
-            f"c_correlation must be finite, got {c_correlation}."
-        )
+        raise ValueError(f"c_correlation must be finite, got {c_correlation}.")
 
     # The underlying two-mode environment covariance is
     # [[(n+1/2)I, cI], [cI, (n+1/2)I]].

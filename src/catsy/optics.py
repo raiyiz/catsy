@@ -59,14 +59,12 @@ class OpticalComponent:
         expected_ports = _COMPONENT_SPECS[self.op_type]["ports"]
         if len(self.ports) != expected_ports:
             raise ValueError(
-                f"{self.op_type} requires exactly {expected_ports} port(s), "
-                f"got {len(self.ports)}."
+                f"{self.op_type} requires exactly {expected_ports} port(s), got {len(self.ports)}."
             )
 
         if len(set(self.ports)) != len(self.ports):
             raise ValueError(
-                f"{self.op_type} cannot connect the same port more than once: "
-                f"{self.ports!r}."
+                f"{self.op_type} cannot connect the same port more than once: {self.ports!r}."
             )
 
         if any(not isinstance(port, str) or not port.strip() for port in self.ports):
@@ -89,8 +87,7 @@ class OpticalComponent:
             value = self.kwargs[key]
             if not np.isscalar(value) or not np.isfinite(value):
                 raise ValueError(
-                    f"{self.op_type} parameter {key!r} must be a finite scalar, "
-                    f"got {value!r}."
+                    f"{self.op_type} parameter {key!r} must be a finite scalar, got {value!r}."
                 )
 
         if self.op_type in {"BeamSplitter", "Loss"}:
@@ -236,11 +233,7 @@ class OpticalSetup:
         tests; `draw` prints the result for interactive/notebook use.
         """
         if not self.components:
-            return (
-                f"┌─── {self.name} ───┐\n"
-                f"│   (Empty Bench Layout)   │\n"
-                f"└──────────────────────────┘"
-            )
+            return f"┌─── {self.name} ───┐\n│   (Empty Bench Layout)   │\n└──────────────────────────┘"
 
         ordered_ports = sorted(self.registered_ports)
         input_states = input_states or {}
@@ -263,9 +256,7 @@ class OpticalSetup:
                             connector = "┴"
                         else:
                             connector = "┼"
-                        cell = (
-                            f"[{connector}{label.center(block_width - 2)}{connector}]"
-                        )
+                        cell = f"[{connector}{label.center(block_width - 2)}{connector}]"
                     else:
                         cell = f"[{label.center(block_width)}]"
                     lines[port] += f"─{cell}─"
@@ -428,7 +419,9 @@ class MachZehnderInterferometer:
         psi_in = qt.tensor(psi_cat_single, qt.fock(N, 0))
         psi_after_BS1 = U_BS * psi_in
 
-        c_ops = [np.sqrt(self.kappa) * a1] if self.kappa > 0 and self.loss_time > 0 else []
+        c_ops = (
+            [np.sqrt(self.kappa) * a1] if self.kappa > 0 and self.loss_time > 0 else []
+        )
         if c_ops:
             loss_sim = qt.mesolve(
                 0 * n1_op,

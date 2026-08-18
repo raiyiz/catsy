@@ -37,10 +37,10 @@ from .core import (
 logger = logging.getLogger("catsy")
 
 
-
 # ========================================================================
 # Gaussian
 # ========================================================================
+
 
 def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]):
     """Build a QuTiP unitary implementing an orthogonal symplectic O."""
@@ -87,8 +87,7 @@ class GaussianState:
         expected_dim = 2 * n_modes
         if self.displacement.shape != (expected_dim,):
             raise ValueError(
-                f"displacement must have shape ({expected_dim},), "
-                f"got {self.displacement.shape}."
+                f"displacement must have shape ({expected_dim},), got {self.displacement.shape}."
             )
         if self.covariance.shape != (expected_dim, expected_dim):
             raise ValueError(
@@ -127,9 +126,7 @@ class GaussianState:
             return self.copy()
 
         indices = [
-            self.get_mode_index(mode) + offset
-            for mode in requested
-            for offset in (0, 1)
+            self.get_mode_index(mode) + offset for mode in requested for offset in (0, 1)
         ]
 
         displacement = self.displacement[indices].copy()
@@ -194,8 +191,7 @@ class GaussianState:
 
         # The Williamson diagonal state is a tensor product of thermal states.
         rho_list = [
-            qt.thermal_dm(N_cutoff, max(float(nu) - 0.5, 0.0))
-            for nu in symplectic_values
+            qt.thermal_dm(N_cutoff, max(float(nu) - 0.5, 0.0)) for nu in symplectic_values
         ]
         rho = qt.tensor(*rho_list)
 
@@ -473,9 +469,11 @@ class GaussianOperations:
 
         return _apply_gaussian_transform(state, X, noise=Y)
 
+
 # ========================================================================
 # Channels
 # ========================================================================
+
 
 @dataclass
 class GaussianChannel:
@@ -492,9 +490,7 @@ class GaussianChannel:
             raise ValueError(f"Duplicate target mode names in {self.target_modes!r}.")
 
         dim = 2 * len(self.target_modes)
-        _validate_gaussian_channel(
-            self.X, self.Y, self.d0, expected_dim=dim
-        )
+        _validate_gaussian_channel(self.X, self.Y, self.d0, expected_dim=dim)
 
     def apply(self, state: GaussianState) -> GaussianState:
         global_dim = len(state.displacement)
@@ -586,11 +582,13 @@ class LossChannels:
         d0 = np.zeros(4)
         return GaussianChannel(target_modes=(mode_a, mode_b), X=X, Y=Y, d0=d0)
 
+
 # ========================================================================
 # Circuit
 # ========================================================================
 
 logger = logging.getLogger("catsy")
+
 
 @dataclass
 class CircuitOperation:
@@ -603,9 +601,7 @@ class CircuitOperation:
     kwargs: dict[str, Any]
 
 
-def _op_squeeze(
-    state: GaussianState, modes: tuple[str, ...], **kwargs
-) -> GaussianState:
+def _op_squeeze(state: GaussianState, modes: tuple[str, ...], **kwargs) -> GaussianState:
     return GaussianOperations.apply_squeezing(state, mode=modes[0], **kwargs)
 
 
@@ -613,9 +609,7 @@ def _op_rotate(state: GaussianState, modes: tuple[str, ...], **kwargs) -> Gaussi
     return GaussianOperations.apply_phase_rotation(state, mode=modes[0], **kwargs)
 
 
-def _op_displace(
-    state: GaussianState, modes: tuple[str, ...], **kwargs
-) -> GaussianState:
+def _op_displace(state: GaussianState, modes: tuple[str, ...], **kwargs) -> GaussianState:
     return GaussianOperations.apply_displacement(state, mode=modes[0], **kwargs)
 
 
@@ -669,9 +663,7 @@ class GaussianCircuit:
         |alpha> instead of vacuum (only takes effect when `compile_and_run`
         is called without an explicit `initial_state`)."""
         if mode_name in self.modes:
-            raise ValueError(
-                f"Mode '{mode_name}' is already registered in this circuit."
-            )
+            raise ValueError(f"Mode '{mode_name}' is already registered in this circuit.")
         self.modes = (*self.modes, mode_name)
         self._initial_alphas[mode_name] = alpha
         return self
@@ -727,9 +719,7 @@ class GaussianCircuit:
             current_state = GaussianOperations.create_coherent(self.modes, alphas)
         else:
             if set(initial_state.modes) != set(self.modes):
-                raise ValueError(
-                    "Initial state's modes don't match the circuit's modes."
-                )
+                raise ValueError("Initial state's modes don't match the circuit's modes.")
             # Circuit order is canonical.  A state may arrive with the same
             # named modes in a different order; reorder it once at the boundary
             # so every subsequent operation sees the same positional layout.
@@ -786,9 +776,7 @@ class GaussianCircuit:
         }
         for op in data["operations"]:
             if op["name"] not in OPERATION_REGISTRY:
-                raise KeyError(
-                    f"Unknown operation '{op['name']}' in serialized circuit."
-                )
+                raise KeyError(f"Unknown operation '{op['name']}' in serialized circuit.")
             circuit._operations.append(
                 CircuitOperation(
                     name=op["name"], modes=tuple(op["modes"]), kwargs=op["kwargs"]
@@ -803,9 +791,11 @@ class GaussianCircuit:
     def load(cls, path: str | Path) -> GaussianCircuit:
         return cls.from_dict(_json_load(path))
 
+
 # ========================================================================
 # Measurements
 # ========================================================================
+
 
 class GaussianMeasurements:
     @staticmethod
@@ -845,8 +835,7 @@ class GaussianMeasurements:
         V_MM = float(V_rot[idx_x, idx_x])
         if not np.isfinite(V_MM) or V_MM <= TOL_PHYSICALITY:
             raise ValueError(
-                "homodyne measurement variance must be finite and positive; "
-                f"got {V_MM:.3e}."
+                f"homodyne measurement variance must be finite and positive; got {V_MM:.3e}."
             )
 
         V_MR = V_rot[idx_x, remaining_indices]
@@ -902,7 +891,9 @@ class GaussianMeasurements:
         try:
             np.linalg.cholesky(V_eff)
         except np.linalg.LinAlgError as exc:
-            raise ValueError("heterodyne effective covariance must be positive definite.") from exc
+            raise ValueError(
+                "heterodyne effective covariance must be positive definite."
+            ) from exc
 
         if outcome is None:
             rng = rng if rng is not None else np.random.default_rng()
@@ -911,8 +902,7 @@ class GaussianMeasurements:
             measured_outcome = np.asarray(outcome, dtype=float)
             if measured_outcome.shape != (2,):
                 raise ValueError(
-                    "heterodyne outcome must have shape (2,), "
-                    f"got {measured_outcome.shape}."
+                    f"heterodyne outcome must have shape (2,), got {measured_outcome.shape}."
                 )
             if not np.all(np.isfinite(measured_outcome)):
                 raise ValueError("heterodyne outcome must contain only finite values.")
@@ -926,9 +916,11 @@ class GaussianMeasurements:
         remaining_modes = tuple(m for m in state.modes if m != measured_mode)
         return measured_outcome, GaussianState(remaining_modes, d_cond, V_cond)
 
+
 # ========================================================================
 # Analysis
 # ========================================================================
+
 
 def compute_wigner_analytically(
     state: GaussianState, mode_name: str, x_max: float = 4.0, num_points: int = 150
@@ -1020,9 +1012,7 @@ def compute_joint_correlation(
     return P, X_a, X_b
 
 
-def plot_joint_correlation(
-    P, X_a, X_b, mode_a: str, mode_b: str, quadrature: str = "x"
-):
+def plot_joint_correlation(P, X_a, X_b, mode_a: str, mode_b: str, quadrature: str = "x"):
     plt.figure(figsize=(6, 5))
     plt.contourf(X_a, X_b, P, 100, cmap="viridis")
     plt.colorbar(label="Probability density")
@@ -1033,9 +1023,7 @@ def plot_joint_correlation(
     plt.show()
 
 
-def compute_duan_inseparability(
-    state: GaussianState, mode_a: str, mode_b: str
-) -> float:
+def compute_duan_inseparability(state: GaussianState, mode_a: str, mode_b: str) -> float:
     """Duan-Simon two-mode entanglement witness (Duan, Giedke, Cirac & Zoller,
     PRL 84, 2722 (2000)). In this codebase's vacuum=0.5 convention, *every*
     separable (classically-correlated-at-best) state satisfies
