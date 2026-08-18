@@ -42,7 +42,7 @@ logger = logging.getLogger("catsy")
 # ========================================================================
 
 
-def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]):
+def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]) -> Any:
     """Build a QuTiP unitary implementing an orthogonal symplectic O."""
     n_modes = len(a_ops)
     A = O[0::2, 0::2]
@@ -57,7 +57,10 @@ def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]):
     h = 1j * scipy.linalg.logm(U)
     h = 0.5 * (h + h.conj().T)
 
-    H = 0
+    # Starts as a plain int and, once any term is added below, becomes a
+    # QuTiP Qobj -- qutip ships no type stubs, so its true dynamic type is
+    # opaque to mypy regardless.
+    H: Any = 0
     for i in range(n_modes):
         for j in range(n_modes):
             hij = h[i, j]
@@ -77,10 +80,10 @@ class GaussianState:
     displacement: np.ndarray
     covariance: np.ndarray
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._validate()
 
-    def _validate(self):
+    def _validate(self) -> None:
         n_modes = len(self.modes)
         if len(set(self.modes)) != n_modes:
             raise ValueError(f"Duplicate mode names in {self.modes!r}.")
@@ -153,7 +156,7 @@ class GaussianState:
 
     # -- Fock-space bridge --------------------------------------------------
 
-    def to_qutip(self, N_cutoff: int = 15):
+    def to_qutip(self, N_cutoff: int = 15) -> Any:
         """Convert this Gaussian state to a truncated QuTiP density matrix.
 
         The conversion uses a numerically stable Williamson decomposition of the
@@ -239,7 +242,7 @@ class GaussianState:
         G = -Omega @ log_P
         G = 0.5 * (G + G.T)
 
-        H_positive = 0
+        H_positive: Any = 0
         for i in range(2 * n_modes):
             for j in range(2 * n_modes):
                 gij = G[i, j]
@@ -268,7 +271,7 @@ class GaussianState:
 
     # -- Plotting -------------------------------------------------------
 
-    def plot_covariance(self):
+    def plot_covariance(self) -> None:
         """Visualize correlations between all registered modes."""
         ticks = []
         for m in self.modes:
@@ -323,17 +326,19 @@ class GaussianOperations:
         """Multi-mode coherent state |alpha_1> ⊗ ... ⊗ |alpha_n> -- a vacuum
         with each mode displaced by its complex amplitude alpha_k. Passing a
         single scalar broadcasts the same alpha to every mode."""
-        if np.isscalar(alphas):
-            alphas = [alphas] * len(modes)
-        alphas = list(alphas)
-        if len(alphas) != len(modes):
+        alpha_list: list[complex]
+        if isinstance(alphas, int | float | complex):
+            alpha_list = [complex(alphas)] * len(modes)
+        else:
+            alpha_list = list(alphas)
+        if len(alpha_list) != len(modes):
             raise ValueError(
-                f"Got {len(alphas)} alpha(s) for {len(modes)} mode(s); "
+                f"Got {len(alpha_list)} alpha(s) for {len(modes)} mode(s); "
                 "pass one alpha per mode (or a single scalar to broadcast)."
             )
 
         state = GaussianOperations.create_vacuum(modes)
-        for mode, alpha in zip(modes, alphas, strict=True):
+        for mode, alpha in zip(modes, alpha_list, strict=True):
             state = GaussianOperations.apply_displacement(state, mode, alpha)
         return state
 
@@ -485,7 +490,7 @@ class GaussianChannel:
     Y: np.ndarray
     d0: np.ndarray
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if len(set(self.target_modes)) != len(self.target_modes):
             raise ValueError(f"Duplicate target mode names in {self.target_modes!r}.")
 
@@ -601,32 +606,40 @@ class CircuitOperation:
     kwargs: dict[str, Any]
 
 
-def _op_squeeze(state: GaussianState, modes: tuple[str, ...], **kwargs) -> GaussianState:
+def _op_squeeze(
+    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+) -> GaussianState:
     return GaussianOperations.apply_squeezing(state, mode=modes[0], **kwargs)
 
 
-def _op_rotate(state: GaussianState, modes: tuple[str, ...], **kwargs) -> GaussianState:
+def _op_rotate(
+    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+) -> GaussianState:
     return GaussianOperations.apply_phase_rotation(state, mode=modes[0], **kwargs)
 
 
-def _op_displace(state: GaussianState, modes: tuple[str, ...], **kwargs) -> GaussianState:
+def _op_displace(
+    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+) -> GaussianState:
     return GaussianOperations.apply_displacement(state, mode=modes[0], **kwargs)
 
 
 def _op_beam_splitter(
-    state: GaussianState, modes: tuple[str, ...], **kwargs
+    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
 ) -> GaussianState:
     return GaussianOperations.apply_beam_splitter(
         state, mode_a=modes[0], mode_b=modes[1], **kwargs
     )
 
 
-def _op_loss(state: GaussianState, modes: tuple[str, ...], **kwargs) -> GaussianState:
+def _op_loss(
+    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+) -> GaussianState:
     return GaussianOperations.apply_loss(state, mode=modes[0], **kwargs)
 
 
 def _op_thermal_loss(
-    state: GaussianState, modes: tuple[str, ...], **kwargs
+    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
 ) -> GaussianState:
     return LossChannels.thermal_loss(mode=modes[0], **kwargs).apply(state)
 
@@ -668,7 +681,9 @@ class GaussianCircuit:
         self._initial_alphas[mode_name] = alpha
         return self
 
-    def _add_op(self, name: str, modes: tuple[str, ...], **kwargs) -> GaussianCircuit:
+    def _add_op(
+        self, name: str, modes: tuple[str, ...], **kwargs: Any
+    ) -> GaussianCircuit:
         self._operations.append(CircuitOperation(name=name, modes=modes, kwargs=kwargs))
         return self
 
@@ -814,7 +829,9 @@ class GaussianMeasurements:
         """
         if not np.isfinite(phi):
             raise ValueError(f"phi must be finite, got {phi!r}.")
-        if outcome is not None and (not np.isscalar(outcome) or not np.isfinite(outcome)):
+        if outcome is not None and (
+            not isinstance(outcome, int | float) or not np.isfinite(outcome)
+        ):
             raise ValueError("homodyne outcome must be a finite scalar.")
 
         n_modes = len(state.modes)
@@ -924,7 +941,7 @@ class GaussianMeasurements:
 
 def compute_wigner_analytically(
     state: GaussianState, mode_name: str, x_max: float = 4.0, num_points: int = 150
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Wigner function of a single mode, computed analytically from (d, V) —
     no Hilbert-space truncation involved."""
     idx = state.get_mode_index(mode_name)
@@ -951,7 +968,7 @@ def compute_wigner_analytically(
     return W, X, P
 
 
-def plot_wigner(W, X, P, mode_name: str):
+def plot_wigner(W: np.ndarray, X: np.ndarray, P: np.ndarray, mode_name: str) -> None:
     plt.figure(figsize=(6, 5))
     span = max(np.max(W), np.abs(np.min(W)))
     contour = plt.contourf(X, P, W, 100, cmap="RdBu_r", vmin=-span, vmax=span)
@@ -972,7 +989,7 @@ def compute_joint_correlation(
     x_max: float = 3.0,
     num_points: int = 150,
     quadrature: str = "x",
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Joint probability distribution of the same quadrature on two modes
     (e.g. x_a vs x_b, or p_a vs p_b) -- the tool for actually *seeing* an
     EPR-style correlation or anti-correlation, as opposed to only reading it
@@ -1012,7 +1029,14 @@ def compute_joint_correlation(
     return P, X_a, X_b
 
 
-def plot_joint_correlation(P, X_a, X_b, mode_a: str, mode_b: str, quadrature: str = "x"):
+def plot_joint_correlation(
+    P: np.ndarray,
+    X_a: np.ndarray,
+    X_b: np.ndarray,
+    mode_a: str,
+    mode_b: str,
+    quadrature: str = "x",
+) -> None:
     plt.figure(figsize=(6, 5))
     plt.contourf(X_a, X_b, P, 100, cmap="viridis")
     plt.colorbar(label="Probability density")
@@ -1047,4 +1071,4 @@ def compute_duan_inseparability(state: GaussianState, mode_a: str, mode_b: str) 
     var_p_sum = (
         V[idx_a + 1, idx_a + 1] + V[idx_b + 1, idx_b + 1] + 2 * V[idx_a + 1, idx_b + 1]
     )
-    return var_x_diff + var_p_sum
+    return float(var_x_diff + var_p_sum)

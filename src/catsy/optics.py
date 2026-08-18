@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 import qutip as qt
@@ -17,10 +17,16 @@ from .gaussian import GaussianCircuit, GaussianState
 # Component blueprint
 # ---------------------------------------------------------------------------
 
+
+class _ComponentSpec(TypedDict):
+    ports: int
+    kwargs: tuple[str, ...]
+
+
 # Structural contract for each component type.  Numerical/physical execution
 # remains in ``GaussianOperations``; this table only defines what a layout
 # component must look like before it can be registered.
-_COMPONENT_SPECS = {
+_COMPONENT_SPECS: dict[str, _ComponentSpec] = {
     "BeamSplitter": {"ports": 2, "kwargs": ("eta",)},
     "Loss": {"ports": 1, "kwargs": ("eta",)},
     "Squeezing": {"ports": 1, "kwargs": ("r", "theta")},
@@ -334,12 +340,12 @@ class KerrCavity:
 
     def run(
         self,
-        rho_init,
+        rho_init: Any,
         tlist: np.ndarray,
         amp: float,
         t0: float,
         sigma: float,
-    ) -> list:
+    ) -> list[Any]:
         """Evolve ``rho_init`` under the driven Kerr-cavity master equation.
 
         ``amp``, ``t0`` and ``sigma`` define the Gaussian drive pulse.
@@ -359,15 +365,16 @@ class KerrCavity:
         a = qt.destroy(self.N_cutoff)
         H_kerr = self.K * a.dag() * a.dag() * a * a
 
-        def pulse_shape(t, amp, t0, sigma):
-            return amp * np.exp(-((t - t0) ** 2) / (2 * sigma**2))
+        def pulse_shape(t: float, amp: float, t0: float, sigma: float) -> float:
+            return float(amp * np.exp(-((t - t0) ** 2) / (2 * sigma**2)))
 
         H_total = [H_kerr, [a + a.dag(), pulse_shape]]
         c_ops = [np.sqrt(self.kappa) * a] if self.kappa > 0 else []
         args = {"amp": float(amp), "t0": float(t0), "sigma": float(sigma)}
 
         result = qt.mesolve(H_total, rho_init, tlist, c_ops=c_ops, args=args)
-        return result.states
+        states: list[Any] = result.states
+        return states
 
 
 class MachZehnderInterferometer:
@@ -392,7 +399,7 @@ class MachZehnderInterferometer:
         self.N_cutoff = N_cutoff
         self.loss_time = float(loss_time)
 
-    def scan(self, psi_cat_single, theta_list: np.ndarray) -> dict:
+    def scan(self, psi_cat_single: Any, theta_list: np.ndarray) -> dict[str, Any]:
         """Scan the phase of the lossy arm and return output observables.
 
         The model is input -> 50:50 beam splitter -> fixed-time amplitude
@@ -437,7 +444,7 @@ class MachZehnderInterferometer:
         else:
             rho_after_loss = psi_after_BS1
 
-        results = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
+        results: dict[str, Any] = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
 
         for theta in theta_list:
             U_phase = (1j * float(theta) * n1_op).expm()

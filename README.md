@@ -136,7 +136,7 @@ These conventions are used consistently by the Gaussian and Fock-space interface
 The project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 
 ```bash
-git clone https://github.com/raiyiz/catsy.git
+git clone https://gitlab.uni-hannover.de/inl/catsy.git
 cd catsy
 uv sync
 ```

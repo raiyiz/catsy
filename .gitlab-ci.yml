@@ -7,6 +7,7 @@ workflow:
 
 stages:
   - test
+  - typecheck
   - docs
 
 .uv-job:
@@ -64,7 +65,7 @@ ruff:
 
 mypy:
   extends: .uv-job
-  stage: test
+  stage: typecheck
   # Type checking covers production Python and dependency metadata.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'

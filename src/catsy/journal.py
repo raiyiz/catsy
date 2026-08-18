@@ -68,7 +68,10 @@ def _atomic_write_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
     # appends ".npz" to string/Path targets that don't already end with it,
     # which would otherwise turn "entry_x.npz.tmp" into "entry_x.npz.tmp.npz".
     with open(tmp_path, "wb") as f:
-        np.savez_compressed(f, **arrays)
+        # numpy's stub gives savez_compressed a concrete `allow_pickle: bool`
+        # keyword alongside **kwds, so unpacking a dict[str, ndarray] here is
+        # flagged even though none of our array names collides with it.
+        np.savez_compressed(f, **arrays)  # type: ignore[arg-type]
     tmp_path.replace(path)
 
 
@@ -236,7 +239,8 @@ class JournalEntry:
         if npz_key in self._pending_arrays:
             return self._pending_arrays[npz_key]
         if self._npz_file is not None and npz_key in self._npz_file.files:
-            return self._npz_file[npz_key]
+            array: np.ndarray = self._npz_file[npz_key]
+            return array
         raise KeyError(f"No array logged under key {npz_key!r}.")
 
     def get_final_state(self, run: SimulationRun) -> GaussianState:
