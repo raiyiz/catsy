@@ -97,7 +97,7 @@ class OpticalComponent:
                 )
 
         if self.op_type in {"BeamSplitter", "Loss"}:
-            eta = float(self.kwargs["eta"])
+            eta = self.kwargs["eta"]
             if not 0.0 <= eta <= 1.0:
                 raise ValueError(
                     f"{self.op_type} parameter 'eta' must be in [0, 1], got {eta}."
@@ -334,8 +334,8 @@ class KerrCavity:
         _check_non_negative(kappa, "kappa")
         if not np.isfinite(K):
             raise ValueError(f"K must be finite, got {K!r}.")
-        self.K = float(K)
-        self.kappa = float(kappa)
+        self.K = K
+        self.kappa = kappa
         self.N_cutoff = N_cutoff
 
     def run(
@@ -370,7 +370,7 @@ class KerrCavity:
 
         H_total = [H_kerr, [a + a.dag(), pulse_shape]]
         c_ops = [np.sqrt(self.kappa) * a] if self.kappa > 0 else []
-        args = {"amp": float(amp), "t0": float(t0), "sigma": float(sigma)}
+        args = {"amp": amp, "t0": t0, "sigma": sigma}
 
         result = qt.mesolve(H_total, rho_init, tlist, c_ops=c_ops, args=args)
         states: list[Any] = result.states
@@ -395,9 +395,9 @@ class MachZehnderInterferometer:
         _check_positive_int(N_cutoff, "N_cutoff")
         _check_non_negative(kappa, "kappa")
         _check_non_negative(loss_time, "loss_time")
-        self.kappa = float(kappa)
+        self.kappa = kappa
         self.N_cutoff = N_cutoff
-        self.loss_time = float(loss_time)
+        self.loss_time = loss_time
 
     def scan(self, psi_cat_single: Any, theta_list: np.ndarray) -> dict[str, Any]:
         """Scan the phase of the lossy arm and return output observables.
@@ -444,10 +444,15 @@ class MachZehnderInterferometer:
         else:
             rho_after_loss = psi_after_BS1
 
-        results: dict[str, Any] = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
+        results: dict[str, Any] = {
+            "theta": theta_list,
+            "n1": [],
+            "n2": [],
+            "parity1": [],
+        }
 
         for theta in theta_list:
-            U_phase = (1j * float(theta) * n1_op).expm()
+            U_phase = (1j * theta * n1_op).expm()
             rho_after_phase = U_phase * rho_after_loss * U_phase.dag()
             rho_out = U_BS * rho_after_phase * U_BS.dag()
 

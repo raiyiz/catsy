@@ -122,9 +122,6 @@ class GaussianState:
                 f"state={self.modes!r}, requested={requested!r}."
             )
 
-        if len(set(requested)) != len(requested):
-            raise ValueError(f"Duplicate mode names in requested order: {requested!r}.")
-
         if requested == self.modes:
             return self.copy()
 
@@ -194,7 +191,7 @@ class GaussianState:
 
         # The Williamson diagonal state is a tensor product of thermal states.
         rho_list = [
-            qt.thermal_dm(N_cutoff, max(float(nu) - 0.5, 0.0)) for nu in symplectic_values
+            qt.thermal_dm(N_cutoff, max(nu - 0.5, 0.0)) for nu in symplectic_values
         ]
         rho = qt.tensor(*rho_list)
 
@@ -256,8 +253,8 @@ class GaussianState:
         # QuTiP's displacement convention is alpha=(dx+i*dp)/sqrt(2), which
         # directly matches the x,p convention used by GaussianState.
         for i in range(n_modes):
-            dx = float(self.displacement[2 * i])
-            dp = float(self.displacement[2 * i + 1])
+            dx = self.displacement[2 * i]
+            dp = self.displacement[2 * i + 1]
             if abs(dx) <= TOL_PHYSICALITY and abs(dp) <= TOL_PHYSICALITY:
                 continue
 
@@ -710,7 +707,7 @@ class GaussianCircuit:
             x, p = np.sqrt(2.0) * np.real(alpha), np.sqrt(2.0) * np.imag(alpha)
         elif x is None or p is None:
             raise ValueError("Must supply either `alpha` or both `x` and `p`.")
-        return self._add_op("Displacement", (mode,), x=float(x), p=float(p))
+        return self._add_op("Displacement", (mode,), x=x, p=p)
 
     def beam_splitter(self, mode_a: str, mode_b: str, eta: float) -> GaussianCircuit:
         return self._add_op("BeamSplitter", (mode_a, mode_b), eta=eta)
@@ -849,7 +846,7 @@ class GaussianMeasurements:
             i for i in range(2 * n_modes) if i != idx_x and i != idx_m + 1
         ]
 
-        V_MM = float(V_rot[idx_x, idx_x])
+        V_MM = V_rot[idx_x, idx_x]
         if not np.isfinite(V_MM) or V_MM <= TOL_PHYSICALITY:
             raise ValueError(
                 f"homodyne measurement variance must be finite and positive; got {V_MM:.3e}."
@@ -859,14 +856,14 @@ class GaussianMeasurements:
         V_RM = V_rot[remaining_indices, idx_x]
         V_RR = V_rot[np.ix_(remaining_indices, remaining_indices)]
 
-        d_M = float(d_rot[idx_x])
+        d_M = d_rot[idx_x]
         d_R = d_rot[remaining_indices]
 
         if outcome is None:
             rng = rng if rng is not None else np.random.default_rng()
-            measured_value = float(rng.normal(loc=d_M, scale=np.sqrt(V_MM)))
+            measured_value = rng.normal(loc=d_M, scale=np.sqrt(V_MM))
         else:
-            measured_value = float(outcome)
+            measured_value = outcome
 
         gain = V_RM / V_MM
         d_cond = d_R + gain * (measured_value - d_M)
