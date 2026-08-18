@@ -337,7 +337,7 @@ class GaussianOperations:
             )
 
         state = GaussianOperations.create_vacuum(modes)
-        for mode, alpha in zip(modes, alphas):
+        for mode, alpha in zip(modes, alphas, strict=True):
             state = GaussianOperations.apply_displacement(state, mode, alpha)
         return state
 
@@ -672,7 +672,7 @@ class GaussianCircuit:
             raise ValueError(
                 f"Mode '{mode_name}' is already registered in this circuit."
             )
-        self.modes = self.modes + (mode_name,)
+        self.modes = (*self.modes, mode_name)
         self._initial_alphas[mode_name] = alpha
         return self
 
@@ -824,9 +824,8 @@ class GaussianMeasurements:
         """
         if not np.isfinite(phi):
             raise ValueError(f"phi must be finite, got {phi!r}.")
-        if outcome is not None:
-            if not np.isscalar(outcome) or not np.isfinite(outcome):
-                raise ValueError("homodyne outcome must be a finite scalar.")
+        if outcome is not None and (not np.isscalar(outcome) or not np.isfinite(outcome)):
+            raise ValueError("homodyne outcome must be a finite scalar.")
 
         n_modes = len(state.modes)
         idx_m = state.get_mode_index(measured_mode)

@@ -1,40 +1,40 @@
 """Small continuous-variable quantum-optics toolkit."""
 
+from .fock import FockOperations
 from .gaussian import (
-    GaussianState,
-    GaussianOperations,
-    GaussianChannel,
-    LossChannels,
     CircuitOperation,
+    GaussianChannel,
     GaussianCircuit,
     GaussianMeasurements,
-    compute_wigner_analytically,
-    plot_wigner,
-    compute_joint_correlation,
-    plot_joint_correlation,
+    GaussianOperations,
+    GaussianState,
+    LossChannels,
     compute_duan_inseparability,
+    compute_joint_correlation,
+    compute_wigner_analytically,
+    plot_joint_correlation,
+    plot_wigner,
 )
-from .fock import FockOperations
-from .optics import KerrCavity, MachZehnderInterferometer, OpticalSetup
 from .journal import JournalEntry, SimulationJournal
+from .optics import KerrCavity, MachZehnderInterferometer, OpticalSetup
 
 __all__ = [
-    "GaussianState",
-    "GaussianOperations",
-    "GaussianChannel",
-    "LossChannels",
     "CircuitOperation",
+    "FockOperations",
+    "GaussianChannel",
     "GaussianCircuit",
     "GaussianMeasurements",
-    "compute_wigner_analytically",
-    "plot_wigner",
-    "compute_joint_correlation",
-    "plot_joint_correlation",
-    "compute_duan_inseparability",
-    "FockOperations",
+    "GaussianOperations",
+    "GaussianState",
+    "JournalEntry",
     "KerrCavity",
+    "LossChannels",
     "MachZehnderInterferometer",
     "OpticalSetup",
-    "JournalEntry",
     "SimulationJournal",
+    "compute_duan_inseparability",
+    "compute_joint_correlation",
+    "compute_wigner_analytically",
+    "plot_joint_correlation",
+    "plot_wigner",
 ]

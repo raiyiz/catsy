@@ -2,9 +2,8 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from catsy.gaussian import GaussianCircuit, GaussianOperations, LossChannels
 from catsy.fock import FockOperations
-
+from catsy.gaussian import GaussianCircuit, GaussianOperations, LossChannels
 
 # Gaussian -> Fock bridge
 

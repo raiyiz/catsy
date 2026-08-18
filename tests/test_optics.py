@@ -5,9 +5,18 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catsy.gaussian import GaussianCircuit, GaussianOperations, compute_duan_inseparability
 from catsy.fock import FockOperations
-from catsy.optics import KerrCavity, MachZehnderInterferometer, OpticalComponent, OpticalSetup
+from catsy.gaussian import (
+    GaussianCircuit,
+    GaussianOperations,
+    compute_duan_inseparability,
+)
+from catsy.optics import (
+    KerrCavity,
+    MachZehnderInterferometer,
+    OpticalComponent,
+    OpticalSetup,
+)
 
 # Layout assembly and serialization
 
@@ -196,7 +205,7 @@ def test_full_cavity_multipanel_plot_demo():
     theta_list = np.linspace(0, 2 * np.pi, 60)
     results = MachZehnderInterferometer(kappa=0.2, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+    _fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     axes[0].plot(theta_list, results["n1"])
     axes[0].set_title("Mean photon number, arm 1")
     axes[1].plot(theta_list, results["n2"])
@@ -322,7 +331,7 @@ def test_kerr_cat_state_generation(plot_enabled):
         fig, axes = plt.subplots(2, 2, figsize=(10, 10))
         xvec = np.linspace(-5, 5, 200)
         cont = None
-        for ax, idx, label in zip(axes.flat, snapshot_indices, snapshot_labels):
+        for ax, idx, label in zip(axes.flat, snapshot_indices, snapshot_labels, strict=True):
             W = qt.wigner(states[idx], xvec, xvec)
             cont = ax.contourf(xvec, xvec, W, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
             ax.set_title(label)
@@ -370,7 +379,7 @@ def test_cat_state_single_shot_through_mzi():
     assert rho_out_port1.tr() == pytest.approx(1.0, abs=1e-6)
     assert rho_out_port2.tr() == pytest.approx(1.0, abs=1e-6)
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(13, 5))
     xvec = np.linspace(-4, 4, 200)
 
     W_port1 = qt.wigner(rho_out_port1, xvec, xvec)
@@ -405,7 +414,7 @@ def test_cat_mzi_phase_scan_fringes():
 
     results = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    _fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
     ax1.plot(
         theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2

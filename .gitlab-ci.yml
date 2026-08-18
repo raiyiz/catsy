@@ -44,6 +44,23 @@ pytest:
       junit: pytest-results.xml
     expire_in: 1 week
 
+ruff:
+  extends: .uv-job
+  stage: test
+  # Same change-based skip as the pytest job above.
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - src/**/*
+        - tests/**/*
+        - pyproject.toml
+        - uv.lock
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - uv sync --group dev
+    - uv run ruff check .
+
 # Compiles the architectural-specs PDF from docs/book.typ. Manual/on-demand
 # only (press "Run" in the pipeline view or MR widget) -- it doesn't gate
 # merges and shouldn't run on every push. `expose_as` surfaces a direct link

@@ -1,7 +1,7 @@
 [project]
 name = "catsy"
 version = "0.1.0"
-description = "Add your description here"
+description = "A continuous-variable quantum-optics toolkit built around Gaussian states in phase space."
 readme = "README.md"
 authors = [
     { name = "gsec", email = "gui@posteo.net" }
@@ -16,10 +16,25 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipython>=9.16.1",
-    "isort>=8.0.1",
     "pytest>=9.1.1",
+    "ruff>=0.16.3",
 ]
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+# E4/E7/E9/F: ruff's own default set. I: import sorting (replaces the
+# unused `isort` dev dependency). UP: pyupgrade. B: bugbear. RUF: ruff's
+# own extra checks.
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "RUF"]
+ignore = [
+    "E741",   # single-letter names like `O`, `V` are the paper's own notation here
+    "RUF001", # Greek letters (alpha, theta, ...) are used intentionally in labels/docstrings
+    "RUF002",
+    "RUF003",
+]

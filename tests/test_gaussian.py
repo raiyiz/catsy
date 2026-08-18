@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 import qutip as qt
+from matplotlib import pyplot as plt
+
 from catsy.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
 from catsy.gaussian import (
     OPERATION_REGISTRY,
@@ -16,7 +18,6 @@ from catsy.gaussian import (
     plot_joint_correlation,
     plot_wigner,
 )
-from matplotlib import pyplot as plt
 
 # Analytic primitive checks
 
@@ -488,7 +489,7 @@ def test_homodyne_measurement_collapses_epr_correlation():
     assert val == 2.5
     assert collapsed.modes == ("b",)
     # EPR correlations mean a measurement on 'a' shifts b's mean the opposite way.
-    val_neg, collapsed_neg = GaussianMeasurements.homodyne_measurement(
+    _val_neg, collapsed_neg = GaussianMeasurements.homodyne_measurement(
         epr_state, measured_mode="a", phi=0.0, outcome=-2.5
     )
     assert np.sign(collapsed.displacement[0]) != np.sign(collapsed_neg.displacement[0])

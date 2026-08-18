@@ -11,8 +11,7 @@ import numpy as np
 import qutip as qt
 
 from .core import _check_non_negative, _check_positive_int
-from .gaussian import GaussianCircuit
-from .gaussian import GaussianState
+from .gaussian import GaussianCircuit, GaussianState
 
 # ---------------------------------------------------------------------------
 # Component blueprint

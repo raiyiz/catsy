@@ -43,8 +43,7 @@ from typing import Any
 
 import numpy as np
 
-from .gaussian import GaussianCircuit
-from .gaussian import GaussianState
+from .gaussian import GaussianCircuit, GaussianState
 
 SCHEMA_VERSION = "2.1.0"
 
@@ -53,7 +52,7 @@ def _make_entry_id() -> str:
     """A sortable, filesystem-friendly entry ID: a UTC timestamp prefix (so
     `ls` / `glob` already comes back in creation order) plus a short random
     suffix (so concurrent entries never collide)."""
-    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
     return f"{stamp}_{uuid.uuid4().hex[:8]}"
 
 
@@ -384,7 +383,7 @@ class SimulationJournal:
         (which can be arbitrarily large) are never opened here."""
         summaries = []
         for file in self.storage_path.glob("entry_*.json"):
-            with open(file, "r") as f:
+            with open(file) as f:
                 meta = json.load(f)["metadata"]
             summaries.append(
                 {
