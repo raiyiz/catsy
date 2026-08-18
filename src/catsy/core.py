@@ -187,7 +187,7 @@ def _williamson_decomposition(
     for i in range(0, dim, 2):
         block = T[i : i + 2, i : i + 2]
         offdiag = 0.5 * (block[0, 1] - block[1, 0])
-        nu = abs(float(offdiag))
+        nu = abs(offdiag)
         if nu <= tol:
             raise ValueError(
                 "covariance has a numerically singular symplectic eigenvalue"
