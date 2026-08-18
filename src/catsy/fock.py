@@ -17,7 +17,7 @@ class FockOperations:
     """
 
     @staticmethod
-    def _validate_state(rho, N_cutoff: int, mode_idx: int):
+    def _validate_state(rho: qt.Qobj, N_cutoff: int, mode_idx: int) -> int:
         if not isinstance(rho, qt.Qobj):
             raise TypeError(f"rho must be a QuTiP Qobj, got {type(rho).__name__}.")
         if not rho.isoper:
@@ -41,7 +41,12 @@ class FockOperations:
         return n_modes
 
     @staticmethod
-    def _mode_operator(op_1mode, n_modes: int, mode_idx: int, N_cutoff: int):
+    def _mode_operator(
+        op_1mode: qt.Qobj,
+        n_modes: int,
+        mode_idx: int,
+        N_cutoff: int,
+    ) -> qt.Qobj:
         if n_modes == 1:
             return op_1mode
         op_list = [qt.qeye(N_cutoff) for _ in range(n_modes)]
@@ -49,7 +54,11 @@ class FockOperations:
         return qt.tensor(*op_list)
 
     @staticmethod
-    def _apply_and_renormalize(rho, op, label: str):
+    def _apply_and_renormalize(
+        rho: qt.Qobj,
+        op: qt.Qobj,
+        label: str,
+    ) -> qt.Qobj:
         rho_new = op * rho * op.dag()
         trace_val = rho_new.tr()
         if abs(trace_val) < TOL_PHYSICALITY:
@@ -59,7 +68,11 @@ class FockOperations:
         return rho_new / trace_val
 
     @staticmethod
-    def photon_subtraction(rho, mode_idx: int = 0, N_cutoff: int = 20):
+    def photon_subtraction(
+        rho: qt.Qobj,
+        mode_idx: int = 0,
+        N_cutoff: int = 20,
+    ) -> qt.Qobj:
         """Apply photon subtraction ``rho -> a rho a†`` and renormalize.
 
         ``rho`` must already be represented in the QuTiP Fock basis.  For a
@@ -72,7 +85,11 @@ class FockOperations:
         return FockOperations._apply_and_renormalize(rho, a_op, "photon_subtraction")
 
     @staticmethod
-    def photon_addition(rho, mode_idx: int = 0, N_cutoff: int = 20):
+    def photon_addition(
+        rho: qt.Qobj,
+        mode_idx: int = 0,
+        N_cutoff: int = 20,
+    ) -> qt.Qobj:
         """Apply photon addition ``rho -> a† rho a`` and renormalize.
 
         ``rho`` must already be represented in the QuTiP Fock basis.  For a

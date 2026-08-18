@@ -62,6 +62,22 @@ ruff:
     - uv run ruff check .
     - uv run ruff format --check .
 
+mypy:
+  extends: .uv-job
+  stage: test
+  # Type checking covers production Python and dependency metadata.
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - src/**/*
+        - pyproject.toml
+        - uv.lock
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - uv sync --group dev
+    - uv run mypy
+
 # Compiles the architectural-specs PDF from docs/book.typ. Manual/on-demand
 # only (press "Run" in the pipeline view or MR widget) -- it doesn't gate
 # merges and shouldn't run on every push. `expose_as` surfaces a direct link
