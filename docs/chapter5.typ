@@ -144,7 +144,7 @@ def reorder_modes(self, modes: tuple[str, ...] | list[str]) -> GaussianState:
 ---
 
 
-== Literature
+=== Literature
 The preparation of coherent, squeezed, and EPR states and the phase-space/Fock-space bridge are treated in depth in:
 
 - #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[A. Serafini, *Quantum Continuous Variables: A Primer of Theoretical Methods*, 2nd ed. (CRC Press, 2023).]

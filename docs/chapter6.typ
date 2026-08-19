@@ -87,7 +87,7 @@ The signs of the cross terms directly mirror the structure of the EPR state: the
 ---
 
 
-== Literature
+=== Literature
 The diagnostics in this chapter connect directly to the standard literature on Gaussian phase space and continuous-variable entanglement cited in Chapter 1 (Weedbrook et al. 2012), plus specifically:
 
 - #link("https://doi.org/10.1140/epjst/e2012-01532-4")[S. Olivares, “Quantum optics in the phase space: A tutorial on Gaussian states,” *EPJ Special Topics* 203, 3–24 (2012).]

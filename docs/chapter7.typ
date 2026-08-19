@@ -95,7 +95,7 @@ Afterwards, for each value of the supplied phase list `theta_list`, the phase op
 ---
 
 
-== Literature
+=== Literature
 The non-Gaussian operations and dynamical models in this chapter are connected to the following primary literature; Weedbrook et al. (2012, Chapter 1) provides the Gaussian/non-Gaussian boundary that motivates the chapter:
 
 - #link("https://doi.org/10.1103/PhysRevA.61.032302")[T. Opatrný, G. Kurizki, and D.-G. Welsch, “Improvement on teleportation of continuous variables by photon subtraction via conditional measurement,” *Physical Review A* 61, 032302 (2000).]

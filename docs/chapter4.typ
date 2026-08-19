@@ -142,7 +142,7 @@ def heterodyne_measurement(
 ---
 
 
-== Literature
+=== Literature
 For homodyne and heterodyne detection and Gaussian conditioning, see the general background in Chapter 1 (Weedbrook et al. 2012; Braunstein and van Loock 2005; Serafini 2023), plus specifically:
 
 - #link("https://doi.org/10.1002/3527602976.ch3")[W. P. Schleich, *Quantum Optics in Phase Space*, especially the chapters on Wigner functions and quantum-state reconstruction.]

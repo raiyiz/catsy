@@ -68,7 +68,7 @@ Dimensions are strictly enforced to be $2n$. A malformed input immediately raise
 ---
 
 
-== Literature
+=== Literature
 The mathematical conventions in this chapter are standard in Gaussian quantum information and phase-space quantum optics. For an advanced treatment, see:
 
 - #link("https://doi.org/10.1103/RevModPhys.84.621")[C. Weedbrook et al., “Gaussian quantum information,” *Reviews of Modern Physics* 84, 621–669 (2012).]

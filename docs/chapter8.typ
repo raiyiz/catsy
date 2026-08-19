@@ -79,7 +79,7 @@ Like `GaussianCircuit`, `OpticalSetup` is JSON-persistent via `to_dict`/`save_la
 ---
 
 
-== Literature
+=== Literature
 The component-level interpretation of beam splitters, phase rotations, squeezing, and loss is standard Gaussian/linear quantum optics, covered by the same background literature as Chapter 1 (Weedbrook et al. 2012; Braunstein and van Loock 2005), plus specifically:
 
 - #link("https://doi.org/10.1002/3527602976.ch13")[W. P. Schleich, *Quantum Optics in Phase Space*, chapter on optical interferometry (Wiley-VCH, 2001).]

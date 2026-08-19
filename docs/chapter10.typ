@@ -105,7 +105,7 @@ pytest --plot
 ---
 
 
-== Literature and reproducibility
+=== Literature and reproducibility
 The practical workflow recommended here is supported by:
 
 - #link("https://doi.org/10.1371/journal.pcbi.1005510")[G. Wilson et al., “Good enough practices in scientific computing,” *PLoS Computational Biology* 13, e1005510 (2017).]
