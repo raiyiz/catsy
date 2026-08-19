@@ -5,10 +5,10 @@
 // ==========================================
 = Chapter 4: Quantum Measurement Processes & State Conditioning
 
-Measurements on continuous variables induce a genuine, irreversible projection of the overall quantum state. Since the toolkit operates in the Gaussian phase-space layer, the mathematical description of wavefunction collapse (*Wigner collapse*) must manage without infinite-dimensional projection operators. The framework solves this via an exact implementation of the symplectic Schur complement in the `GaussianMeasurements` class.
+Measurements on continuous variables induce an irreversible conditional state update of the overall quantum state. Since the toolkit operates in the Gaussian phase-space layer, the update can be expressed directly in terms of conditional Gaussian moments rather than explicit infinite-dimensional projection operators. The framework implements this using the covariance-matrix conditioning (Schur-complement) formulas standard in Gaussian quantum measurement theory. See #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
 == Homodyne measurement (`homodyne_measurement`)
-Homodyne detection measures a freely chosen linear combination of the canonical quadrature operators $q$ and $p$ of a target mode. This process is intrinsically stochastic: the system collapses onto the eigenstate of the quadrature operator, and the remaining modes are *conditioned* (entangled subsystems adjust their statistics instantaneously).
+Homodyne detection measures a freely chosen linear combination of the canonical quadrature operators $q$ and $p$ of a target mode. This process is intrinsically stochastic: the idealized measurement projects onto a quadrature eigenstate, while the remaining modes are *conditioned* on the measurement result. In a physical implementation, the conditional update is the relevant operational statement; the phase-space treatment avoids requiring an explicit infinite-energy eigenstate representation.
 
 === Mathematical transformation & mode rotation
 To generalize the measurement to an arbitrary local-oscillator angle $phi$ (where $phi=0$ corresponds to the position quadrature $q$ and $phi=pi/2$ to the momentum quadrature $p$), the code first transforms the system via a global passive rotation matrix $R_("global")$ into the eigenbasis of the measurement apparatus. This reduces every homodyne detection mathematically to a pure measurement of the first quadrature ($q$) of the target mode.
@@ -24,7 +24,7 @@ $ V_("rot") = mat(V_(M M), V_(M R); V_(R M), V_(R R)) $
 If no explicit measurement value (`outcome`) is given, the toolkit computes the physically correct stochastic measurement outcome. The probability distribution of the outcome $x_m$ is a Gaussian centered on the rotated mean of the quadrature, with a width given by the quantum variance:
 $x_m "sim" N(d_M, sqrt(V_(M M)))$
 
-The collapse of the remaining modes is then computed via the *Schur complement*. The evolution of the displacement vector $d_("cond")$ and the covariance matrix $V_("cond")$ is implemented in the code exactly as follows:
+The conditional state of the remaining modes is then computed via the *Schur complement*, which is the classical-looking matrix form taken by Gaussian quantum conditioning. The evolution of the displacement vector $d_("cond")$ and the covariance matrix $V_("cond")$ is implemented in the code exactly as follows:
 
 ```python
 @staticmethod
@@ -88,7 +88,7 @@ Heterodyne (or dual-homodyne) detection measures both conjugate quadratures ($q$
 === The mathematical vacuum-port model
 Physically, heterodyne measurement corresponds to splitting the target mode on a 50:50 beam splitter whose second input is populated with an uncorrelated vacuum state. The two outputs are then each homodyne-detected (one measures $q$, the other $p$).
 
-This intrinsic quantum noise is simulated elegantly and efficiently in the code, without needing to explicitly construct the beam splitter in phase space: the vacuum noise is added directly as an additive term to the measurement block:
+This intrinsic quantum noise is simulated directly in the code, without needing to explicitly construct the beam splitter in phase space: the vacuum noise is added directly as an additive term to the measurement block:
 $ V_("eff") = V_(M M) + 1/2 bb(1)_2 $
 
 === Implementation & noise injection
@@ -140,3 +140,11 @@ def heterodyne_measurement(
 - *`V_cond = V_RR - V_RM @ V_eff_inv @ V_MR`*: because the measurement noise means less information can be extracted about the system than with a homodyne measurement, the modified `V_eff_inv` ensures the variances of the remaining system $V_("cond")$ shrink less strongly. The eigenvalues of the resulting covariance matrix remain guaranteed to stay above the vacuum limit ($>= 0.5$).
 
 ---
+
+
+== Literature
+For homodyne and heterodyne detection and Gaussian conditioning, see the general background in Chapter 1 (Weedbrook et al. 2012; Braunstein and van Loock 2005; Serafini 2023), plus specifically:
+
+- #link("https://doi.org/10.1002/3527602976.ch3")[W. P. Schleich, *Quantum Optics in Phase Space*, especially the chapters on Wigner functions and quantum-state reconstruction.]
+
+This reference provides useful background for the distinction between ideal homodyne projection and the noisy coherent-state POVM associated with heterodyne detection.

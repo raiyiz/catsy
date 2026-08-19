@@ -8,10 +8,10 @@ phase-space diagnostics. QuTiP is a required core dependency of catsy.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Protocol, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,6 +33,15 @@ from .core import (
     _validate_physical_covariance,
     _williamson_decomposition,
 )
+from .types import (
+    FloatArray,
+    GaussianChannelData,
+    GaussianCircuitData,
+    GaussianStateData,
+    Modes,
+    OperationParameters,
+    ParameterValue,
+)
 
 logger = logging.getLogger("catsy")
 
@@ -42,7 +51,7 @@ logger = logging.getLogger("catsy")
 # ========================================================================
 
 
-def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]) -> Any:
+def _qutip_passive_unitary(O: np.ndarray, a_ops: list[qt.Qobj]) -> qt.Qobj:
     """Build a QuTiP unitary implementing an orthogonal symplectic O."""
     n_modes = len(a_ops)
     A = O[0::2, 0::2]
@@ -60,14 +69,15 @@ def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]) -> Any:
     # Starts as a plain int and, once any term is added below, becomes a
     # QuTiP Qobj -- qutip ships no type stubs, so its true dynamic type is
     # opaque to mypy regardless.
-    H: Any = 0
+    H: qt.Qobj | None = None
     for i in range(n_modes):
         for j in range(n_modes):
             hij = h[i, j]
             if abs(hij) > TOL_PHYSICALITY:
-                H += hij * a_ops[i].dag() * a_ops[j]
+                term = hij * a_ops[i].dag() * a_ops[j]
+                H = term if H is None else H + term
 
-    if H == 0:
+    if H is None:
         return qt.tensor(*[qt.qeye(a.dims[0][0]) for a in a_ops])
     return (-1j * H).expm()
 
@@ -76,9 +86,9 @@ def _qutip_passive_unitary(O: np.ndarray, a_ops: list[Any]) -> Any:
 class GaussianState:
     """A multi-mode Gaussian state, fully described by (modes, d, V)."""
 
-    modes: tuple[str, ...]
-    displacement: np.ndarray
-    covariance: np.ndarray
+    modes: Modes
+    displacement: FloatArray
+    covariance: FloatArray
 
     def __post_init__(self) -> None:
         self._validate()
@@ -106,7 +116,7 @@ class GaussianState:
             raise ValueError(f"Mode '{mode_name}' is not present in this state.")
         return self.modes.index(mode_name) * 2
 
-    def reorder_modes(self, modes: tuple[str, ...] | list[str]) -> GaussianState:
+    def reorder_modes(self, modes: Sequence[str]) -> GaussianState:
         """Return an equivalent state with quadratures arranged in ``modes`` order.
 
         The requested modes must contain exactly the same unique mode names as
@@ -153,7 +163,7 @@ class GaussianState:
 
     # -- Fock-space bridge --------------------------------------------------
 
-    def to_qutip(self, N_cutoff: int = 15) -> Any:
+    def to_qutip(self, N_cutoff: int = 15) -> qt.Qobj:
         """Convert this Gaussian state to a truncated QuTiP density matrix.
 
         The conversion uses a numerically stable Williamson decomposition of the
@@ -239,14 +249,15 @@ class GaussianState:
         G = -Omega @ log_P
         G = 0.5 * (G + G.T)
 
-        H_positive: Any = 0
+        H_positive: qt.Qobj | None = None
         for i in range(2 * n_modes):
             for j in range(2 * n_modes):
                 gij = G[i, j]
                 if np.abs(gij) > TOL_PHYSICALITY:
-                    H_positive += 0.5 * gij * r_ops[i] * r_ops[j]
+                    term = 0.5 * gij * r_ops[i] * r_ops[j]
+                    H_positive = term if H_positive is None else H_positive + term
 
-        if H_positive != 0:
+        if H_positive is not None:
             U_positive = (-1j * H_positive).expm()
             rho = U_positive * rho * U_positive.dag()
 
@@ -284,7 +295,7 @@ class GaussianState:
 
     # -- Serialization ----------------------------------------------------
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> GaussianStateData:
         return {
             "modes": list(self.modes),
             "displacement": self.displacement.tolist(),
@@ -292,7 +303,7 @@ class GaussianState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> GaussianState:
+    def from_dict(cls, data: GaussianStateData) -> GaussianState:
         return cls(
             modes=tuple(data["modes"]),
             displacement=np.array(data["displacement"], dtype=float),
@@ -304,12 +315,12 @@ class GaussianState:
 
     @classmethod
     def load(cls, path: str | Path) -> GaussianState:
-        return cls.from_dict(_json_load(path))
+        return cls.from_dict(cast(GaussianStateData, _json_load(path)))
 
 
 class GaussianOperations:
     @staticmethod
-    def create_vacuum(modes: tuple[str, ...]) -> GaussianState:
+    def create_vacuum(modes: Modes) -> GaussianState:
         """Multi-mode vacuum state (V = 0.5 * I)."""
         dim = 2 * len(modes)
         d = np.zeros(dim)
@@ -318,7 +329,7 @@ class GaussianOperations:
 
     @staticmethod
     def create_coherent(
-        modes: tuple[str, ...], alphas: complex | Sequence[complex]
+        modes: Modes, alphas: complex | Sequence[complex]
     ) -> GaussianState:
         """Multi-mode coherent state |alpha_1> ⊗ ... ⊗ |alpha_n> -- a vacuum
         with each mode displaced by its complex amplitude alpha_k. Passing a
@@ -482,10 +493,10 @@ class GaussianChannel:
     """A general Gaussian channel d' = X@d + d0, V' = X@V@X.T + Y acting on
     a subset of modes."""
 
-    target_modes: tuple[str, ...]
-    X: np.ndarray
-    Y: np.ndarray
-    d0: np.ndarray
+    target_modes: Modes
+    X: FloatArray
+    Y: FloatArray
+    d0: FloatArray
 
     def __post_init__(self) -> None:
         if len(set(self.target_modes)) != len(self.target_modes):
@@ -516,7 +527,7 @@ class GaussianChannel:
 
     # -- Serialization ------------------------------------------------------
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> GaussianChannelData:
         return {
             "target_modes": list(self.target_modes),
             "X": self.X.tolist(),
@@ -525,7 +536,7 @@ class GaussianChannel:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> GaussianChannel:
+    def from_dict(cls, data: GaussianChannelData) -> GaussianChannel:
         return cls(
             target_modes=tuple(data["target_modes"]),
             X=np.array(data["X"], dtype=float),
@@ -538,7 +549,7 @@ class GaussianChannel:
 
     @classmethod
     def load(cls, path: str | Path) -> GaussianChannel:
-        return cls.from_dict(_json_load(path))
+        return cls.from_dict(cast(GaussianChannelData, _json_load(path)))
 
 
 class LossChannels:
@@ -599,50 +610,78 @@ class CircuitOperation:
     JSON-serializable."""
 
     name: str
-    modes: tuple[str, ...]
-    kwargs: dict[str, Any]
+    modes: Modes
+    kwargs: OperationParameters
 
 
 def _op_squeeze(
-    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+    state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_squeezing(state, mode=modes[0], **kwargs)
+    return GaussianOperations.apply_squeezing(
+        state,
+        mode=modes[0],
+        r=cast(float, kwargs["r"]),
+        theta=cast(float, kwargs["theta"]),
+    )
 
 
 def _op_rotate(
-    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+    state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_phase_rotation(state, mode=modes[0], **kwargs)
+    return GaussianOperations.apply_phase_rotation(
+        state, mode=modes[0], phi=cast(float, kwargs["phi"])
+    )
 
 
 def _op_displace(
-    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+    state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_displacement(state, mode=modes[0], **kwargs)
+    return GaussianOperations.apply_displacement(
+        state,
+        mode=modes[0],
+        x=cast(float, kwargs["x"]),
+        p=cast(float, kwargs["p"]),
+    )
 
 
 def _op_beam_splitter(
-    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+    state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return GaussianOperations.apply_beam_splitter(
-        state, mode_a=modes[0], mode_b=modes[1], **kwargs
+        state,
+        mode_a=modes[0],
+        mode_b=modes[1],
+        eta=cast(float, kwargs["eta"]),
     )
 
 
 def _op_loss(
-    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+    state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_loss(state, mode=modes[0], **kwargs)
+    return GaussianOperations.apply_loss(
+        state, mode=modes[0], eta=cast(float, kwargs["eta"])
+    )
 
 
 def _op_thermal_loss(
-    state: GaussianState, modes: tuple[str, ...], **kwargs: Any
+    state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return LossChannels.thermal_loss(mode=modes[0], **kwargs).apply(state)
+    channel = LossChannels.thermal_loss(
+        mode=modes[0],
+        eta=cast(float, kwargs["eta"]),
+        n_thermal=cast(float, kwargs["n_thermal"]),
+    )
+    return channel.apply(state)
 
 
 # Registry maps serialized operation names to their state-transforming functions.
-OPERATION_REGISTRY: dict[str, Callable[..., GaussianState]] = {
+class GaussianOperation(Protocol):
+    def __call__(
+        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
+    ) -> GaussianState: ...
+
+
+OPERATION_REGISTRY: dict[str, GaussianOperation] = {
     "Squeezing": _op_squeeze,
     "PhaseRotation": _op_rotate,
     "Displacement": _op_displace,
@@ -657,14 +696,14 @@ class GaussianCircuit:
     """Sequences a chain of Gaussian gates/channels and runs them over a
     registered set of modes."""
 
-    modes: tuple[str, ...] = field(default_factory=tuple)
+    modes: Modes = field(default_factory=tuple)
     _operations: list[CircuitOperation] = field(default_factory=list, init=False)
     # Per-mode starting amplitude (0 -> vacuum), used by compile_and_run when
     # no initial_state is supplied -- see add_mode(alpha=...).
     _initial_alphas: dict[str, complex] = field(default_factory=dict, init=False)
 
     @classmethod
-    def register(cls, name: str, fn: Callable[..., GaussianState]) -> None:
+    def register(cls, name: str, fn: GaussianOperation) -> None:
         """Register a new circuit-operation kind so `.compile_and_run` can execute it."""
         OPERATION_REGISTRY[name] = fn
 
@@ -679,7 +718,7 @@ class GaussianCircuit:
         return self
 
     def _add_op(
-        self, name: str, modes: tuple[str, ...], **kwargs: Any
+        self, name: str, modes: Modes, **kwargs: ParameterValue
     ) -> GaussianCircuit:
         self._operations.append(CircuitOperation(name=name, modes=modes, kwargs=kwargs))
         return self
@@ -767,12 +806,13 @@ class GaussianCircuit:
 
     # -- Serialization ------------------------------------------------------
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> GaussianCircuitData:
         return {
             "modes": list(self.modes),
             # Stored as [re, im] pairs -- complex isn't JSON-serializable.
             "initial_alphas": {
-                m: [np.real(a), np.imag(a)] for m, a in self._initial_alphas.items()
+                m: [float(np.real(a)), float(np.imag(a))]
+                for m, a in self._initial_alphas.items()
             },
             "operations": [
                 {"name": op.name, "modes": list(op.modes), "kwargs": op.kwargs}
@@ -781,7 +821,7 @@ class GaussianCircuit:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> GaussianCircuit:
+    def from_dict(cls, data: GaussianCircuitData) -> GaussianCircuit:
         circuit = cls(modes=tuple(data["modes"]))
         circuit._initial_alphas = {
             m: complex(re, im) for m, (re, im) in data.get("initial_alphas", {}).items()
@@ -801,7 +841,7 @@ class GaussianCircuit:
 
     @classmethod
     def load(cls, path: str | Path) -> GaussianCircuit:
-        return cls.from_dict(_json_load(path))
+        return cls.from_dict(cast(GaussianCircuitData, _json_load(path)))
 
 
 # ========================================================================
@@ -877,9 +917,9 @@ class GaussianMeasurements:
     def heterodyne_measurement(
         state: GaussianState,
         measured_mode: str,
-        outcome: np.ndarray | None = None,
+        outcome: FloatArray | None = None,
         rng: np.random.Generator | None = None,
-    ) -> tuple[np.ndarray, GaussianState]:
+    ) -> tuple[FloatArray, GaussianState]:
         """Heterodyne (double-homodyne) measurement on `measured_mode`: both
         quadratures are measured simultaneously, equivalent to splitting the
         mode 50:50 against vacuum and homodyning each output. Unlike
@@ -938,7 +978,7 @@ class GaussianMeasurements:
 
 def compute_wigner_analytically(
     state: GaussianState, mode_name: str, x_max: float = 4.0, num_points: int = 150
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[FloatArray, FloatArray, FloatArray]:
     """Wigner function of a single mode, computed analytically from (d, V) —
     no Hilbert-space truncation involved."""
     idx = state.get_mode_index(mode_name)
@@ -986,7 +1026,7 @@ def compute_joint_correlation(
     x_max: float = 3.0,
     num_points: int = 150,
     quadrature: str = "x",
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[FloatArray, FloatArray, FloatArray]:
     """Joint probability distribution of the same quadrature on two modes
     (e.g. x_a vs x_b, or p_a vs p_b) -- the tool for actually *seeing* an
     EPR-style correlation or anti-correlation, as opposed to only reading it

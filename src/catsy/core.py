@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy.linalg
+
+from .types import FloatArray
 
 if TYPE_CHECKING:
     from .gaussian import GaussianState
@@ -130,11 +132,11 @@ def _check_thermal_correlation(c_correlation: float, n_thermal: float) -> None:
         )
 
 
-def _json_save(obj: Any, path: str | Path) -> None:
+def _json_save(obj: object, path: str | Path) -> None:
     Path(path).write_text(json.dumps(obj))
 
 
-def _json_load(path: str | Path) -> Any:
+def _json_load(path: str | Path) -> object:
     return json.loads(Path(path).read_text())
 
 
@@ -157,10 +159,10 @@ def _apply_gaussian_transform(
 
 
 def _williamson_decomposition(
-    covariance: np.ndarray,
+    covariance: FloatArray,
     *,
     tol: float = 1e-10,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[FloatArray, FloatArray, FloatArray]:
     """Return symplectic eigenvalues, S and D with V = S D S.T.
 
     The construction uses the positive square root of V followed by a real
@@ -211,4 +213,4 @@ def _williamson_decomposition(
             f"covariance={covariance_residual:.3e}."
         )
 
-    return np.asarray(nus), S, D
+    return np.asarray(nus, dtype=float), S, D

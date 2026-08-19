@@ -5,7 +5,7 @@
 // ==========================================
 = Chapter 3: Compiler Architecture & Extensible Gate Registry
 
-The `GaussianCircuit` class acts as the imperative sequencing layer of the toolkit. Its software design strictly separates the definition of the algorithmic gate sequence from the mathematical execution layer (*execution engine*). This keeps the system fully extensible without needing to modify the compiler core itself.
+The `GaussianCircuit` class acts as the imperative sequencing layer of the toolkit. At the physics level, the circuit is a finite composition of Gaussian channels and unitaries; the resulting mathematical evolution remains within the Gaussian formalism described by #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)]. Its software design strictly separates the definition of the algorithmic gate sequence from the mathematical execution layer (*execution engine*). This keeps the system fully extensible without needing to modify the compiler core itself.
 
 == The data-driven operations model (`CircuitOperation`)
 To guarantee straightforward serializability of the quantum circuit, the compiler does not store operations as direct function references, but decouples them into flat data structures via the `CircuitOperation` class.
@@ -90,3 +90,7 @@ def to_dict(self) -> dict[str, Any]:
 
 ---
 
+
+
+== Literature
+This chapter is primarily software-architectural rather than a derivation of new physics. The physical meaning of the registered gates and their sequential composition follows the same Gaussian-circuit formalism cited in Chapter 1 (Weedbrook et al. 2012; Braunstein and van Loock 2005). The registry, serialization, and validation mechanisms described here are implementation choices of `catsy`, not claims of a unique physical formalism.

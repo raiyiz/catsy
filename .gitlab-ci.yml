@@ -9,6 +9,7 @@ stages:
   - test
   - typecheck
   - docs
+  - deploy
 
 .uv-job:
   image: ghcr.io/astral-sh/uv:python3.13-bookworm
@@ -38,12 +39,20 @@ pytest:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
     - uv sync --group dev
-    - uv run pytest --junitxml=pytest-results.xml
+    - mkdir -p coverage
+    - uv run pytest --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
     when: always
     reports:
       junit: pytest-results.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/coverage.xml
+    paths:
+      - coverage/coverage.xml
+      - coverage/html/
     expire_in: 1 week
+  coverage: '/TOTAL.*? (100(?:\.0+)?%|[1-9]?\d(?:\.\d+)?%)$/'
 
 ruff:
   extends: .uv-job
@@ -106,3 +115,18 @@ typst:
     paths:
       - architectural_specs.pdf
     expire_in: 30 days
+
+# Publish the latest default-branch HTML coverage report via GitLab Pages.
+# The pytest job already generates coverage/html/; this job publishes that
+# directory at the project Pages URL.
+coverage-pages:
+  stage: deploy
+  needs:
+    - job: pytest
+      artifacts: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - test -f coverage/html/index.html
+  pages:
+    publish: coverage/html

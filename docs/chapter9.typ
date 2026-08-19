@@ -14,7 +14,7 @@ An entry is consistently split into two files according to access pattern:
 - *`entry_<id>.json`* — metadata, scalar results, and small array *annotations* (description, unit, dimensions, shape, dtype). Always small; this is the only file `fetch_history_summary` reads when merely browsing entries.
 - *`entry_<id>.npz`* — every actual NumPy array logged (run results, final-state covariances/displacements), compressed. Only written if the entry has any array data at all.
 
-The reasoning is purely pragmatic: a numeric grid serialized as decimal-text JSON balloons to a multiple of its binary size, and `json.load` has to parse the *entire* file just to read a title. By splitting the two, listing/searching entries stays cheap regardless of how much array data is attached to them — and `numpy.load` on an `.npz` only decompresses an individual array upon actual index access anyway, so `get_array` only pays for the arrays that are actually requested.
+The reasoning is purely pragmatic: a numeric grid serialized as decimal-text JSON balloons to a multiple of its binary size, and `json.load` has to parse the *entire* file just to read a title. More broadly, separating human-readable metadata from bulk numerical arrays supports the reproducibility and data-management practices recommended in #link("https://doi.org/10.1038/sdata.2016.18")[Wilkinson et al. (2016)] and #link("https://doi.org/10.1371/journal.pcbi.1005510")[Wilson et al. (2017)]. By splitting the two, listing/searching entries stays cheap regardless of how much array data is attached to them — and `numpy.load` on an `.npz` only decompresses an individual array upon actual index access anyway, so `get_array` only pays for the arrays that are actually requested.
 
 == Logging a run (`log_run`)
 
@@ -82,3 +82,12 @@ def fetch_history_summary(self) -> list[dict[str, Any]]:
 Since only the small `.json` files are opened here, browsing (`find`, filterable by tag and/or title substring) and listing (`list_entries`) stay cheap even with very many or very large entries; the corresponding `.npz` files are only touched by an explicit `load_entry`/`get_entry` call followed by `get_array`/`get_final_state` access. Entry IDs (`_make_entry_id`) are UTC timestamps with a short random suffix — so even a plain directory `ls`/`glob` already sorts in creation order, while concurrent entries never collide.
 
 ---
+
+
+== Literature
+This chapter is principally about software and data management rather than quantum-optical theory. Its reproducibility and persistence goals are aligned with:
+
+- #link("https://doi.org/10.1038/sdata.2016.18")[M. D. Wilkinson et al., “The FAIR Guiding Principles for scientific data management and stewardship,” *Scientific Data* 3, 160018 (2016).]
+- #link("https://doi.org/10.1371/journal.pcbi.1005510")[G. Wilson et al., “Good enough practices in scientific computing,” *PLoS Computational Biology* 13, e1005510 (2017).]
+
+These references motivate the emphasis on machine-readable metadata, explicit provenance, reproducible storage, and separation of data from descriptive metadata. They do not prescribe the exact JSON/NPZ format used by `catsy`.
