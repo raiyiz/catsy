@@ -67,16 +67,9 @@ def test_loss_matches_vacuum_environment_formula(eta):
     [(0.0, 0.0), (0.25, 0.5), (0.8, 1.2), (1.0, 2.0)],
 )
 def test_thermal_loss_matches_environment_formula(eta, n_thermal):
-    state = GaussianState.coherent(("a",), 0.4 - 0.2j).squeeze(
-        "a", r=0.5, theta=0.2
-    )
-    lossy = LossChannels.thermal_loss(
-        mode="a", eta=eta, n_thermal=n_thermal
-    ).apply(state)
-    expected = (
-        eta * state.covariance
-        + (1.0 - eta) * (n_thermal + 0.5) * np.eye(2)
-    )
+    state = GaussianState.coherent(("a",), 0.4 - 0.2j).squeeze("a", r=0.5, theta=0.2)
+    lossy = LossChannels.thermal_loss(mode="a", eta=eta, n_thermal=n_thermal).apply(state)
+    expected = eta * state.covariance + (1.0 - eta) * (n_thermal + 0.5) * np.eye(2)
     np.testing.assert_allclose(lossy.covariance, expected, atol=1e-12)
     np.testing.assert_allclose(lossy.displacement, np.sqrt(eta) * state.displacement)
 
@@ -119,15 +112,11 @@ def test_squeezing_preserves_purity_determinant(single_mode_vacuum):
 
 
 def test_beam_splitter_entangles_independent_modes(two_mode_vacuum):
-    state = (
-        two_mode_vacuum
-        .squeeze("a", r=0.6, theta=0.0)
-        .squeeze("b", r=0.6, theta=np.pi / 2)
+    state = two_mode_vacuum.squeeze("a", r=0.6, theta=0.0).squeeze(
+        "b", r=0.6, theta=np.pi / 2
     )
 
-    np.testing.assert_allclose(
-        state.covariance[0:2, 2:4], np.zeros((2, 2)), atol=1e-12
-    )
+    np.testing.assert_allclose(state.covariance[0:2, 2:4], np.zeros((2, 2)), atol=1e-12)
     mixed = state.beam_splitter("a", "b", eta=0.5)
     assert np.abs(mixed.covariance[0:2, 2:4]).max() > 1e-6
 
@@ -164,9 +153,7 @@ def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
     state = single_mode_vacuum
     alpha = 0.6 - 0.9j
     via_alpha = state.displace("a", alpha=alpha)
-    via_xp = state.displace(
-        "a", x=np.sqrt(2.0) * alpha.real, p=np.sqrt(2.0) * alpha.imag
-    )
+    via_xp = state.displace("a", x=np.sqrt(2.0) * alpha.real, p=np.sqrt(2.0) * alpha.imag)
     np.testing.assert_allclose(via_alpha.displacement, via_xp.displacement)
 
 
@@ -212,9 +199,7 @@ def test_coherent_state_mean_photon_number_matches_alpha_squared():
 
 def test_circuit_displace_matches_manual_displacement():
     manual = (
-        GaussianState.vacuum(("a",))
-        .squeeze("a", r=0.3)
-        .displace("a", alpha=0.5 - 0.2j)
+        GaussianState.vacuum(("a",)).squeeze("a", r=0.3).displace("a", alpha=0.5 - 0.2j)
     )
 
     circuit = GaussianCircuit().add_mode("a")
@@ -231,9 +216,7 @@ def test_circuit_add_mode_with_alpha_seeds_coherent_starting_state():
     expected = GaussianState.coherent(("c",), 1.0 + 1.0j)
     np.testing.assert_allclose(compiled.displacement, expected.displacement)
 
-    overridden = circuit.compile_and_run(
-        initial_state=GaussianState.vacuum(("c",))
-    )
+    overridden = circuit.compile_and_run(initial_state=GaussianState.vacuum(("c",)))
     np.testing.assert_allclose(overridden.displacement, np.zeros(2))
 
 
@@ -256,11 +239,7 @@ def test_duplicate_mode_names_rejected():
 
 
 def test_state_reorder_modes_preserves_physical_state(two_mode_vacuum):
-    state = (
-        two_mode_vacuum
-        .displace("a", alpha=0.7 + 0.2j)
-        .squeeze("b", r=0.4, theta=0.3)
-    )
+    state = two_mode_vacuum.displace("a", alpha=0.7 + 0.2j).squeeze("b", r=0.4, theta=0.3)
 
     reordered = state.reorder_modes(("b", "a"))
     roundtrip = reordered.reorder_modes(("a", "b"))
@@ -275,17 +254,13 @@ def test_state_reorder_modes_rejects_wrong_mode_set(two_mode_vacuum):
 
 
 def test_circuit_canonicalizes_initial_state_mode_order():
-    initial = GaussianState.coherent(
-        ("b", "a"), alphas=[0.0 + 1.0j, 1.0 + 0.0j]
-    )
+    initial = GaussianState.coherent(("b", "a"), alphas=[0.0 + 1.0j, 1.0 + 0.0j])
 
     circuit = GaussianCircuit().add_mode("a").add_mode("b")
     result = circuit.compile_and_run(initial_state=initial)
     assert result.modes == ("a", "b")
 
-    expected = GaussianState.coherent(
-        ("a", "b"), alphas=[1.0 + 0.0j, 0.0 + 1.0j]
-    )
+    expected = GaussianState.coherent(("a", "b"), alphas=[1.0 + 0.0j, 0.0 + 1.0j])
     np.testing.assert_allclose(result.displacement, expected.displacement)
     np.testing.assert_allclose(result.covariance, expected.covariance)
 
@@ -368,9 +343,7 @@ def test_thermal_loss_is_a_valid_gaussian_channel():
         (0.0, 1e-6, False),
     ],
 )
-def test_correlated_thermal_noise_validates_correlation(
-    n_thermal, c_correlation, valid
-):
+def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation, valid):
     if valid:
         channel = LossChannels.correlated_thermal_noise(
             "a",
@@ -406,9 +379,7 @@ def test_circuit_matches_manual_operation_chain():
         .squeeze("b", r=0.6, theta=np.pi / 2)
         .beam_splitter("a", "b", eta=0.5)
     )
-    manual = LossChannels.thermal_loss(
-        mode="b", eta=0.7, n_thermal=0.3
-    ).apply(manual)
+    manual = LossChannels.thermal_loss(mode="b", eta=0.7, n_thermal=0.3).apply(manual)
 
     circuit = GaussianCircuit()
     circuit.add_mode("a").add_mode("b")
@@ -463,9 +434,7 @@ def test_gaussian_state_roundtrips_through_dict():
 
 
 def test_gaussian_state_roundtrips_through_file(tmp_path):
-    state = GaussianState.vacuum(modes=("a",)).squeeze(
-        "a", r=0.9, theta=0.2
-    )
+    state = GaussianState.vacuum(modes=("a",)).squeeze("a", r=0.9, theta=0.2)
     path = tmp_path / "state.json"
     state.save(path)
     restored = GaussianState.load(path)
@@ -486,9 +455,7 @@ def test_circuit_roundtrips_through_file(tmp_path):
     restored = GaussianCircuit.load(path)
     original_result = circuit.compile_and_run()
     restored_result = restored.compile_and_run()
-    np.testing.assert_allclose(
-        restored_result.covariance, original_result.covariance
-    )
+    np.testing.assert_allclose(restored_result.covariance, original_result.covariance)
 
 
 def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
@@ -500,9 +467,7 @@ def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
     restored = GaussianCircuit.load(path)
     original_result = circuit.compile_and_run()
     restored_result = restored.compile_and_run()
-    np.testing.assert_allclose(
-        restored_result.displacement, original_result.displacement
-    )
+    np.testing.assert_allclose(restored_result.displacement, original_result.displacement)
 
 
 def test_homodyne_measurement_collapses_tmsv_correlation():
@@ -521,9 +486,7 @@ def test_homodyne_measurement_collapses_tmsv_correlation():
     _val_neg, collapsed_neg = GaussianMeasurements.homodyne_measurement(
         state, measured_mode="a", phi=0.0, outcome=-2.5
     )
-    assert np.sign(collapsed.displacement[0]) != np.sign(
-        collapsed_neg.displacement[0]
-    )
+    assert np.sign(collapsed.displacement[0]) != np.sign(collapsed_neg.displacement[0])
 
 
 def test_homodyne_measurement_is_reproducible_with_seeded_rng():
@@ -613,9 +576,9 @@ def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
 def test_joint_correlation_computes_valid_grid(plot_enabled):
     circuit = GaussianCircuit()
     circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.6).squeeze(
-        mode="b", r=0.6, theta=np.pi
-    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5)
+    circuit.squeeze(mode="a", r=0.6).squeeze(mode="b", r=0.6, theta=np.pi).beam_splitter(
+        mode_a="a", mode_b="b", eta=0.5
+    )
     cv_state = circuit.compile_and_run()
     P, X_a, X_b, mode_a, mode_b = compute_joint_correlation(cv_state, "a", "b")
     assert P.shape == (150, 150)
@@ -675,12 +638,8 @@ def test_duan_witness_confirms_genuine_entanglement_for_tmsv():
 
 
 def test_duan_witness_strengthens_with_more_squeezing():
-    weak = compute_duan_inseparability(
-        GaussianState.tmsv("a", "b", r=0.3), "a", "b"
-    )
-    strong = compute_duan_inseparability(
-        GaussianState.tmsv("a", "b", r=1.2), "a", "b"
-    )
+    weak = compute_duan_inseparability(GaussianState.tmsv("a", "b", r=0.3), "a", "b")
+    strong = compute_duan_inseparability(GaussianState.tmsv("a", "b", r=1.2), "a", "b")
     assert DUAN_SEPARABILITY_BOUND > weak > strong > 0.0
 
 
@@ -778,11 +737,7 @@ def test_phase_rotation_preserves_photon_number_and_purity():
 
 
 def test_circuit_rotate_matches_manual_rotation():
-    manual = (
-        GaussianState.vacuum(("a",))
-        .squeeze("a", r=0.5)
-        .rotate("a", phi=0.4)
-    )
+    manual = GaussianState.vacuum(("a",)).squeeze("a", r=0.5).rotate("a", phi=0.4)
 
     circuit = GaussianCircuit().add_mode("a")
     circuit.squeeze(mode="a", r=0.5).rotate(mode="a", phi=0.4)
@@ -853,9 +808,7 @@ def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
         .squeeze("b", r=0.5, theta=np.pi / 2)
         .beam_splitter("a", "b", eta=0.5)
     )
-    noisy_state = LossChannels.thermal_loss(
-        mode="a", eta=0.9, n_thermal=0.2
-    ).apply(state)
+    noisy_state = LossChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(state)
     rho = noisy_state.to_qutip(N_cutoff=18)
     assert rho.tr() == pytest.approx(1.0, abs=1e-9)
 

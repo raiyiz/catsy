@@ -8,10 +8,7 @@ def test_gaussian_state_constructors_and_fluent_transformations():
     coherent = GaussianState.coherent(("a",), 0.7 + 0.2j)
 
     squeezed = (
-        vacuum
-        .squeeze("a", r=0.5)
-        .rotate("a", phi=0.25)
-        .displace("a", alpha=0.3 + 0.1j)
+        vacuum.squeeze("a", r=0.5).rotate("a", phi=0.25).displace("a", alpha=0.3 + 0.1j)
     )
 
     assert vacuum is not squeezed

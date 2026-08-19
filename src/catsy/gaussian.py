@@ -174,9 +174,7 @@ class GaussianState:
         )
 
     @classmethod
-    def coherent(
-        cls, modes: Modes, alphas: complex | Sequence[complex]
-    ) -> GaussianState:
+    def coherent(cls, modes: Modes, alphas: complex | Sequence[complex]) -> GaussianState:
         """Return a multi-mode coherent state.
 
         A single scalar amplitude is broadcast to every mode; otherwise pass
@@ -467,7 +465,6 @@ class GaussianOperations:
     def create_epr_pair(mode_a: str, mode_b: str, r: float) -> GaussianState:
         return GaussianState.tmsv(mode_a, mode_b, r)
 
-
     @staticmethod
     def apply_squeezing(
         state: GaussianState, mode: str, r: float, theta: float = 0.0
@@ -592,9 +589,7 @@ class LossChannels:
         p-quadrature only, proportional to the jitter variance."""
         _check_non_negative(sigma_phi, "sigma_phi")
         X = np.eye(2)
-        Y = np.diag(
-            [0.0, sigma_phi**2]
-        )
+        Y = np.diag([0.0, sigma_phi**2])
         d0 = np.zeros(2)
         return GaussianChannel(target_modes=(mode,), X=X, Y=Y, d0=d0)
 
@@ -646,9 +641,7 @@ def _op_squeeze(
 def _op_rotate(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return state.rotate(
-        mode=modes[0], phi=cast(float, kwargs["phi"])
-    )
+    return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
 
 
 def _op_displace(
@@ -674,9 +667,7 @@ def _op_beam_splitter(
 def _op_loss(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return state.loss(
-        mode=modes[0], eta=cast(float, kwargs["eta"])
-    )
+    return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
 
 
 def _op_thermal_loss(
