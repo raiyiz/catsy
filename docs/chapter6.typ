@@ -38,10 +38,10 @@ def compute_wigner_analytically(
         + dP * inv_V[1, 1] * dP
     )
     W = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
-    return W, X, P
+    return W, X, P, mode_name
 ```
 
-Since only the $2 times 2$ submatrix of the target mode is extracted, this evaluation is $O(1)$ per grid point, independent of the total number of modes — unlike a Wigner function reconstructed from a truncated Fock density matrix. `plot_wigner` visualizes the result as a filled contour map with a diverging (red-blue) color scale, symmetric around the zero of the probability density.
+Since only the $2 times 2$ submatrix of the target mode is extracted, this evaluation is $O(1)$ per grid point, independent of the total number of modes — unlike a Wigner function reconstructed from a truncated Fock density matrix. The returned `mode_name` is passed straight through so callers can forward the whole result tuple directly to `plot_wigner(W, X, P, mode_name)`, which visualizes it as a filled contour map with a diverging (red-blue) color scale, symmetric around the zero of the probability density, titled with the mode name.
 
 == Joint quadrature correlations
 
