@@ -985,7 +985,7 @@ class GaussianMeasurements:
 
 def compute_wigner_analytically(
     state: GaussianState, mode_name: str, x_max: float = 4.0, num_points: int = 150
-) -> tuple[FloatArray, FloatArray, FloatArray]:
+) -> tuple[FloatArray, FloatArray, FloatArray, str]:
     """Wigner function of a single mode, computed analytically from (d, V) —
     no Hilbert-space truncation involved."""
     idx = state.get_mode_index(mode_name)
@@ -1033,7 +1033,7 @@ def compute_joint_correlation(
     x_max: float = 3.0,
     num_points: int = 150,
     quadrature: str = "x",
-) -> tuple[FloatArray, FloatArray, FloatArray]:
+) -> tuple[FloatArray, FloatArray, FloatArray, str, str]:
     """Joint probability distribution of the same quadrature on two modes
     (e.g. x_a vs x_b, or p_a vs p_b) -- the tool for actually *seeing* an
     EPR-style correlation or anti-correlation, as opposed to only reading it
