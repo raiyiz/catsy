@@ -30,12 +30,10 @@ class CircuitOpCallable(Protocol):
     ) -> GaussianState: ...
 
 OPERATION_REGISTRY: dict[str, CircuitOpCallable] = {
-    "Squeezing": lambda s, m, **kw: GaussianOperations.apply_squeezing(s, m, **kw),
-    "PhaseRotation": lambda s, m, **kw: GaussianOperations.apply_phase_rotation(s, m, **kw),
-    "BeamSplitter": lambda s, m, **kw: GaussianOperations.apply_beam_splitter(
-        s, m, m, **kw
-    ),
-    "Loss": lambda s, m, **kw: GaussianOperations.apply_loss(s, m, **kw),
+    "Squeezing": lambda s, m, **kw: s.squeeze(m[0], **kw),
+    "PhaseRotation": lambda s, m, **kw: s.rotate(m[0], **kw),
+    "BeamSplitter": lambda s, m, **kw: s.beam_splitter(m[0], m[1], **kw),
+    "Loss": lambda s, m, **kw: s.loss(m[0], **kw),
     "ThermalLossChannel": lambda s, m, **kw: QBSChannels.thermal_loss(m, **kw).apply(s),
 }
 ```
@@ -55,7 +53,7 @@ def compile_and_run(self, initial_state: GaussianState | None = None) -> Gaussia
         raise ValueError("Circuit has no registered modes.")
     
     current_state = (
-        GaussianOperations.create_vacuum(self.modes)
+        GaussianState.vacuum(self.modes)
         if initial_state is None
         else initial_state
     )

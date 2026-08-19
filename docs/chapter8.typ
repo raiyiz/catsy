@@ -20,7 +20,7 @@ _COMPONENT_SPECS = {
 }
 ```
 
-`OpticalComponent.__post_init__` enforces against this table, among other things: a valid, known `op_type`; exactly the expected number of ports with no duplicates; exactly the expected parameter set (no missing, no extra `kwargs`); finite scalar parameter values; and $eta in [0,1]$ for beam splitters and loss elements. The separation of responsibilities is important here: `OpticalComponent` validates *only* the structural correctness of the component as a blueprint — the actual numerical execution remains entirely the responsibility of `GaussianOperations` (Chapter 2).
+`OpticalComponent.__post_init__` enforces against this table, among other things: a valid, known `op_type`; exactly the expected number of ports with no duplicates; exactly the expected parameter set (no missing, no extra `kwargs`); finite scalar parameter values; and $eta in [0,1]$ for beam splitters and loss elements. The separation of responsibilities is important here: `OpticalComponent` validates *only* the structural correctness of the component as a blueprint — the actual numerical execution is performed by `GaussianState` transformations through the `GaussianCircuit` execution layer (Chapters 2–3).
 
 == Declaratively assembling a bench (`OpticalSetup`)
 

@@ -4,7 +4,7 @@
 
 Gaussian operations are defined by the fact that they leave the Gaussian structure of the Wigner function invariant. Mathematically, unitary operators of this class correspond to affine symplectic transformations in phase space. Non-unitary processes (decoherence and noise) are modeled as CPTP maps (*Completely Positive Trace-Preserving Maps*) via Gaussian channels. This is the standard Gaussian-operation/channel framework of continuous-variable quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
-== Unitary gate transformations (`GaussianOperations`)
+== Unitary gate transformations (`GaussianState`)
 Every purely Gaussian unitary transformation $hat(U)$ induces a linear transformation in phase space, expressed via a symplectic matrix $S in S_p(2n, RR)$. For the displacement vector $d$ and the covariance matrix $V$:
 $d -> S d$
 $V -> S V S^T$
@@ -12,7 +12,7 @@ $V -> S V S^T$
 Preserving the canonical commutation relations strictly requires that $S$ preserve the symplectic form:
 $S Omega S^T = Omega$
 
-The toolkit implements three fundamental basis transformations in `GaussianOperations`:
+The toolkit exposes these transformations directly as methods on `GaussianState`:
 
 1. *Squeezing operator ($hat(S)_k (r, theta)$):*
    The local squeeze operator on mode $k$ reduces the variance in one quadrature below the shot-noise limit, while amplifying the conjugate quadrature. Squeezing, passive rotations, and beam splitters are standard examples of Gaussian unitaries; their symplectic representation is developed systematically in the references above and in Serafini’s graduate-level treatment. The local symplectic matrix is:
