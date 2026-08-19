@@ -121,8 +121,6 @@ typst:
   image:
     name: ghcr.io/typst/typst:latest
     entrypoint: [""]
-  rules:
-    - when: manual
   allow_failure: true
   script:
     - apk add --no-cache ttf-liberation ttf-dejavu
