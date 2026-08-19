@@ -178,7 +178,7 @@ The repository also contains examples and tests that can be useful when explorin
 
 ## Test coverage
 
-Coverage is collected with [`pytest-cov`](https://pytest-cov.readthedocs.io/) and is intentionally configured as a development concern rather than a runtime dependency. Locally, run:
+Coverage is collected with [`pytest-cov`](https://pytest-cov.readthedocs.io/) and is intentionally configured as a development concern rather than a runtime dependency. Branch coverage (not just line coverage) is enabled via `[tool.coverage.run]` in `pyproject.toml`. Locally, run:
 
 If the development dependencies have changed, refresh the lockfile first with `uv lock`. Then run:
 

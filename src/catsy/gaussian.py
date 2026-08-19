@@ -443,62 +443,6 @@ class GaussianState:
     def load(cls, path: str | Path) -> GaussianState:
         return cls.from_dict(cast(GaussianStateData, _json_load(path)))
 
-
-class GaussianOperations:
-    """Compatibility facade for the legacy static Gaussian API.
-
-    New code should use :class:`GaussianState` constructors and instance
-    methods directly.
-    """
-
-    @staticmethod
-    def create_vacuum(modes: Modes) -> GaussianState:
-        return GaussianState.vacuum(modes)
-
-    @staticmethod
-    def create_coherent(
-        modes: Modes, alphas: complex | Sequence[complex]
-    ) -> GaussianState:
-        return GaussianState.coherent(modes, alphas)
-
-    @staticmethod
-    def create_epr_pair(mode_a: str, mode_b: str, r: float) -> GaussianState:
-        return GaussianState.tmsv(mode_a, mode_b, r)
-
-    @staticmethod
-    def apply_squeezing(
-        state: GaussianState, mode: str, r: float, theta: float = 0.0
-    ) -> GaussianState:
-        return state.squeeze(mode, r=r, theta=theta)
-
-    @staticmethod
-    def apply_phase_rotation(
-        state: GaussianState, mode: str, phi: float
-    ) -> GaussianState:
-        return state.rotate(mode, phi=phi)
-
-    @staticmethod
-    def apply_displacement(
-        state: GaussianState,
-        mode: str,
-        alpha: complex | None = None,
-        *,
-        x: float | None = None,
-        p: float | None = None,
-    ) -> GaussianState:
-        return state.displace(mode, alpha=alpha, x=x, p=p)
-
-    @staticmethod
-    def apply_beam_splitter(
-        state: GaussianState, mode_a: str, mode_b: str, eta: float
-    ) -> GaussianState:
-        return state.beam_splitter(mode_a, mode_b, eta=eta)
-
-    @staticmethod
-    def apply_loss(state: GaussianState, mode: str, eta: float) -> GaussianState:
-        return state.loss(mode, eta=eta)
-
-
 # ========================================================================
 # Channels
 # ========================================================================
