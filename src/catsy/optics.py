@@ -31,8 +31,8 @@ class _ComponentSpec(TypedDict):
 
 
 # Structural contract for each component type.  Numerical/physical execution
-# remains in ``GaussianOperations``; this table only defines what a layout
-# component must look like before it can be registered.
+# remains in ``GaussianState``/``GaussianCircuit``; this table only defines
+# what a layout component must look like before it can be registered.
 _COMPONENT_SPECS: dict[str, _ComponentSpec] = {
     "BeamSplitter": {"ports": 2, "kwargs": ("eta",)},
     "Loss": {"ports": 1, "kwargs": ("eta",)},

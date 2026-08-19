@@ -35,6 +35,13 @@ def homodyne_measurement(
     outcome: float | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[float, GaussianState]:
+    if not np.isfinite(phi):
+        raise ValueError(f"phi must be finite, got {phi!r}.")
+    if outcome is not None and (
+        not isinstance(outcome, int | float) or not np.isfinite(outcome)
+    ):
+        raise ValueError("homodyne outcome must be a finite scalar.")
+
     n_modes = len(state.modes)
     idx_m = state.get_mode_index(measured_mode)
 
@@ -55,32 +62,41 @@ def homodyne_measurement(
 
     # 2. Block partitioning for the Schur complement
     V_MM = V_rot[idx_x, idx_x]
+    if not np.isfinite(V_MM) or V_MM <= TOL_PHYSICALITY:
+        raise ValueError(
+            f"homodyne measurement variance must be finite and positive; got {V_MM:.3e}."
+        )
     V_MR = V_rot[idx_x, remaining_indices]
     V_RM = V_rot[remaining_indices, idx_x]
     V_RR = V_rot[np.ix_(remaining_indices, remaining_indices)]
 
+    d_M = d_rot[idx_x]
+    d_R = d_rot[remaining_indices]
+
     # 3. Deterministic or stochastic sampling of the outcome
     if outcome is None:
         rng = rng if rng is not None else np.random.default_rng()
-        measured_value = rng.normal(loc=d_rot[idx_x], scale=np.sqrt(V_MM))
+        measured_value = rng.normal(loc=d_M, scale=np.sqrt(V_MM))
     else:
         measured_value = outcome
 
     # 4. Compute the conditioned state (Wigner collapse)
     # The displacement shifts proportionally to the deviation from the expectation value
-    d_cond = d_rot[remaining_indices] + V_RM * (1.0 / V_MM) * (
-        measured_value - d_rot[idx_x]
-    )
+    gain = V_RM / V_MM
+    d_cond = d_R + gain * (measured_value - d_M)
     # The new covariance matrix shrinks; uncertainty is reduced by information extraction
     V_cond = V_RR - np.outer(V_RM, V_MR) / V_MM
+    V_cond = 0.5 * (V_cond + V_cond.T)
 
     remaining_modes = tuple(m for m in state.modes if m != measured_mode)
-    return float(measured_value), GaussianState(remaining_modes, d_cond, V_cond)
+    return measured_value, GaussianState(remaining_modes, d_cond, V_cond)
 ```
 
 === Why the code does this (physical causality)
-- *`V_RM * (1.0 / V_MM) * (measured_value - d_rot[idx_x])`*: if the measured mode was entangled with the rest of the system (e.g. an EPR pair), its state correlates with the other modes. If the measurement outcome `measured_value` deviates from its quantum-mechanical mean, this correlation forces the remaining system into a macroscopic shift in phase space.
+- *validating `phi`, `outcome`, and `V_MM` up front*: a non-finite local-oscillator angle, a non-finite forced outcome, or a numerically zero/negative measured-quadrature variance would otherwise propagate silently into a division by (near) zero a few lines later; the code fails fast with a specific `ValueError` instead.
+- *`gain * (measured_value - d_M)`*, where `gain = V_RM / V_MM`: if the measured mode was entangled with the rest of the system (e.g. an EPR pair), its state correlates with the other modes. If the measurement outcome `measured_value` deviates from its quantum-mechanical mean, this correlation forces the remaining system into a macroscopic shift in phase space.
 - *`- np.outer(V_RM, V_MR) / V_MM`*: every homodyne measurement extracts information from the overall system. Since the cross-correlations $V_("RM")$ encode the amount of quantum knowledge about the subsystem, the Schur complement subtracts exactly this uncertainty. The remaining system shrinks in phase space along the entangled axes.
+- *`V_cond = 0.5 * (V_cond + V_cond.T)`*: the Schur-complement formula is exactly symmetric in exact arithmetic, but floating-point round-off can leave a tiny antisymmetric residual; explicitly symmetrizing keeps `V_cond` a valid covariance matrix for the `GaussianState` constructor's own symmetry check.
 
 == Heterodyne measurement (`heterodyne_measurement`)
 Heterodyne (or dual-homodyne) detection measures both conjugate quadratures ($q$ and $p$) of a mode simultaneously. Since $[q, p] = i != 0$, the Heisenberg uncertainty principle forbids an exact simultaneous measurement without injecting additional noise.
@@ -109,35 +125,51 @@ def heterodyne_measurement(
     # Partition the pure system covariance (2x2 block for the target mode)
     V_MM = state.covariance[idx_m : idx_m + 2, idx_m : idx_m + 2]
     V_MR = state.covariance[idx_m : idx_m + 2, remaining_indices]
-    V_RM = V_MR.T
     V_RR = state.covariance[np.ix_(remaining_indices, remaining_indices)]
-    
-    # Inject the minimal Heisenberg vacuum noise (0.5 * I_2)
-    V_eff = V_MM + 0.5 * np.eye(2)
-    V_eff_inv = np.linalg.inv(V_eff)
+    d_M = state.displacement[idx_m : idx_m + 2]
+    d_R = state.displacement[remaining_indices]
+
+    # Inject the minimal Heisenberg vacuum noise (0.5 * I_2), symmetrized
+    # against floating-point round-off
+    V_eff = 0.5 * (V_MM + 0.5 * np.eye(2)) + 0.5 * (V_MM + 0.5 * np.eye(2)).T
+    if not np.all(np.isfinite(V_eff)):
+        raise ValueError("heterodyne effective covariance must be finite.")
+    try:
+        np.linalg.cholesky(V_eff)
+    except np.linalg.LinAlgError as exc:
+        raise ValueError(
+            "heterodyne effective covariance must be positive definite."
+        ) from exc
 
     # Multivariate sampling over the noisy distribution
     if outcome is None:
         rng = rng if rng is not None else np.random.default_rng()
-        measured_vector = rng.multivariate_normal(
-            mean=state.displacement[idx_m : idx_m + 2], cov=V_eff
-        )
+        measured_outcome = rng.multivariate_normal(mean=d_M, cov=V_eff)
     else:
-        measured_vector = np.asarray(outcome, dtype=float)
+        measured_outcome = np.asarray(outcome, dtype=float)
+        if measured_outcome.shape != (2,):
+            raise ValueError(
+                f"heterodyne outcome must have shape (2,), got {measured_outcome.shape}."
+            )
+        if not np.all(np.isfinite(measured_outcome)):
+            raise ValueError("heterodyne outcome must contain only finite values.")
 
-    # Matrix conditioning via the noisy Schur complement
-    d_cond = state.displacement[remaining_indices] + V_RM @ V_eff_inv @ (
-        measured_vector - state.displacement[idx_m : idx_m + 2]
-    )
-    V_cond = V_RR - V_RM @ V_eff_inv @ V_MR
+    # Matrix conditioning via the noisy Schur complement (solve, not an
+    # explicit inverse, for numerical stability)
+    gain = np.linalg.solve(V_eff, V_MR).T
+    innovation = measured_outcome - d_M
+    d_cond = d_R + gain @ innovation
+    V_cond = V_RR - gain @ V_MR
+    V_cond = 0.5 * (V_cond + V_cond.T)
 
     remaining_modes = tuple(m for m in state.modes if m != measured_mode)
-    return measured_vector, GaussianState(remaining_modes, d_cond, V_cond)
+    return measured_outcome, GaussianState(remaining_modes, d_cond, V_cond)
 ```
 
 === Why the code does this (physical causality)
-- *`V_eff = V_MM + 0.5 * np.eye(2)`*: the added `0.5 * np.eye(2)` represents exactly the fluctuation quantum of the unused beam-splitter input. Without this term, the resulting matrix inversion would be singular or physically underspecified for ideally squeezed states, leading to violations of the Robertson-Schrödinger uncertainty relation in the remaining state.
-- *`V_cond = V_RR - V_RM @ V_eff_inv @ V_MR`*: because the measurement noise means less information can be extracted about the system than with a homodyne measurement, the modified `V_eff_inv` ensures the variances of the remaining system $V_("cond")$ shrink less strongly. The eigenvalues of the resulting covariance matrix remain guaranteed to stay above the vacuum limit ($>= 0.5$).
+- *`V_eff = V_MM + 0.5 * np.eye(2)`* (symmetrized): the added `0.5 * np.eye(2)` represents exactly the fluctuation quantum of the unused beam-splitter input. The explicit finiteness and Cholesky positive-definiteness checks turn what would otherwise be a silent singular-matrix failure -- or a physically underspecified result for ideally squeezed states -- into an early, specific `ValueError`.
+- *`gain = np.linalg.solve(V_eff, V_MR).T`*: solving the linear system for the gain avoids explicitly forming `V_eff`'s inverse, which is the numerically preferred way to apply $V_(M M)^(-1)$ without amplifying round-off error.
+- *`V_cond = V_RR - gain @ V_MR`* (symmetrized): because the measurement noise means less information can be extracted about the system than with a homodyne measurement, the Schur complement here removes less uncertainty than the homodyne case. The eigenvalues of the resulting covariance matrix remain guaranteed to stay above the vacuum limit ($>= 0.5$); the final symmetrization guards against floating-point asymmetry the same way it does for homodyne conditioning above.
 
 ---
 

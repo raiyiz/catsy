@@ -6,12 +6,12 @@
 The main idea is to keep Gaussian calculations in phase space where possible, describe experiments as reusable circuits, and move to a truncated Fock-space representation when needed.
 
 
-### For a more detailed documentation, check the latest build of the [Specs (PDF)](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst)
+### For a more detailed documentation, check the latest build of the [Specifications](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst)
 
 
 ### Status
 
-[![Pipeline status](https://gitlab.uni-hannover.de/inl/catsy/badges/main/pipeline.svg)](https://gitlab.uni-hannover.de/inl/catsy/-/pipelines) [![Coverage](https://gitlab.uni-hannover.de/inl/catsy/badges/main/coverage.svg)](https://inl.idmpages.uni-h.de/catsy/) [Latest HTML coverage report](https://inl.idmpages.uni-h.de/catsy/)
+[![Pipeline status](https://gitlab.uni-hannover.de/inl/catsy/badges/main/pipeline.svg)](https://gitlab.uni-hannover.de/inl/catsy/-/pipelines) [![Coverage](https://gitlab.uni-hannover.de/inl/catsy/badges/main/coverage.svg)](https://inl.idmpages.uni-h.de/catsy/)
 The default branch publishes the latest interactive HTML coverage report through GitLab Pages. Every pipeline (including merge requests) also attaches its own HTML coverage report directly to the `pytest` job -- open the job and use the "HTML coverage report" artifact link if the default-branch Pages link above is ever out of date. The CI pipeline also uploads the Cobertura XML report so GitLab can show the coverage percentage and line-by-line coverage annotations in merge requests.
 
 ---
@@ -24,9 +24,9 @@ The default branch publishes the latest interactive HTML coverage report through
 ## Quick start
 
 ```python
-from catsy import GaussianCircuit, GaussianOperations
+from catsy import GaussianCircuit, GaussianState
 
-initial = GaussianOperations.create_epr_pair("a", "b", r=0.7)
+initial = GaussianState.tmsv("a", "b", r=0.7)
 
 circuit = (
     GaussianCircuit()
@@ -40,27 +40,24 @@ final.plot_covariance()
 ```
 
 Here `r` is the squeezing strength and `eta` is the power transmissivity of the loss channel.
-
 ## Where to start
-
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L321) |
-| Apply Gaussian operations                   | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L321) |
-| Build a sequence of operations              | [`GaussianCircuit`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L695) |
-| Model loss and thermal noise                | [`LossChannels`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L555), [`GaussianChannel`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L492) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L852) |
-| Inspect a covariance matrix                 | [`GaussianState`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L86) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L979) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L166) |
-| Define an optical layout                    | [`OpticalSetup`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/optics.py#L164) |
-| Save states and experiments                 | [`SimulationJournal`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/journal.py#L354) |
-
+| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py) |
+| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py) |
+| Build a sequence of operations              | [`GaussianCircuit`](src/catsy/gaussian.py) |
+| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py), [`GaussianChannel`](src/catsy/gaussian.py) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py) |
+| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py) |
+| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py) |
+| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py) |
 ## Gaussian states
 
 States are represented in phase space by their first moments and covariance matrix. Common operations include:
 
-* vacuum, coherent, and EPR states
+* vacuum, coherent, and two-mode squeezed vacuum states
 * squeezing and displacement
 * phase shifts and beam splitters
 * loss and thermal channels
@@ -69,26 +66,23 @@ States are represented in phase space by their first moments and covariance matr
 For example:
 
 ```python
-from catsy import GaussianOperations
-
-state = GaussianOperations.create_vacuum(("a",))
-state = GaussianOperations.apply_squeezing(state, "a", r=0.5)
-state = GaussianOperations.apply_displacement(
-    state,
+from catsy import GaussianState
+state = GaussianState.vacuum(("a",))
+state = state.squeeze("a", r=0.5)
+state = state.displace(
     "a",
     alpha=0.4 + 0.2j,
 )
 ```
-
 ## Circuits
 
 For a sequence of operations that you want to keep as a reusable experiment, `GaussianCircuit` provides an explicit representation:
 
 ```python
-from catsy import GaussianCircuit, GaussianOperations
+from catsy import GaussianCircuit, GaussianState
 import numpy as np
 
-initial = GaussianOperations.create_vacuum(("a", "b"))
+initial = GaussianState.vacuum(("a", "b"))
 
 circuit = (
     GaussianCircuit()
@@ -164,12 +158,11 @@ uv run pytest --plot
 
 | Module                                                                                                       | Contents                                                            |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [`core.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/core.py)         | conventions, validation, numerical helpers                          |
-| [`gaussian.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py) | states, operations, channels, circuits, measurements                |
-| [`fock.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/fock.py)         | Fock-space functionality                                             |
-| [`optics.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/optics.py)     | optical layouts and QuTiP-based cavity/interferometer simulations   |
-| [`journal.py`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/journal.py)   | experiment persistence                                               |
-
+| [`core.py`](src/catsy/core.py)         | conventions, validation, numerical helpers                          |
+| [`gaussian.py`](src/catsy/gaussian.py) | states, operations, channels, circuits, measurements                |
+| [`fock.py`](src/catsy/fock.py)         | Fock-space functionality                                             |
+| [`optics.py`](src/catsy/optics.py)     | optical layouts and QuTiP-based cavity/interferometer simulations   |
+| [`journal.py`](src/catsy/journal.py)   | experiment persistence                                               |
 ## Documentation
 
 The [documentation](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the more detailed API and usage information.
@@ -185,7 +178,7 @@ The repository also contains examples and tests that can be useful when explorin
 
 ## Test coverage
 
-Coverage is collected with [`pytest-cov`](https://pytest-cov.readthedocs.io/) and is intentionally configured as a development concern rather than a runtime dependency. Locally, run:
+Coverage is collected with [`pytest-cov`](https://pytest-cov.readthedocs.io/) and is intentionally configured as a development concern rather than a runtime dependency. Branch coverage (not just line coverage) is enabled via `[tool.coverage.run]` in `pyproject.toml`. Locally, run:
 
 If the development dependencies have changed, refresh the lockfile first with `uv lock`. Then run:
 
@@ -193,5 +186,3 @@ If the development dependencies have changed, refresh the lockfile first with `u
 uv sync --group dev
 uv run pytest --cov=src/catsy --cov-report=term-missing --cov-report=html:coverage/html --cov-report=xml:coverage/coverage.xml
 ```
-
-This enables branch coverage and reports missing lines. The HTML report is written to `coverage/html/`; the XML report is written to `coverage/coverage.xml`.

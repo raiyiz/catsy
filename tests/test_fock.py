@@ -3,16 +3,16 @@ import pytest
 import qutip as qt
 
 from catsy.fock import FockOperations
-from catsy.gaussian import GaussianCircuit, GaussianOperations, LossChannels
+from catsy.gaussian import GaussianCircuit, GaussianState, LossChannels
 
 # Gaussian -> Fock bridge
 
 
 def test_cv_channel_to_fock_purity_drops_with_loss():
-    state = GaussianOperations.create_vacuum(modes=("a", "b"))
-    state = GaussianOperations.apply_squeezing(state, mode="a", r=0.5)
-    state = GaussianOperations.apply_squeezing(state, mode="b", r=0.5, theta=np.pi / 2)
-    state = GaussianOperations.apply_beam_splitter(state, mode_a="a", mode_b="b", eta=0.5)
+    state = GaussianState.vacuum(modes=("a", "b"))
+    state = state.squeeze(mode="a", r=0.5)
+    state = state.squeeze(mode="b", r=0.5, theta=np.pi / 2)
+    state = state.beam_splitter(mode_a="a", mode_b="b", eta=0.5)
 
     clean_rho = state.to_qutip(N_cutoff=18)
     noisy_state = LossChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(state)

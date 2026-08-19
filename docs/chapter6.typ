@@ -38,10 +38,10 @@ def compute_wigner_analytically(
         + dP * inv_V[1, 1] * dP
     )
     W = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
-    return W, X, P
+    return W, X, P, mode_name
 ```
 
-Since only the $2 times 2$ submatrix of the target mode is extracted, this evaluation is $O(1)$ per grid point, independent of the total number of modes — unlike a Wigner function reconstructed from a truncated Fock density matrix. `plot_wigner` visualizes the result as a filled contour map with a diverging (red-blue) color scale, symmetric around the zero of the probability density.
+Since only the $2 times 2$ submatrix of the target mode is extracted, this evaluation is $O(1)$ per grid point, independent of the total number of modes — unlike a Wigner function reconstructed from a truncated Fock density matrix. The returned `mode_name` is passed straight through so callers can forward the whole result tuple directly to `plot_wigner(W, X, P, mode_name)`, which visualizes it as a filled contour map with a diverging (red-blue) color scale, symmetric around the zero of the probability density, titled with the mode name.
 
 == Joint quadrature correlations
 
@@ -65,7 +65,7 @@ Both the covariance matrix and the correlation plots show *correlation*, but on 
 
 $ "Var"(q_a - q_b) + "Var"(p_a + p_b) >= 2 quad "(every separable state)" $
 
-In the convention used by the toolkit (vacuum $= 1/2$), two independent vacua exactly saturate this bound at $2$ (`DUAN_SEPARABILITY_BOUND` in `core.py`). A measured value *strictly below* $2$ is a *sufficient* condition for non-classical entanglement between `mode_a` and `mode_b` — no classical correlation can undercut this bound, only an entangling operation such as the beam splitter in `create_epr_pair` can. For the two-mode Gaussian states considered here, that last caveat should be read carefully: the Duan criterion is equivalent to the Gaussian PPT/separability test. Simon’s independent phase-space formulation of the PPT criterion gives the corresponding necessary-and-sufficient separability condition for bipartite Gaussian states. For non-Gaussian states, the simple Duan test is only a sufficient witness.
+In the convention used by the toolkit (vacuum $= 1/2$), two independent vacua exactly saturate this bound at $2$ (`DUAN_SEPARABILITY_BOUND` in `core.py`). A measured value *strictly below* $2$ is a *sufficient* condition for non-classical entanglement between `mode_a` and `mode_b` — no classical correlation can undercut this bound, only an entangling operation such as the beam splitter used in `GaussianState.tmsv` can. For the two-mode Gaussian states considered here, that last caveat should be read carefully: the Duan criterion is equivalent to the Gaussian PPT/separability test. Simon’s independent phase-space formulation of the PPT criterion gives the corresponding necessary-and-sufficient separability condition for bipartite Gaussian states. For non-Gaussian states, the simple Duan test is only a sufficient witness.
 
 ```python
 def compute_duan_inseparability(
@@ -82,7 +82,7 @@ def compute_duan_inseparability(
     return var_x_diff + var_p_sum
 ```
 
-The signs of the cross terms directly mirror the structure of the EPR state: the minus sign in front of $V_(a b)$ in the $q$ term expects *positive* correlation ($q_a approx q_b$), while the plus sign in the $p$ term expects *negative* correlation ($p_a approx -p_b$) — exactly the statistics that `create_epr_pair` constructs.
+The signs of the cross terms directly mirror the structure of the EPR state: the minus sign in front of $V_(a b)$ in the $q$ term expects *positive* correlation ($q_a approx q_b$), while the plus sign in the $p$ term expects *negative* correlation ($p_a approx -p_b$) — exactly the statistics that `GaussianState.tmsv` constructs.
 
 ---
 

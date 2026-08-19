@@ -5,9 +5,9 @@
 // ==========================================
 = Chapter 5: State Preparation & the Gaussian-Fock Bridge
 
-While Chapters 2–4 deal with the transformation of *existing* states, this chapter is devoted to their *creation*: the factory methods in `GaussianOperations` that provide standard resources such as vacuum, coherent states, and EPR pairs, as well as the central translation routine `GaussianState.to_qutip`, which bridges the efficient phase-space layer into the full (but exponentially more expensive) Fock space of QuTiP.
+While Chapters 2–4 deal with the transformation of *existing* states, this chapter is devoted to their *creation*: the constructors on `GaussianState` provide standard resources such as vacuum, coherent states, and two-mode squeezed vacuum (TMSV), as well as the central translation routine `GaussianState.to_qutip`, which bridges the efficient phase-space layer into the full (but exponentially more expensive) Fock space of QuTiP.
 
-== Factory methods for standard resources (`GaussianOperations`)
+== Constructors for standard resources (`GaussianState`)
 
 Each factory method constructs a state *declaratively* from the vacuum, by composing the unitary transformations already introduced in Chapter 2. This keeps the physics of every resource traceable to a single place.
 
@@ -16,11 +16,11 @@ Each factory method constructs a state *declaratively* from the vacuum, by compo
 The $n$-mode vacuum state trivially has no displacement and the isotropic shot-noise covariance:
 $ d = 0, quad V = 1/2 bb(1)_(2n) $
 
-A coherent state $ket(alpha)$ is a vacuum displaced by $alpha$. The `create_coherent` factory method achieves this by repeatedly calling `apply_displacement`:
+A coherent state $ket(alpha)$ is a vacuum displaced by $alpha$. The `GaussianState.coherent` constructor creates this state directly:
 
 ```python
-@staticmethod
-def create_coherent(
+@classmethod
+def coherent(
     modes: tuple[str, ...], alphas: complex | Sequence[complex]
 ) -> GaussianState:
     """Multi-mode coherent state |alpha_1> ⊗ ... ⊗ |alpha_n> -- a vacuum
@@ -35,29 +35,26 @@ def create_coherent(
             "pass one alpha per mode (or a single scalar to broadcast)."
         )
 
-    state = GaussianOperations.create_vacuum(modes)
+    state = cls.vacuum(modes)
     for mode, alpha in zip(modes, alphas):
-        state = GaussianOperations.apply_displacement(state, mode, alpha)
+        state = state.displace(mode, alpha)
     return state
 ```
 
 A single scalar `alphas` is broadcast across all modes simultaneously — useful, e.g., for creating an $n$-mode reference beam with identical amplitude without manually repeating the list.
 
-=== The EPR pair (`create_epr_pair`)
+=== Two-mode squeezed vacuum (`GaussianState.tmsv`)
 
-The standard recipe for non-classical continuous-variable entanglement first creates two orthogonally squeezed vacua and then mixes them on a 50:50 beam splitter. This construction is the standard two-mode-squeezing/EPR resource construction in CV quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[Serafini (2023)].
+The standard recipe for non-classical continuous-variable entanglement first creates two orthogonally squeezed vacua and then mixes them on a 50:50 beam splitter. `GaussianState.tmsv` packages this standard two-mode-squeezing/EPR resource construction in CV quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://www.routledge.com/Quantum-Continuous-Variables-A-Primer-of-Theoretical-Methods/Serafini/p/book/9781032157238")[Serafini (2023)].
 
 ```python
-@staticmethod
-def create_epr_pair(mode_a: str, mode_b: str, r: float) -> GaussianState:
-    _check_non_negative(r, "r")
-    state = GaussianOperations.create_vacuum((mode_a, mode_b))
-    state = GaussianOperations.apply_squeezing(state, mode=mode_a, r=r, theta=0.0)
-    state = GaussianOperations.apply_squeezing(
-        state, mode=mode_b, r=r, theta=np.pi / 2
-    )
-    return GaussianOperations.apply_beam_splitter(
-        state, mode_a=mode_a, mode_b=mode_b, eta=0.5
+@classmethod
+def tmsv(cls, mode_a: str, mode_b: str, r: float) -> GaussianState:
+    return (
+        cls.vacuum((mode_a, mode_b))
+        .squeeze(mode_a, r=r, theta=0.0)
+        .squeeze(mode_b, r=r, theta=np.pi / 2)
+        .beam_splitter(mode_a, mode_b, eta=0.5)
     )
 ```
 

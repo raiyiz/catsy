@@ -161,6 +161,132 @@ class GaussianState:
             covariance=self.covariance.copy(),
         )
 
+    # -- Constructors -------------------------------------------------------
+
+    @classmethod
+    def vacuum(cls, modes: Modes) -> GaussianState:
+        """Return a multi-mode vacuum state (V = 0.5 * I)."""
+        dim = 2 * len(modes)
+        return cls(
+            modes=modes,
+            displacement=np.zeros(dim),
+            covariance=0.5 * np.eye(dim),
+        )
+
+    @classmethod
+    def coherent(cls, modes: Modes, alphas: complex | Sequence[complex]) -> GaussianState:
+        """Return a multi-mode coherent state.
+
+        A single scalar amplitude is broadcast to every mode; otherwise pass
+        one amplitude per mode.
+        """
+        alpha_list: list[complex]
+        if isinstance(alphas, int | float | complex):
+            alpha_list = [complex(alphas)] * len(modes)
+        else:
+            alpha_list = list(alphas)
+        if len(alpha_list) != len(modes):
+            raise ValueError(
+                f"Got {len(alpha_list)} alpha(s) for {len(modes)} mode(s); "
+                "pass one alpha per mode (or a single scalar to broadcast)."
+            )
+
+        state = cls.vacuum(modes)
+        for mode, alpha in zip(modes, alpha_list, strict=True):
+            state = state.displace(mode, alpha)
+        return state
+
+    @classmethod
+    def tmsv(cls, mode_a: str, mode_b: str, r: float) -> GaussianState:
+        """Return a two-mode squeezed vacuum (TMSV) state."""
+        _check_non_negative(r, "r")
+        return (
+            cls.vacuum((mode_a, mode_b))
+            .squeeze(mode_a, r=r, theta=0.0)
+            .squeeze(mode_b, r=r, theta=np.pi / 2)
+            .beam_splitter(mode_a, mode_b, eta=0.5)
+        )
+
+    # -- Gaussian transformations -----------------------------------------
+
+    def squeeze(self, mode: str, r: float, theta: float = 0.0) -> GaussianState:
+        """Return the state after single-mode squeezing on ``mode``."""
+        idx = self.get_mode_index(mode)
+        dim = len(self.displacement)
+        S_local = np.array([[np.exp(-r), 0], [0, np.exp(r)]])
+        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        S_local = R @ S_local @ R.T
+        S_global = np.eye(dim)
+        S_global[idx : idx + 2, idx : idx + 2] = S_local
+        return _apply_gaussian_transform(self, S_global)
+
+    def rotate(self, mode: str, phi: float) -> GaussianState:
+        """Return the state after phase-space rotation on ``mode``."""
+        idx = self.get_mode_index(mode)
+        dim = len(self.displacement)
+        R_local = np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]])
+        R_global = np.eye(dim)
+        R_global[idx : idx + 2, idx : idx + 2] = R_local
+        return _apply_gaussian_transform(self, R_global)
+
+    def displace(
+        self,
+        mode: str,
+        alpha: complex | None = None,
+        *,
+        x: float | None = None,
+        p: float | None = None,
+    ) -> GaussianState:
+        """Return the state after displacing ``mode``.
+
+        Give either ``alpha`` or both ``x`` and ``p``; supplying both forms is
+        rejected.
+        """
+        if alpha is not None and (x is not None or p is not None):
+            raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
+        if alpha is not None:
+            d_x, d_p = np.sqrt(2.0) * np.real(alpha), np.sqrt(2.0) * np.imag(alpha)
+        elif x is not None and p is not None:
+            d_x, d_p = x, p
+        else:
+            raise ValueError("Must supply either `alpha` or both `x` and `p`.")
+        idx = self.get_mode_index(mode)
+        new_d = self.displacement.copy()
+        new_d[idx] += d_x
+        new_d[idx + 1] += d_p
+        return GaussianState(
+            modes=self.modes, displacement=new_d, covariance=self.covariance.copy()
+        )
+
+    def beam_splitter(self, mode_a: str, mode_b: str, eta: float) -> GaussianState:
+        """Return the state after a lossless beam splitter."""
+        if mode_a == mode_b:
+            raise ValueError("mode_a and mode_b must be different modes.")
+        _check_unit_interval(eta, "eta")
+        idx_a = self.get_mode_index(mode_a)
+        idx_b = self.get_mode_index(mode_b)
+        dim = len(self.displacement)
+        t = np.sqrt(eta)
+        r_coeff = np.sqrt(1 - eta)
+        S_BS = np.eye(dim)
+        I2 = np.eye(2)
+        S_BS[idx_a : idx_a + 2, idx_a : idx_a + 2] = t * I2
+        S_BS[idx_a : idx_a + 2, idx_b : idx_b + 2] = r_coeff * I2
+        S_BS[idx_b : idx_b + 2, idx_a : idx_a + 2] = -r_coeff * I2
+        S_BS[idx_b : idx_b + 2, idx_b : idx_b + 2] = t * I2
+        return _apply_gaussian_transform(self, S_BS)
+
+    def loss(self, mode: str, eta: float) -> GaussianState:
+        """Return the state after vacuum-coupled loss on ``mode``."""
+        _check_unit_interval(eta, "eta")
+        idx = self.get_mode_index(mode)
+        dim = len(self.displacement)
+        X = np.eye(dim)
+        X[idx : idx + 2, idx : idx + 2] = np.sqrt(eta) * np.eye(2)
+        Y = np.zeros((dim, dim))
+        Y[idx : idx + 2, idx : idx + 2] = (1 - eta) * 0.5 * np.eye(2)
+        return _apply_gaussian_transform(self, X, noise=Y)
+
     # -- Fock-space bridge --------------------------------------------------
 
     def to_qutip(self, N_cutoff: int = 15) -> qt.Qobj:
@@ -318,171 +444,6 @@ class GaussianState:
         return cls.from_dict(cast(GaussianStateData, _json_load(path)))
 
 
-class GaussianOperations:
-    @staticmethod
-    def create_vacuum(modes: Modes) -> GaussianState:
-        """Multi-mode vacuum state (V = 0.5 * I)."""
-        dim = 2 * len(modes)
-        d = np.zeros(dim)
-        V = 0.5 * np.eye(dim)
-        return GaussianState(modes=modes, displacement=d, covariance=V)
-
-    @staticmethod
-    def create_coherent(
-        modes: Modes, alphas: complex | Sequence[complex]
-    ) -> GaussianState:
-        """Multi-mode coherent state |alpha_1> ⊗ ... ⊗ |alpha_n> -- a vacuum
-        with each mode displaced by its complex amplitude alpha_k. Passing a
-        single scalar broadcasts the same alpha to every mode."""
-        alpha_list: list[complex]
-        if isinstance(alphas, int | float | complex):
-            alpha_list = [complex(alphas)] * len(modes)
-        else:
-            alpha_list = list(alphas)
-        if len(alpha_list) != len(modes):
-            raise ValueError(
-                f"Got {len(alpha_list)} alpha(s) for {len(modes)} mode(s); "
-                "pass one alpha per mode (or a single scalar to broadcast)."
-            )
-
-        state = GaussianOperations.create_vacuum(modes)
-        for mode, alpha in zip(modes, alpha_list, strict=True):
-            state = GaussianOperations.apply_displacement(state, mode, alpha)
-        return state
-
-    @staticmethod
-    def create_epr_pair(mode_a: str, mode_b: str, r: float) -> GaussianState:
-        """Canonical two-mode squeezed vacuum (EPR pair): squeeze `mode_a` in
-        x, `mode_b` in p, then combine them on a 50:50 beam splitter. This is
-        the standard recipe for *genuine* (non-classical) CV entanglement --
-        as opposed to merely correlated noise from a channel, which can look
-        similar in a scatter plot but never violates the Duan-Simon bound
-        (see `compute_duan_inseparability`).
-
-        Produces Var(x_a - x_b) = Var(p_a + p_b) = exp(-2r): x_a and x_b end
-        up positively correlated, p_a and p_b end up anti-correlated, and
-        both combined variances drop below the vacuum (shot-noise) level for
-        any r > 0.
-        """
-        _check_non_negative(r, "r")
-        state = GaussianOperations.create_vacuum((mode_a, mode_b))
-        state = GaussianOperations.apply_squeezing(state, mode=mode_a, r=r, theta=0.0)
-        state = GaussianOperations.apply_squeezing(
-            state, mode=mode_b, r=r, theta=np.pi / 2
-        )
-        return GaussianOperations.apply_beam_splitter(
-            state, mode_a=mode_a, mode_b=mode_b, eta=0.5
-        )
-
-    @staticmethod
-    def apply_squeezing(
-        state: GaussianState, mode: str, r: float, theta: float = 0.0
-    ) -> GaussianState:
-        """Single-mode squeezing on `mode` (squeeze strength r, phase theta)."""
-        idx = state.get_mode_index(mode)
-        dim = len(state.displacement)
-
-        S_local = np.array([[np.exp(-r), 0], [0, np.exp(r)]])
-        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-        S_local = R @ S_local @ R.T
-
-        S_global = np.eye(dim)
-        S_global[idx : idx + 2, idx : idx + 2] = S_local
-
-        return _apply_gaussian_transform(state, S_global)
-
-    @staticmethod
-    def apply_phase_rotation(
-        state: GaussianState, mode: str, phi: float
-    ) -> GaussianState:
-        """Phase-space rotation by angle `phi` on `mode` (a passive, energy-
-        preserving gate -- the piece needed alongside squeezing + beam
-        splitters to generate arbitrary single- and two-mode Gaussian
-        unitaries)."""
-        idx = state.get_mode_index(mode)
-        dim = len(state.displacement)
-
-        R_local = np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]])
-        R_global = np.eye(dim)
-        R_global[idx : idx + 2, idx : idx + 2] = R_local
-
-        return _apply_gaussian_transform(state, R_global)
-
-    @staticmethod
-    def apply_displacement(
-        state: GaussianState,
-        mode: str,
-        alpha: complex | None = None,
-        *,
-        x: float | None = None,
-        p: float | None = None,
-    ) -> GaussianState:
-        """Phase-space displacement D(alpha) = exp(alpha*adag - alpha^*a) on
-        `mode`: shifts the mean by (x, p) = (sqrt(2)*Re(alpha), sqrt(2)*Im(alpha))
-        and leaves the covariance untouched (displacement is affine, not
-        symplectic-mixing, so it never changes purity/entanglement).
-
-        Give either `alpha` (complex amplitude) or both `x` and `p`
-        (quadrature shifts directly) -- not both.
-        """
-        if alpha is not None and (x is not None or p is not None):
-            raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
-        if alpha is not None:
-            d_x, d_p = np.sqrt(2.0) * np.real(alpha), np.sqrt(2.0) * np.imag(alpha)
-        elif x is not None and p is not None:
-            d_x, d_p = x, p
-        else:
-            raise ValueError("Must supply either `alpha` or both `x` and `p`.")
-
-        idx = state.get_mode_index(mode)
-        new_d = state.displacement.copy()
-        new_d[idx] += d_x
-        new_d[idx + 1] += d_p
-        return GaussianState(
-            modes=state.modes, displacement=new_d, covariance=state.covariance.copy()
-        )
-
-    @staticmethod
-    def apply_beam_splitter(
-        state: GaussianState, mode_a: str, mode_b: str, eta: float
-    ) -> GaussianState:
-        """Lossless beam splitter with power transmissivity eta on (mode_a, mode_b)."""
-        if mode_a == mode_b:
-            raise ValueError("mode_a and mode_b must be different modes.")
-        _check_unit_interval(eta, "eta")
-
-        idx_a = state.get_mode_index(mode_a)
-        idx_b = state.get_mode_index(mode_b)
-        dim = len(state.displacement)
-
-        t = np.sqrt(eta)
-        r_coeff = np.sqrt(1 - eta)
-
-        S_BS = np.eye(dim)
-        I2 = np.eye(2)
-        S_BS[idx_a : idx_a + 2, idx_a : idx_a + 2] = t * I2
-        S_BS[idx_a : idx_a + 2, idx_b : idx_b + 2] = r_coeff * I2
-        S_BS[idx_b : idx_b + 2, idx_a : idx_a + 2] = -r_coeff * I2
-        S_BS[idx_b : idx_b + 2, idx_b : idx_b + 2] = t * I2
-
-        return _apply_gaussian_transform(state, S_BS)
-
-    @staticmethod
-    def apply_loss(state: GaussianState, mode: str, eta: float) -> GaussianState:
-        """Vacuum-coupled loss (transmissivity eta) on `mode`."""
-        _check_unit_interval(eta, "eta")
-        idx = state.get_mode_index(mode)
-        dim = len(state.displacement)
-
-        X = np.eye(dim)
-        X[idx : idx + 2, idx : idx + 2] = np.sqrt(eta) * np.eye(2)
-
-        Y = np.zeros((dim, dim))
-        Y[idx : idx + 2, idx : idx + 2] = (1 - eta) * 0.5 * np.eye(2)
-
-        return _apply_gaussian_transform(state, X, noise=Y)
-
-
 # ========================================================================
 # Channels
 # ========================================================================
@@ -573,9 +534,7 @@ class LossChannels:
         p-quadrature only, proportional to the jitter variance."""
         _check_non_negative(sigma_phi, "sigma_phi")
         X = np.eye(2)
-        Y = np.diag(
-            [0.0, sigma_phi**2]
-        )  # fixed: was shape (1,2), invalid for a 2x2 channel
+        Y = np.diag([0.0, sigma_phi**2])
         d0 = np.zeros(2)
         return GaussianChannel(target_modes=(mode,), X=X, Y=Y, d0=d0)
 
@@ -617,8 +576,7 @@ class CircuitOperation:
 def _op_squeeze(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_squeezing(
-        state,
+    return state.squeeze(
         mode=modes[0],
         r=cast(float, kwargs["r"]),
         theta=cast(float, kwargs["theta"]),
@@ -628,16 +586,13 @@ def _op_squeeze(
 def _op_rotate(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_phase_rotation(
-        state, mode=modes[0], phi=cast(float, kwargs["phi"])
-    )
+    return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
 
 
 def _op_displace(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_displacement(
-        state,
+    return state.displace(
         mode=modes[0],
         x=cast(float, kwargs["x"]),
         p=cast(float, kwargs["p"]),
@@ -647,8 +602,7 @@ def _op_displace(
 def _op_beam_splitter(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_beam_splitter(
-        state,
+    return state.beam_splitter(
         mode_a=modes[0],
         mode_b=modes[1],
         eta=cast(float, kwargs["eta"]),
@@ -658,9 +612,7 @@ def _op_beam_splitter(
 def _op_loss(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    return GaussianOperations.apply_loss(
-        state, mode=modes[0], eta=cast(float, kwargs["eta"])
-    )
+    return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
 
 
 def _op_thermal_loss(
@@ -767,7 +719,7 @@ class GaussianCircuit:
 
         if initial_state is None:
             alphas = [self._initial_alphas.get(m, 0.0) for m in self.modes]
-            current_state = GaussianOperations.create_coherent(self.modes, alphas)
+            current_state = GaussianState.coherent(self.modes, alphas)
         else:
             if set(initial_state.modes) != set(self.modes):
                 raise ValueError("Initial state's modes don't match the circuit's modes.")
@@ -978,7 +930,7 @@ class GaussianMeasurements:
 
 def compute_wigner_analytically(
     state: GaussianState, mode_name: str, x_max: float = 4.0, num_points: int = 150
-) -> tuple[FloatArray, FloatArray, FloatArray]:
+) -> tuple[FloatArray, FloatArray, FloatArray, str]:
     """Wigner function of a single mode, computed analytically from (d, V) —
     no Hilbert-space truncation involved."""
     idx = state.get_mode_index(mode_name)
@@ -1002,7 +954,7 @@ def compute_wigner_analytically(
         + dP * inv_V[1, 1] * dP
     )
     W = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
-    return W, X, P
+    return W, X, P, mode_name
 
 
 def plot_wigner(W: np.ndarray, X: np.ndarray, P: np.ndarray, mode_name: str) -> None:
@@ -1026,13 +978,13 @@ def compute_joint_correlation(
     x_max: float = 3.0,
     num_points: int = 150,
     quadrature: str = "x",
-) -> tuple[FloatArray, FloatArray, FloatArray]:
+) -> tuple[FloatArray, FloatArray, FloatArray, str, str]:
     """Joint probability distribution of the same quadrature on two modes
     (e.g. x_a vs x_b, or p_a vs p_b) -- the tool for actually *seeing* an
     EPR-style correlation or anti-correlation, as opposed to only reading it
     off the covariance matrix. `quadrature` selects which pair: 'x' shows
     position correlation, 'p' shows momentum correlation (anti-correlated,
-    for the standard `GaussianOperations.create_epr_pair` construction).
+    for the standard `GaussianState.tmsv` construction).
     """
     if quadrature not in ("x", "p"):
         raise ValueError(f"quadrature must be 'x' or 'p', got {quadrature!r}.")
@@ -1063,7 +1015,7 @@ def compute_joint_correlation(
         + inv_V[1, 1] * dX_b**2
     )
     P = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
-    return P, X_a, X_b
+    return P, X_a, X_b, mode_a, mode_b
 
 
 def plot_joint_correlation(
@@ -1096,7 +1048,7 @@ def compute_duan_inseparability(state: GaussianState, mode_a: str, mode_b: str) 
     entanglement between mode_a and mode_b: no amount of classical
     correlation (e.g. from `LossChannels.correlated_thermal_noise`) can beat
     it, only a genuinely entangling operation like the beam splitter in
-    `GaussianOperations.create_epr_pair` can. The bound is not necessary --
+    `GaussianState.tmsv` can. The bound is not necessary --
     some entangled states pass it undetected -- so failing to beat it does
     not itself prove separability.
     """

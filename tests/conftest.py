@@ -2,7 +2,7 @@
 
 import pytest
 
-from catsy.gaussian import GaussianOperations
+from catsy.gaussian import GaussianState
 
 
 def pytest_addoption(parser):
@@ -28,12 +28,12 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture
 def single_mode_vacuum():
-    return GaussianOperations.create_vacuum(("a",))
+    return GaussianState.vacuum(("a",))
 
 
 @pytest.fixture
 def two_mode_vacuum():
-    return GaussianOperations.create_vacuum(("a", "b"))
+    return GaussianState.vacuum(("a", "b"))
 
 
 @pytest.fixture

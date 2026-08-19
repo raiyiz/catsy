@@ -4,7 +4,7 @@
 
 Gaussian operations are defined by the fact that they leave the Gaussian structure of the Wigner function invariant. Mathematically, unitary operators of this class correspond to affine symplectic transformations in phase space. Non-unitary processes (decoherence and noise) are modeled as CPTP maps (*Completely Positive Trace-Preserving Maps*) via Gaussian channels. This is the standard Gaussian-operation/channel framework of continuous-variable quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
-== Unitary gate transformations (`GaussianOperations`)
+== Unitary gate transformations (`GaussianState`)
 Every purely Gaussian unitary transformation $hat(U)$ induces a linear transformation in phase space, expressed via a symplectic matrix $S in S_p(2n, RR)$. For the displacement vector $d$ and the covariance matrix $V$:
 $d -> S d$
 $V -> S V S^T$
@@ -12,7 +12,7 @@ $V -> S V S^T$
 Preserving the canonical commutation relations strictly requires that $S$ preserve the symplectic form:
 $S Omega S^T = Omega$
 
-The toolkit implements three fundamental basis transformations in `GaussianOperations`:
+The toolkit exposes these transformations directly as methods on `GaussianState`:
 
 1. *Squeezing operator ($hat(S)_k (r, theta)$):*
    The local squeeze operator on mode $k$ reduces the variance in one quadrature below the shot-noise limit, while amplifying the conjugate quadrature. Squeezing, passive rotations, and beam splitters are standard examples of Gaussian unitaries; their symplectic representation is developed systematically in the references above and in Serafini’s graduate-level treatment. The local symplectic matrix is:
@@ -39,38 +39,37 @@ $Y + i/2 Omega - i/2 X Omega X^T >= 0$
 The toolkit implements these maps efficiently via a global coordinate embedding in the `GaussianChannel` class:
 
 ```python
-@dataclass(frozen=True)
+@dataclass
 class GaussianChannel:
     """A general Gaussian channel d' = X@d + d0, V' = X@V@X.T + Y
     acting on a subset of modes."""
     target_modes: tuple[str, ...]
-    X: np.ndarray = field(hash=False)
-    Y: np.ndarray = field(hash=False)
-    d0: np.ndarray = field(hash=False)
+    X: np.ndarray
+    Y: np.ndarray
+    d0: np.ndarray
 
     def apply(self, state: GaussianState) -> GaussianState:
         global_dim = len(state.displacement)
+        target_indices = [
+            i
+            for mode in self.target_modes
+            for i in (state.get_mode_index(mode), state.get_mode_index(mode) + 1)
+        ]
+        index = np.ix_(target_indices, target_indices)
+
         X_global = np.eye(global_dim)
         Y_global = np.zeros((global_dim, global_dim))
         d0_global = np.zeros(global_dim)
+        X_global[index] = self.X
+        Y_global[index] = self.Y
+        d0_global[target_indices] = self.d0
 
-        # Embed the local matrices into the global mode indices
-        for l_idx1, m1 in enumerate(self.target_modes):
-            gi1 = state.get_mode_index(m1)
-            d0_global[gi1 : gi1 + 2] = self.d0[l_idx1 * 2 : l_idx1 * 2 + 2]
-            for l_idx2, m2 in enumerate(self.target_modes):
-                gi2 = state.get_mode_index(m2)
-                X_global[gi1 : gi1 + 2, gi2 : gi2 + 2] = self.X[
-                    l_idx1 * 2 : l_idx1 * 2 + 2, l_idx2 * 2 : l_idx2 * 2 + 2
-                ]
-                Y_global[gi1 : gi1 + 2, gi2 : gi2 + 2] = self.Y[
-                    l_idx1 * 2 : l_idx1 * 2 + 2, l_idx2 * 2 : l_idx2 * 2 + 2
-                ]
-
-        new_d = X_global @ state.displacement + d0_global
-        new_V = X_global @ state.covariance @ X_global.T + Y_global
-        return GaussianState(modes=state.modes, displacement=new_d, covariance=new_V)
+        return _apply_gaussian_transform(
+            state, X_global, noise=Y_global, displacement=d0_global
+        )
 ```
+
+`GaussianChannel` is a plain (non-frozen) dataclass; `apply` shares its embedding and update logic with the unitary gates above via the private `_apply_gaussian_transform` helper in `core.py`, rather than re-deriving `d' = Xd + d_0`, `V' = XVX^T + Y` in-line.
 
 == Standard optical noise channels (`LossChannels`)
 The toolkit provides standard physical channels through the factory object `LossChannels`:

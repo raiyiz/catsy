@@ -18,7 +18,7 @@ This closing chapter summarizes the previous nine chapters into a practical over
   stroke: 0.5pt + gray.lighten(40%),
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
-  [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianOperations`, `GaussianChannel`/`LossChannels`, `GaussianCircuit`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianCircuit`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
   [#src-link("src/catsy/fock.py")], [`FockOperations`: photon addition/subtraction on QuTiP states (Chapter 7).],
   [#src-link("src/catsy/optics.py")], [`OpticalSetup`/`OpticalComponent`: reusable bench layouts (Chapter 8); `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
@@ -28,7 +28,7 @@ There is no separate compatibility-shim or simulation-only module: `FockOperatio
 
 ```python
 from catsy import (
-    GaussianState, GaussianOperations, GaussianChannel, LossChannels,
+    GaussianState, GaussianChannel, LossChannels,
     GaussianCircuit, GaussianMeasurements,
     compute_wigner_analytically, compute_joint_correlation, compute_duan_inseparability,
     FockOperations, KerrCavity, MachZehnderInterferometer,
@@ -53,16 +53,16 @@ All modules share the same underlying physical conventions, regardless of which 
   [Beam splitter], [power transmissivity $eta$, see Chapter 2.],
 )
 
-For a single-mode squeezed vacuum state with squeezing strength $r$ and $theta = 0$, this correspondingly gives $"Var"(q) = e^(-2r)/2$ and $"Var"(p) = e^(2r)/2$ — the reference values against which `apply_squeezing` (Chapter 2) and the Wigner diagnostics (Chapter 6) are verified in the test suite.
+For a single-mode squeezed vacuum state with squeezing strength $r$ and $theta = 0$, this correspondingly gives $"Var"(q) = e^(-2r)/2$ and $"Var"(p) = e^(2r)/2$ — the reference values against which `GaussianState.squeeze` (Chapter 2) and the Wigner diagnostics (Chapter 6) are verified in the test suite.
 
 == Two typical workflows
 
 *Declarative, via `GaussianCircuit` (Chapter 3):* a `GaussianCircuit` describes the gate sequence, and `compile_and_run` executes it against an initial state (default: vacuum).
 
 ```python
-from catsy import GaussianCircuit, GaussianOperations
+from catsy import GaussianCircuit, GaussianState
 
-initial = GaussianOperations.create_epr_pair("a", "b", r=0.7)
+initial = GaussianState.tmsv("a", "b", r=0.7)
 circuit = (
     GaussianCircuit()
     .add_mode("a")
@@ -75,14 +75,14 @@ final = circuit.compile_and_run(initial_state=initial)
 *Direct, gate by gate (Chapters 2 and 5):* for exploratory use, where every intermediate state should be inspected.
 
 ```python
-from catsy import GaussianOperations
+from catsy import GaussianState
 
-state = GaussianOperations.create_vacuum(("a",))
-state = GaussianOperations.apply_squeezing(state, "a", r=0.5)
-state = GaussianOperations.apply_displacement(state, "a", alpha=0.4 + 0.2j)
+state = GaussianState.vacuum(("a",))
+state = state.squeeze("a", r=0.5)
+state = state.displace("a", alpha=0.4 + 0.2j)
 ```
 
-Both paths produce identical `GaussianState` objects and can be freely mixed: a directly constructed state can be fed as `initial_state` into `compile_and_run` (as in the first example), and a compiled final state can subsequently be processed further with `GaussianOperations` methods directly.
+Both paths produce identical `GaussianState` objects and can be freely mixed: a directly constructed state can be fed as `initial_state` into `compile_and_run` (as in the first example), and a compiled final state can subsequently be processed further with `GaussianState` methods directly.
 
 == Test suite
 
