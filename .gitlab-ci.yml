@@ -42,6 +42,10 @@ pytest:
     - uv run pytest --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
     when: always
+    # Gives every pipeline -- not just the default branch -- a direct link
+    # to its own HTML coverage report in the job/MR view, independent of
+    # whether GitLab Pages is deploying correctly.
+    expose_as: "HTML coverage report"
     reports:
       junit: pytest-results.xml
       coverage_report:
@@ -68,8 +72,15 @@ ruff:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
     - uv sync --group dev
-    - uv run ruff check .
+    - uv run ruff check . --output-format=gitlab --output-file=gl-code-quality-report.json
     - uv run ruff format --check .
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+    paths:
+      - gl-code-quality-report.json
+    expire_in: 1 week
 
 mypy:
   extends: .uv-job
@@ -126,9 +137,13 @@ typst:
     expire_in: 30 days
 
 # Publish the latest default-branch HTML coverage report via GitLab Pages.
-# The pytest job already generates coverage/html/; this job publishes that
-# directory at the project Pages URL.
-coverage-pages:
+# The pytest job already generates coverage/html/; this job republishes that
+# directory at the project Pages URL. The job is deliberately named `pages`
+# and uses the classic `public/` artifact convention (rather than the
+# `pages: publish:` keyword under a custom job name, which needs GitLab
+# >=17.6 and no-ops silently on older instances) so this works regardless
+# of the GitLab version this pipeline runs on.
+pages:
   stage: deploy
   needs:
     - job: pytest
@@ -137,5 +152,9 @@ coverage-pages:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
     - test -f coverage/html/index.html
-  pages:
-    publish: coverage/html
+    - rm -rf public
+    - mv coverage/html public
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
