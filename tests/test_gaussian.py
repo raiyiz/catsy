@@ -615,7 +615,7 @@ def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
     test_state.displacement[0] = 2.0
     test_state.displacement[1] = 3.0
 
-    W, X, P = compute_wigner_analytically(
+    W, X, P, M = compute_wigner_analytically(
         test_state, mode_name="a", x_max=8.0, num_points=200
     )
     # A properly normalized Wigner function integrates to ~1 over phase space.
@@ -623,7 +623,7 @@ def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
     integral = W.sum() * dx * dx
     assert integral == pytest.approx(1.0, rel=1e-2)
     if plot_enabled:
-        plot_wigner(W, X, P, mode_name="a")
+        plot_wigner(W, X, P, M)
 
 
 def test_joint_correlation_computes_valid_grid(plot_enabled):
@@ -633,11 +633,11 @@ def test_joint_correlation_computes_valid_grid(plot_enabled):
         mode_a="a", mode_b="b", eta=0.5
     )
     cv_state = circuit.compile_and_run()
-    P, X_a, X_b = compute_joint_correlation(cv_state, "a", "b")
+    P, X_a, X_b, mode_a, mode_b = compute_joint_correlation(cv_state, "a", "b")
     assert P.shape == (150, 150)
     assert np.all(P >= 0)
     if plot_enabled:
-        plot_joint_correlation(P, X_a, X_b, "a", "b")
+        plot_joint_correlation(P, X_a, X_b, mode_a, mode_b)
 
 
 def test_joint_correlation_rejects_invalid_quadrature():
@@ -654,8 +654,8 @@ def test_joint_correlation_x_correlated_p_anticorrelated_for_epr_pair():
     # would see on screen.
     epr = GaussianOperations.create_epr_pair("a", "b", r=1.0)
 
-    P_x, Xa_x, Xb_x = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="x")
-    P_p, Xa_p, Xb_p = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="p")
+    P_x, Xa_x, Xb_x, _, _ = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="x")
+    P_p, Xa_p, Xb_p, _, _ = compute_joint_correlation(epr, "a", "b", x_max=6.0, quadrature="p")
     dx = Xa_x[0, 1] - Xa_x[0, 0]
 
     # Means are zero, so this is directly the covariance Integral[x_a*x_b*P].

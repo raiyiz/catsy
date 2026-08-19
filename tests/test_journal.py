@@ -10,8 +10,6 @@ from catsy.gaussian import (
 )
 from catsy.journal import JournalEntry, SimulationJournal
 
-# JournalEntry.log_run
-
 
 def test_log_run_can_record_a_run_without_a_circuit():
     entry = JournalEntry(title="Fock calculation")
@@ -29,7 +27,7 @@ def test_log_run_with_inline_circuit_embeds_full_definition():
     circuit.beam_splitter(mode_a="a", mode_b="b", eta=0.5)
     final_state = circuit.compile_and_run()
 
-    P, X_a, X_b = compute_joint_correlation(final_state, "a", "b", quadrature="x")
+    P, X_a, X_b, _, _ = compute_joint_correlation(final_state, "a", "b", quadrature="x")
 
     entry = JournalEntry(title="EPR BeamSplitter Correlation Scan")
     run = entry.log_run(

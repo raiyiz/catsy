@@ -1,10 +1,10 @@
 [project]
 name = "catsy"
-version = "0.1.0"
-description = "A continuous-variable quantum-optics toolkit built around Gaussian states in phase space."
+version = "0.2.0"
+description = "A gaussian/fock optics toolkit built around states in phase space."
 readme = "README.md"
 authors = [
-    { name = "gsec", email = "gui@posteo.net" }
+    { name = "ↄǝsƃ", email = "ʇǝu˙oǝʇsod@ınƃ" }
 ]
 requires-python = ">=3.13"
 dependencies = [

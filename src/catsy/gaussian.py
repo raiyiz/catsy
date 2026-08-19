@@ -575,7 +575,7 @@ class LossChannels:
         X = np.eye(2)
         Y = np.diag(
             [0.0, sigma_phi**2]
-        )  # fixed: was shape (1,2), invalid for a 2x2 channel
+        )
         d0 = np.zeros(2)
         return GaussianChannel(target_modes=(mode,), X=X, Y=Y, d0=d0)
 
@@ -1002,7 +1002,7 @@ def compute_wigner_analytically(
         + dP * inv_V[1, 1] * dP
     )
     W = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
-    return W, X, P
+    return W, X, P, mode_name
 
 
 def plot_wigner(W: np.ndarray, X: np.ndarray, P: np.ndarray, mode_name: str) -> None:
@@ -1063,7 +1063,7 @@ def compute_joint_correlation(
         + inv_V[1, 1] * dX_b**2
     )
     P = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
-    return P, X_a, X_b
+    return P, X_a, X_b, mode_a, mode_b
 
 
 def plot_joint_correlation(
