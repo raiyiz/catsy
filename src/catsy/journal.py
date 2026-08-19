@@ -94,7 +94,7 @@ def _split_array_payload(payload: object) -> tuple[np.ndarray, dict[str, object]
         unit = "arbitrary_units"
         dimensions = []
         description = ""
-    meta = {
+    meta: dict[str, object] = {
         "description": description,
         "unit": unit,
         "dimensions": dimensions,
@@ -152,12 +152,12 @@ class SimulationRun:
         # format. It is deliberately ignored when loading older entries;
         # layouts are not part of the journal's current data model.
         return cls(
-            run_id=data["run_id"],
-            run_name=data["run_name"],
-            timestamp=data["timestamp"],
-            circuit=data.get("circuit"),
-            final_state_cv=data.get("final_state_cv"),
-            scalar_results=data.get("scalar_results", {}),
+            run_id=cast(str, data["run_id"]),
+            run_name=cast(str, data["run_name"]),
+            timestamp=cast(str, data["timestamp"]),
+            circuit=cast("GaussianCircuitData | None", data.get("circuit")),
+            final_state_cv=cast("dict[str, object] | None", data.get("final_state_cv")),
+            scalar_results=cast(JsonObject, data.get("scalar_results", {})),
             data_payloads=cast(
                 dict[str, dict[str, object]], data.get("data_payloads", {})
             ),
@@ -261,9 +261,9 @@ class JournalEntry:
             raise ValueError(f"Run '{run.run_name}' has no logged final state.")
         cv = run.final_state_cv
         return GaussianState(
-            modes=tuple(cv["modes"]),
-            displacement=self.get_array(cv["displacement_npz_key"]),
-            covariance=self.get_array(cv["covariance_npz_key"]),
+            modes=tuple(cast("list[str]", cv["modes"])),
+            displacement=self.get_array(cast(str, cv["displacement_npz_key"])),
+            covariance=self.get_array(cast(str, cv["covariance_npz_key"])),
         )
 
     # -- Serialization --------------------------------------------------------
@@ -286,14 +286,17 @@ class JournalEntry:
     def from_dict(cls, data: dict[str, object]) -> JournalEntry:
         meta = cast(dict[str, object], data["metadata"])
         entry = cls(
-            title=meta["title"],
-            entry_id=meta["entry_id"],
-            timestamp=meta["timestamp"],
-            tags=list(meta.get("tags", [])),
-            notes=meta.get("notes", ""),
-            metadata=dict(meta.get("custom", meta.get("metadata", {}))),
+            title=cast(str, meta["title"]),
+            entry_id=cast(str, meta["entry_id"]),
+            timestamp=cast(str, meta["timestamp"]),
+            tags=cast("list[str]", list(cast("list[object]", meta.get("tags", [])))),
+            notes=cast(str, meta.get("notes", "")),
+            metadata=dict(cast("dict[str, object]", meta.get("custom", meta.get("metadata", {})))),
         )
-        entry.runs = [SimulationRun.from_dict(r) for r in data["runs"]]
+        entry.runs = [
+            SimulationRun.from_dict(cast(dict[str, object], r))
+            for r in cast("list[object]", data["runs"])
+        ]
         return entry
 
     def save(self, directory: str | Path) -> Path:
@@ -384,11 +387,17 @@ class SimulationJournal:
         """Find saved entries by an optional tag and/or title substring."""
         summaries = self.fetch_history_summary()
         if tag is not None:
-            summaries = [summary for summary in summaries if tag in summary["tags"]]
+            summaries = [
+                summary
+                for summary in summaries
+                if tag in cast("list[str]", summary["tags"])
+            ]
         if title is not None:
             needle = title.casefold()
             summaries = [
-                summary for summary in summaries if needle in summary["title"].casefold()
+                summary
+                for summary in summaries
+                if needle in cast(str, summary["title"]).casefold()
             ]
         return summaries
 
@@ -409,4 +418,4 @@ class SimulationJournal:
                     "file_path": str(file),
                 }
             )
-        return sorted(summaries, key=lambda s: s["timestamp"], reverse=True)
+        return sorted(summaries, key=lambda s: cast(str, s["timestamp"]), reverse=True)

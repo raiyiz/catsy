@@ -105,6 +105,10 @@ class OpticalComponent:
 
         if self.op_type in {"BeamSplitter", "Loss"}:
             eta = self.kwargs["eta"]
+            if isinstance(eta, complex):
+                raise ValueError(
+                    f"{self.op_type} parameter 'eta' must be a real number, got {eta!r}."
+                )
             if not 0.0 <= eta <= 1.0:
                 raise ValueError(
                     f"{self.op_type} parameter 'eta' must be in [0, 1], got {eta}."
