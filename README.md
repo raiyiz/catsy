@@ -46,16 +46,16 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L310) |
-| Apply Gaussian operations                   | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L310) |
-| Build a sequence of operations              | [`GaussianCircuit`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L656) |
-| Model loss and thermal noise                | [`LossChannels`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L544), [`GaussianChannel`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L481) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L812) |
-| Inspect a covariance matrix                 | [`GaussianState`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L76) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L939) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L156) |
-| Define an optical layout                    | [`OpticalSetup`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/optics.py#L153) |
-| Save states and experiments                 | [`SimulationJournal`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/journal.py#L338) |
+| Create Gaussian states                      | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L321) |
+| Apply Gaussian operations                   | [`GaussianOperations`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L321) |
+| Build a sequence of operations              | [`GaussianCircuit`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L695) |
+| Model loss and thermal noise                | [`LossChannels`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L555), [`GaussianChannel`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L492) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L852) |
+| Inspect a covariance matrix                 | [`GaussianState`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L86) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L979) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/gaussian.py#L166) |
+| Define an optical layout                    | [`OpticalSetup`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/optics.py#L164) |
+| Save states and experiments                 | [`SimulationJournal`](https://gitlab.uni-hannover.de/inl/catsy/-/blob/main/src/catsy/journal.py#L354) |
 
 ## Gaussian states
 

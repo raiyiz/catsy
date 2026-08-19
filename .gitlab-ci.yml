@@ -7,7 +7,6 @@ workflow:
 
 stages:
   - test
-  - typecheck
   - docs
   - deploy
 
@@ -74,8 +73,9 @@ ruff:
 
 mypy:
   extends: .uv-job
-  stage: typecheck
-  # Type checking covers production Python and dependency metadata.
+  stage: test
+  # Same stage as pytest/ruff: mypy doesn't depend on either of their
+  # results, so running it as a separate later stage only added latency.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -84,6 +84,15 @@ mypy:
         - uv.lock
         - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  cache:
+    - key:
+        files:
+          - uv.lock
+      paths:
+        - .cache/uv/
+    - key: mypy-cache
+      paths:
+        - .mypy_cache/
   script:
     - uv sync --group dev
     - uv run mypy

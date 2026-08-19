@@ -44,6 +44,11 @@ module = [
 ]
 ignore_missing_imports = true
 
+[tool.coverage.run]
+# The README documents branch coverage; this is what actually turns it on
+# for both the CI job and any local `pytest --cov` run.
+branch = true
+
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
