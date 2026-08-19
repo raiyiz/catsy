@@ -1,6 +1,6 @@
 import numpy as np
 
-from catsy.gaussian import GaussianCircuit, GaussianOperations, GaussianState
+from catsy.gaussian import GaussianCircuit, GaussianState
 
 
 def test_gaussian_state_constructors_and_fluent_transformations():
@@ -51,12 +51,3 @@ def test_circuit_matches_fluent_state_chain():
 
     np.testing.assert_allclose(compiled.displacement, direct.displacement)
     np.testing.assert_allclose(compiled.covariance, direct.covariance)
-
-
-def test_legacy_gaussian_operations_delegate_to_gaussian_state():
-    state = GaussianOperations.create_vacuum(("a",))
-    legacy = GaussianOperations.apply_squeezing(state, "a", r=0.5)
-    current = state.squeeze("a", r=0.5)
-
-    np.testing.assert_allclose(legacy.displacement, current.displacement)
-    np.testing.assert_allclose(legacy.covariance, current.covariance)

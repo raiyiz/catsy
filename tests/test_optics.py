@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from catsy.fock import FockOperations
 from catsy.gaussian import (
     GaussianCircuit,
-    GaussianOperations,
+    GaussianState,
     compute_duan_inseparability,
 )
 from catsy.optics import (
@@ -71,7 +71,7 @@ def test_optical_component_rejects_invalid_definitions(op_type, ports, kwargs, m
 
 def test_process_beam_rejects_empty_setup():
     setup = OpticalSetup("Empty Bench")
-    vacuum = GaussianOperations.create_vacuum(modes=("a",))
+    vacuum = GaussianState.vacuum(modes=("a",))
     with pytest.raises(ValueError):
         setup.process_beam(vacuum)
 
@@ -82,7 +82,7 @@ def test_mzi_setup_preserves_purity_for_coherent_input():
     mzi.phase_shifter("Phase", port="line_2", phi=0.785)
     mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
 
-    coherent_in = GaussianOperations.create_coherent(
+    coherent_in = GaussianState.coherent(
         modes=("line_1", "line_2"), alphas=[1.5 + 0.0j, 2.0j]
     )
     result = mzi.process_beam(coherent_in)
@@ -96,10 +96,10 @@ def test_lossy_channel_setup_weakens_but_can_preserve_entanglement():
     setup.fiber_loss("Loss_A", port="line_1", eta=0.9)
     setup.fiber_loss("Loss_B", port="line_2", eta=1.0)  # lossless reference arm
 
-    epr_in = GaussianOperations.create_epr_pair(mode_a="line_1", mode_b="line_2", r=1.2)
-    duan_before = compute_duan_inseparability(epr_in, "line_1", "line_2")
+    tmsv_in = GaussianState.tmsv(mode_a="line_1", mode_b="line_2", r=1.2)
+    duan_before = compute_duan_inseparability(tmsv_in, "line_1", "line_2")
 
-    result = setup.process_beam(epr_in)
+    result = setup.process_beam(tmsv_in)
     duan_after = compute_duan_inseparability(result, "line_1", "line_2")
 
     # Loss always moves the witness toward the separability bound...
@@ -110,7 +110,7 @@ def test_lossy_channel_setup_weakens_but_can_preserve_entanglement():
 
 def test_process_beam_rejects_input_state_missing_a_registered_port():
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
-    mismatched = GaussianOperations.create_vacuum(modes=("a",))
+    mismatched = GaussianState.vacuum(modes=("a",))
     with pytest.raises(ValueError):
         setup.process_beam(mismatched)
 
