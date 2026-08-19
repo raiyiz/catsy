@@ -291,7 +291,9 @@ class JournalEntry:
             timestamp=cast(str, meta["timestamp"]),
             tags=cast("list[str]", list(cast("list[object]", meta.get("tags", [])))),
             notes=cast(str, meta.get("notes", "")),
-            metadata=dict(cast("dict[str, object]", meta.get("custom", meta.get("metadata", {})))),
+            metadata=dict(
+                cast("dict[str, object]", meta.get("custom", meta.get("metadata", {})))
+            ),
         )
         entry.runs = [
             SimulationRun.from_dict(cast(dict[str, object], r))
