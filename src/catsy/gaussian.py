@@ -443,6 +443,7 @@ class GaussianState:
     def load(cls, path: str | Path) -> GaussianState:
         return cls.from_dict(cast(GaussianStateData, _json_load(path)))
 
+
 # ========================================================================
 # Channels
 # ========================================================================

@@ -706,7 +706,7 @@ def test_tmsv_entanglement_visualization_demo():
         ),
     ]
     for state, quad, ax, title in panels:
-        P, X_a, X_b,_ ,_ = compute_joint_correlation(
+        P, X_a, X_b, _, _ = compute_joint_correlation(
             state, "a", "b", x_max=6.0, quadrature=quad
         )
         ax.contourf(X_a, X_b, P, 100, cmap="viridis")
