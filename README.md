@@ -12,7 +12,6 @@ The main idea is to keep Gaussian calculations in phase space where possible, de
 ### Status
 
 [![Pipeline status](https://gitlab.uni-hannover.de/inl/catsy/badges/main/pipeline.svg)](https://gitlab.uni-hannover.de/inl/catsy/-/pipelines) [![Coverage](https://gitlab.uni-hannover.de/inl/catsy/badges/main/coverage.svg)](https://inl.idmpages.uni-h.de/catsy/) [Latest HTML coverage report](https://inl.idmpages.uni-h.de/catsy/)
-https://inl.idmpages.uni-h.de/-/catsy/-/jobs/75575/artifacts/public/index.html
 The default branch publishes the latest interactive HTML coverage report through GitLab Pages. Every pipeline (including merge requests) also attaches its own HTML coverage report directly to the `pytest` job -- open the job and use the "HTML coverage report" artifact link if the default-branch Pages link above is ever out of date. The CI pipeline also uploads the Cobertura XML report so GitLab can show the coverage percentage and line-by-line coverage annotations in merge requests.
 
 ---
@@ -196,8 +195,3 @@ uv run pytest --cov=src/catsy --cov-report=term-missing --cov-report=html:covera
 ```
 
 This enables branch coverage and reports missing lines. The HTML report is written to `coverage/html/`; the XML report is written to `coverage/coverage.xml`.
-
-The GitLab CI test job runs the same coverage-enabled test suite. GitLab receives the Cobertura-compatible XML report and uses it for both the coverage percentage and line-by-line coverage annotations in merge requests. The percentage is configured with the CI `coverage` keyword, while `artifacts:reports:coverage_report` provides the line annotations. urlGitLab coverage reporting documentationhttps://docs.gitlab.com/ci/testing/code_coverage/coverage_reporting/ urlGitLab coverage visualization documentationhttps://docs.gitlab.com/ci/testing/code_coverage/coverage_visualization/
-
-There is deliberately **no minimum coverage gate yet**. This gives the project a reliable baseline first; a `--cov-fail-under` threshold can be introduced once the initial coverage level is known and the test suite has been expanded accordingly.
-
