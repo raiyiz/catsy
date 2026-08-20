@@ -38,9 +38,7 @@ DEF_RE = re.compile(r"^\s*(?:class|def)\s+(\w+)")
 
 # #src-link("path"[, ..., line: N][, ...])  -- path and an optional `line:`
 # kwarg, in either order, on a single line (all current usages are single-line).
-SRC_LINK_RE = re.compile(
-    r'#src-link\(\s*"(?P<path>[^"]+)"(?P<rest>[^)]*)\)'
-)
+SRC_LINK_RE = re.compile(r'#src-link\(\s*"(?P<path>[^"]+)"(?P<rest>[^)]*)\)')
 LINE_KWARG_RE = re.compile(r"line:\s*(?P<line>\d+)")
 
 # [`Symbol`](path/to/file.py#L123) or [`Symbol.method()`](path#L123)
@@ -75,7 +73,9 @@ def _nearby_backticked_symbol(text: str, match_start: int) -> str | None:
     return _symbol_from_label(tokens[-1])
 
 
-def _check(path_str: str, line_no: int | None, symbol: str | None, where: str) -> list[str]:
+def _check(
+    path_str: str, line_no: int | None, symbol: str | None, where: str
+) -> list[str]:
     errors: list[str] = []
     target = REPO_ROOT / path_str
     if not target.is_file():
@@ -88,8 +88,7 @@ def _check(path_str: str, line_no: int | None, symbol: str | None, where: str) -
     lines = target.read_text().splitlines()
     if not (1 <= line_no <= len(lines)):
         errors.append(
-            f"{where}: line {line_no} is out of range for {path_str} "
-            f"({len(lines)} lines)"
+            f"{where}: line {line_no} is out of range for {path_str} ({len(lines)} lines)"
         )
         return errors
 
