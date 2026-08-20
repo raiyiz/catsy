@@ -79,7 +79,7 @@ def compute_duan_inseparability(
     var_p_sum = (
         V[idx_a + 1, idx_a + 1] + V[idx_b + 1, idx_b + 1] + 2 * V[idx_a + 1, idx_b + 1]
     )
-    return var_x_diff + var_p_sum
+    return float(var_x_diff + var_p_sum)
 ```
 
 The signs of the cross terms directly mirror the structure of the EPR state: the minus sign in front of $V_(a b)$ in the $q$ term expects *positive* correlation ($q_a approx q_b$), while the plus sign in the $p$ term expects *negative* correlation ($p_a approx -p_b$) — exactly the statistics that `GaussianState.tmsv` constructs.

@@ -89,13 +89,13 @@ Both paths produce identical `GaussianState` objects and can be freely mixed: a 
 The test suite emphasizes both physical invariants (uncertainty relation, symplectic conservation, exact loss limiting cases) and analytical reference values across the entire module chain -- from state validation through to the Gaussian-Fock boundary:
 
 ```bash
-pytest
+uv run pytest
 ```
 
 Plot-generating tests (`plot_covariance`, `plot_wigner`, `plot_joint_correlation`) are deliberately opt-in, to keep the default suite headless-friendly and fast:
 
 ```bash
-pytest --plot
+uv run pytest --plot
 ```
 
 == Scope and boundaries

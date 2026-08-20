@@ -37,7 +37,7 @@ pytest:
         - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
-    - uv sync --group dev
+    - uv sync --group dev --locked
     - mkdir -p coverage
     - uv run pytest --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
@@ -71,7 +71,7 @@ ruff:
         - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
-    - uv sync --group dev
+    - uv sync --group dev --locked
     - uv run ruff check . --output-format=gitlab --output-file=gl-code-quality-report.json
     - uv run ruff format --check .
   artifacts:
@@ -105,8 +105,30 @@ mypy:
       paths:
         - .mypy_cache/
   script:
-    - uv sync --group dev
+    - uv sync --group dev --locked
     - uv run mypy
+
+# Checks every #src-link(..., line: N) in docs/*.typ and every
+# [`Symbol`](path#L123) link in README.md against the actual source: the
+# path must exist, the line must be in range, and it must declare the
+# exact class/function the link's label names. Catches doc links going
+# stale after a refactor moves code around -- see scripts/check_doc_links.py
+# for exactly what is and isn't checked. No project dependencies needed
+# (stdlib only), so this runs in a bare Python image rather than the uv one.
+docs-links:
+  stage: test
+  image: python:3.13-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - docs/**/*
+        - README.md
+        - src/**/*
+        - scripts/check_doc_links.py
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - python3 scripts/check_doc_links.py
 
 # Compiles the architectural-specs PDF from docs/book.typ. Manual/on-demand
 # only (press "Run" in the pipeline view or MR widget) -- it doesn't gate

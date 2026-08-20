@@ -42,16 +42,16 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py) |
-| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py) |
-| Build a sequence of operations              | [`GaussianCircuit`](src/catsy/gaussian.py) |
-| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py), [`GaussianChannel`](src/catsy/gaussian.py) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py) |
-| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py) |
-| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py) |
-| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py) |
+| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L86) |
+| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L86) |
+| Build a sequence of operations              | [`GaussianCircuit`](src/catsy/gaussian.py#L647) |
+| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L516), [`GaussianChannel`](src/catsy/gaussian.py#L453) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L804) |
+| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L86) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L931) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L292) |
+| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L164) |
+| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L354) |
 ## Gaussian states
 
 States are represented in phase space by their first moments and covariance matrix. Common operations include:

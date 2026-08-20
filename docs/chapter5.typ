@@ -21,22 +21,26 @@ A coherent state $ket(alpha)$ is a vacuum displaced by $alpha$. The `GaussianSta
 ```python
 @classmethod
 def coherent(
-    modes: tuple[str, ...], alphas: complex | Sequence[complex]
+    cls, modes: tuple[str, ...], alphas: complex | Sequence[complex]
 ) -> GaussianState:
-    """Multi-mode coherent state |alpha_1> ⊗ ... ⊗ |alpha_n> -- a vacuum
-    with each mode displaced by its complex amplitude alpha_k. Passing a
-    single scalar broadcasts the same alpha to every mode."""
-    if np.isscalar(alphas):
-        alphas = [alphas] * len(modes)
-    alphas = list(alphas)
-    if len(alphas) != len(modes):
+    """Return a multi-mode coherent state.
+
+    A single scalar amplitude is broadcast to every mode; otherwise pass
+    one amplitude per mode.
+    """
+    alpha_list: list[complex]
+    if isinstance(alphas, int | float | complex):
+        alpha_list = [complex(alphas)] * len(modes)
+    else:
+        alpha_list = list(alphas)
+    if len(alpha_list) != len(modes):
         raise ValueError(
-            f"Got {len(alphas)} alpha(s) for {len(modes)} mode(s); "
+            f"Got {len(alpha_list)} alpha(s) for {len(modes)} mode(s); "
             "pass one alpha per mode (or a single scalar to broadcast)."
         )
 
     state = cls.vacuum(modes)
-    for mode, alpha in zip(modes, alphas):
+    for mode, alpha in zip(modes, alpha_list, strict=True):
         state = state.displace(mode, alpha)
     return state
 ```
