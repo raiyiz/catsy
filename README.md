@@ -13,13 +13,11 @@ The main idea is to keep Gaussian calculations in phase space where possible, de
 
 [![Pipeline status](https://gitlab.uni-hannover.de/inl/catsy/badges/main/pipeline.svg)](https://gitlab.uni-hannover.de/inl/catsy/-/pipelines) [![Coverage](https://gitlab.uni-hannover.de/inl/catsy/badges/main/coverage.svg)](https://inl.idmpages.uni-h.de/catsy/)
 
+***⚠ This package was build with heavy use of AI***
+
+---
+
 The default branch publishes the latest interactive HTML coverage report through GitLab Pages. Every pipeline (including merge requests) also attaches its own HTML coverage report directly to the `pytest` job -- open the job and use the "HTML coverage report" artifact link if the default-branch Pages link above is ever out of date. The CI pipeline also uploads the Cobertura XML report so GitLab can show the coverage percentage and line-by-line coverage annotations in merge requests.
-
----
-
-***⚠ ATTENTION! This package was build with heavy use of AI***
-
----
 
 
 ## Quick start

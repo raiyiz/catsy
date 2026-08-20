@@ -81,12 +81,11 @@ wheels = [
 
 [[package]]
 name = "catsy"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
-    { name = "pytest-cov" },
     { name = "qutip" },
     { name = "scipy" },
 ]
@@ -96,6 +95,7 @@ dev = [
     { name = "ipython" },
     { name = "mypy" },
     { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "ruff" },
     { name = "scipy-stubs" },
 ]
@@ -104,7 +104,6 @@ dev = [
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "numpy", specifier = ">=2.5.2" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "qutip", specifier = ">=5.3.1" },
     { name = "scipy", specifier = ">=1.16.0,<2.0.0" },
 ]
@@ -114,6 +113,7 @@ dev = [
     { name = "ipython", specifier = ">=9.16.1" },
     { name = "mypy", specifier = ">=2.3,<2.4" },
     { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.16.3" },
     { name = "scipy-stubs", specifier = ">=1.16.0" },
 ]
