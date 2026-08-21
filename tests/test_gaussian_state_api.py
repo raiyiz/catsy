@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from catsy.gaussian import GaussianCircuit, GaussianState
 
@@ -48,3 +49,33 @@ def test_circuit_matches_fluent_state_chain():
 
     np.testing.assert_allclose(compiled.displacement, direct.displacement)
     np.testing.assert_allclose(compiled.covariance, direct.covariance)
+
+
+def test_repr_reports_modes_and_purity():
+    # A pure two-mode state (squeeze + lossless beam splitter) must report
+    # purity~1.000; this also exercises purity() on a non-trivial covariance
+    # rather than only ever being read as a side effect of debugging.
+    pure = (
+        GaussianState.vacuum(("a", "b"))
+        .squeeze("a", r=0.6)
+        .beam_splitter("a", "b", eta=0.5)
+    )
+    text = repr(pure)
+    assert "GaussianState" in text
+    assert "modes=('a', 'b')" in text
+    assert "purity~1.000" in text
+
+    # Loss strictly reduces purity below 1, so the printed value must move
+    # off the pure-state baseline too, not just be present.
+    lossy = pure.loss("a", eta=0.5)
+    assert "purity~1.000" not in repr(lossy)
+
+
+@pytest.mark.visual
+def test_plot_covariance_renders_without_error():
+    state = (
+        GaussianState.vacuum(("a", "b"))
+        .squeeze("a", r=0.7)
+        .beam_splitter("a", "b", eta=0.5)
+    )
+    state.plot_covariance()

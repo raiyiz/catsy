@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -11,7 +11,15 @@ import numpy as np
 import qutip as qt
 
 from .core import _check_non_negative, _check_positive_int
-from .gaussian import GaussianCircuit, GaussianState
+from .gaussian import (
+    GaussianCircuit,
+    GaussianOperation,
+    GaussianState,
+    beam_splitter,
+    loss,
+    rotate,
+    squeeze,
+)
 from .types import (
     FloatArray,
     Modes,
@@ -25,65 +33,72 @@ from .types import (
 # ---------------------------------------------------------------------------
 
 
-class _ComponentSpec(TypedDict):
-    ports: int
-    kwargs: tuple[str, ...]
+# Optical components are the subset of Gaussian operations that have a direct
+# physical optical-bench interpretation.  The operation itself is stored as a
+# callable; the optical layer adds the component name and layout semantics.
+_OPTICAL_COMPONENT_OPS = frozenset(
+    {
+        beam_splitter,
+        loss,
+        squeeze,
+        rotate,
+    }
+)
+_OPTICAL_OPERATION_BY_NAME = {op.__name__: op for op in _OPTICAL_COMPONENT_OPS}
 
-
-# Structural contract for each component type.  Numerical/physical execution
-# remains in ``GaussianState``/``GaussianCircuit``; this table only defines
-# what a layout component must look like before it can be registered.
-_COMPONENT_SPECS: dict[str, _ComponentSpec] = {
-    "BeamSplitter": {"ports": 2, "kwargs": ("eta",)},
-    "Loss": {"ports": 1, "kwargs": ("eta",)},
-    "Squeezing": {"ports": 1, "kwargs": ("r", "theta")},
-    "PhaseRotation": {"ports": 1, "kwargs": ("phi",)},
+# Port count and expected kwarg names per operation.  This is *structural*
+# metadata the executing layer can't provide: GaussianCircuit/GaussianState
+# happily accept whatever kwargs a callable's **kwargs picks out and quietly
+# ignore the rest, so a component built with the wrong port count or a
+# mistyped kwarg name would otherwise fail late (an IndexError/KeyError deep
+# inside the callable) or not at all (an unrecognized extra kwarg is simply
+# never read). Physical value constraints (eta in [0, 1], etc.) are
+# deliberately NOT duplicated here -- those already have a single owner in
+# GaussianState.beam_splitter/.loss and are validated there.
+_COMPONENT_INTERFACE: dict[GaussianOperation, tuple[int, tuple[str, ...]]] = {
+    beam_splitter: (2, ("eta",)),
+    loss: (1, ("eta",)),
+    squeeze: (1, ("r", "theta")),
+    rotate: (1, ("phi",)),
 }
 
 
 @dataclass
 class OpticalComponent:
-    """Blueprint for a component mapped to specific interface ports."""
+    """Named physical component backed directly by an executable callable."""
 
-    name: str  # e.g. "50:50 BS", "Fiber Loss", "Squeezer"
-    op_type: str  # one of "BeamSplitter", "Loss", "Squeezing", "PhaseRotation"
-    ports: Modes  # the ordered port/channel names it connects to
-    kwargs: OperationParameters = field(default_factory=dict)
+    name: str
+    op: GaussianOperation
+    ports: Modes
+    kwargs: OperationParameters
 
     def __post_init__(self) -> None:
-        """Validate the structural contract of a layout component.
-
-        Component validation belongs here because an ``OpticalComponent`` is
-        the reusable layout object.  The circuit compiler remains responsible
-        for executing valid components.
-        """
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("OpticalComponent name must be a non-empty string.")
-
-        if self.op_type not in _COMPONENT_SPECS:
+        if not callable(self.op):
+            raise TypeError("OpticalComponent op must be callable.")
+        if self.op not in _OPTICAL_COMPONENT_OPS:
             raise ValueError(
-                f"Unknown optical component type {self.op_type!r}. "
-                f"Known types: {sorted(_COMPONENT_SPECS)}."
+                f"Unknown optical component operation {self.op.__name__!r}. "
+                f"Known operations: {sorted(op.__name__ for op in _OPTICAL_COMPONENT_OPS)}."
             )
-
         self.ports = tuple(self.ports)
         self.kwargs = dict(self.kwargs)
 
-        expected_ports = _COMPONENT_SPECS[self.op_type]["ports"]
+        expected_ports, expected_kwargs = _COMPONENT_INTERFACE[self.op]
         if len(self.ports) != expected_ports:
             raise ValueError(
-                f"{self.op_type} requires exactly {expected_ports} port(s), got {len(self.ports)}."
+                f"{self.op_type} requires exactly {expected_ports} port(s), "
+                f"got {len(self.ports)}."
             )
-
         if len(set(self.ports)) != len(self.ports):
             raise ValueError(
-                f"{self.op_type} cannot connect the same port more than once: {self.ports!r}."
+                f"{self.op_type} cannot connect the same port more than once: "
+                f"{self.ports!r}."
             )
-
         if any(not isinstance(port, str) or not port.strip() for port in self.ports):
             raise ValueError("All optical component ports must be non-empty strings.")
 
-        expected_kwargs = _COMPONENT_SPECS[self.op_type]["kwargs"]
         if set(self.kwargs) != set(expected_kwargs):
             missing = sorted(set(expected_kwargs) - set(self.kwargs))
             extra = sorted(set(self.kwargs) - set(expected_kwargs))
@@ -95,63 +110,52 @@ class OpticalComponent:
             raise ValueError(
                 f"Invalid kwargs for {self.op_type}: " + ", ".join(details) + "."
             )
-
-        for key in expected_kwargs:
-            value = self.kwargs[key]
+        for key, value in self.kwargs.items():
             if not np.isscalar(value) or not np.isfinite(value):
                 raise ValueError(
                     f"{self.op_type} parameter {key!r} must be a finite scalar, got {value!r}."
                 )
 
-        if self.op_type in {"BeamSplitter", "Loss"}:
-            eta = self.kwargs["eta"]
-            if isinstance(eta, complex):
-                raise ValueError(
-                    f"{self.op_type} parameter 'eta' must be a real number, got {eta!r}."
-                )
-            if not 0.0 <= eta <= 1.0:
-                raise ValueError(
-                    f"{self.op_type} parameter 'eta' must be in [0, 1], got {eta}."
-                )
+    @property
+    def op_type(self) -> str:
+        """Compatibility/readability alias exposing the callable's name."""
+        return self.op.__name__
+
+    def apply_to(self, circuit: GaussianCircuit) -> None:
+        """Attach this component's callable directly to ``circuit``."""
+        circuit.add_operation(self.op, self.ports, **self.kwargs)
 
     def to_dict(self) -> OpticalComponentData:
         return {
             "name": self.name,
-            "op_type": self.op_type,
+            "op_type": self.op.__name__,
             "ports": list(self.ports),
             "kwargs": self.kwargs,
         }
 
     @classmethod
     def from_dict(cls, data: OpticalComponentData) -> OpticalComponent:
+        try:
+            op = _OPTICAL_OPERATION_BY_NAME[data["op_type"]]
+        except KeyError as exc:
+            raise KeyError(
+                f"Unknown optical operation function '{data['op_type']}' in serialized component."
+            ) from exc
         return cls(
             name=data["name"],
-            op_type=data["op_type"],
+            op=op,
             ports=tuple(data["ports"]),
             kwargs=data["kwargs"],
         )
 
 
-# Maps an OpticalComponent.op_type to the GaussianCircuit builder method that
-# implements it. Extend the component vocabulary by adding an entry here (and
-# a matching `add_*`-style convenience method below) rather than touching
-# `process_beam`.
-_CIRCUIT_BUILDERS = {
-    "BeamSplitter": lambda circuit, ports, kwargs: circuit.beam_splitter(
-        ports[0], ports[1], **kwargs
-    ),
-    "Loss": lambda circuit, ports, kwargs: circuit.loss(ports[0], **kwargs),
-    "Squeezing": lambda circuit, ports, kwargs: circuit.squeeze(ports[0], **kwargs),
-    "PhaseRotation": lambda circuit, ports, kwargs: circuit.rotate(ports[0], **kwargs),
-}
-
 # Abbreviated labels and the kwarg used to render each component's parameter
 # in `OpticalSetup.render_schematic`.
 _TYPE_ABBREVIATIONS = {
-    "BeamSplitter": "BS",
-    "Loss": "LOSS",
-    "Squeezing": "SQZ",
-    "PhaseRotation": "PHASE",
+    beam_splitter.__name__: "BS",
+    loss.__name__: "LOSS",
+    squeeze.__name__: "SQZ",
+    rotate.__name__: "PHASE",
 }
 _LABEL_PARAM_KEYS = ("eta", "phi", "r")
 
@@ -162,16 +166,32 @@ _LABEL_PARAM_KEYS = ("eta", "phi", "r")
 
 
 class OpticalSetup:
-    """A static, reusable layout of optical hardware components on a bench."""
+    """A reusable layout of optical hardware components on a bench.
 
-    def __init__(self, name: str = "Custom Bench Layout"):
+    Each `add_component` call attaches that component's operation directly to
+    an owned `GaussianCircuit`; `process_beam` runs the same accumulated
+    circuit against whatever input state it's given, so a single setup can be
+    replayed against many different inputs.
+    """
+
+    def __init__(
+        self,
+        name: str = "Custom Bench Layout",
+        *,
+        circuit: GaussianCircuit | None = None,
+    ):
         self.name = name
+        self.circuit = circuit if circuit is not None else GaussianCircuit()
         self.components: list[OpticalComponent] = []
         self.registered_ports: set[str] = set()
 
     def add_component(self, component: OpticalComponent) -> OpticalSetup:
         self.registered_ports.update(component.ports)
+        for port in component.ports:
+            if port not in self.circuit.modes:
+                self.circuit.add_mode(port)
         self.components.append(component)
+        component.apply_to(self.circuit)
         return self
 
     # -- Syntactic sugar for quick assembly ---------------------------------
@@ -180,23 +200,21 @@ class OpticalSetup:
         self, name: str, port_a: str, port_b: str, eta: float = 0.5
     ) -> OpticalSetup:
         return self.add_component(
-            OpticalComponent(name, "BeamSplitter", (port_a, port_b), {"eta": eta})
+            OpticalComponent(name, beam_splitter, (port_a, port_b), {"eta": eta})
         )
 
     def fiber_loss(self, name: str, port: str, eta: float) -> OpticalSetup:
-        return self.add_component(OpticalComponent(name, "Loss", (port,), {"eta": eta}))
+        return self.add_component(OpticalComponent(name, loss, (port,), {"eta": eta}))
 
     def inline_squeezer(
         self, name: str, port: str, r: float, theta: float = 0.0
     ) -> OpticalSetup:
         return self.add_component(
-            OpticalComponent(name, "Squeezing", (port,), {"r": r, "theta": theta})
+            OpticalComponent(name, squeeze, (port,), {"r": r, "theta": theta})
         )
 
     def phase_shifter(self, name: str, port: str, phi: float) -> OpticalSetup:
-        return self.add_component(
-            OpticalComponent(name, "PhaseRotation", (port,), {"phi": phi})
-        )
+        return self.add_component(OpticalComponent(name, rotate, (port,), {"phi": phi}))
 
     # -- Execution ------------------------------------------------------------
 
@@ -205,19 +223,7 @@ class OpticalSetup:
         if not self.components:
             raise ValueError(f"OpticalSetup '{self.name}' has no components to run.")
 
-        circuit = GaussianCircuit()
-        for mode in sorted(self.registered_ports):
-            circuit.add_mode(mode)
-
-        for comp in self.components:
-            if comp.op_type not in _CIRCUIT_BUILDERS:
-                raise KeyError(
-                    f"Component '{comp.name}': unknown op_type '{comp.op_type}'. "
-                    f"Known types: {sorted(_CIRCUIT_BUILDERS)}."
-                )
-            _CIRCUIT_BUILDERS[comp.op_type](circuit, comp.ports, comp.kwargs)
-
-        return circuit.compile_and_run(initial_state=input_state)
+        return self.circuit.compile_and_run(initial_state=input_state)
 
     # -- Serialization --------------------------------------------------------
 
@@ -420,6 +426,10 @@ class MachZehnderInterferometer:
     def scan(self, psi_cat_single: qt.Qobj, theta_list: FloatArray) -> ObservableScanData:
         """Scan the phase of the lossy arm and return output observables.
 
+        ``psi_cat_single`` may be a ket or a density matrix -- the latter
+        lets the output of a lossy simulation (e.g. ``KerrCavity.run``) be
+        fed in directly without an intermediate purification step.
+
         The model is input -> 50:50 beam splitter -> fixed-time amplitude
         damping on arm 1 -> phase shift on arm 1 -> second 50:50 beam splitter.
         The returned dictionary contains ``theta``, ``n1``, ``n2`` and
@@ -441,8 +451,17 @@ class MachZehnderInterferometer:
 
         U_BS = ((1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())).expm()
 
-        psi_in = qt.tensor(psi_cat_single, qt.fock(N, 0))
-        psi_after_BS1 = U_BS * psi_in
+        # psi_cat_single may be a ket (e.g. a hand-built cat state) or a
+        # density matrix (e.g. the output of a lossy KerrCavity.run()) -- the
+        # vacuum port and the beam-splitter application below must match it,
+        # since qt.tensor requires both operands to be the same Qobj type
+        # and U*rho (unlike U*psi) needs an explicit U*rho*U.dag() to conjugate.
+        if psi_cat_single.isket:
+            psi_in = qt.tensor(psi_cat_single, qt.fock(N, 0))
+            psi_after_BS1 = U_BS * psi_in
+        else:
+            psi_in = qt.tensor(psi_cat_single, qt.ket2dm(qt.fock(N, 0)))
+            psi_after_BS1 = U_BS * psi_in * U_BS.dag()
 
         c_ops = (
             [np.sqrt(self.kappa) * a1] if self.kappa > 0 and self.loss_time > 0 else []
