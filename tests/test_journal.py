@@ -217,6 +217,31 @@ def test_resaving_after_reload_preserves_previously_logged_arrays(tmp_path):
     np.testing.assert_array_equal(fully_reloaded.get_array(y_key), [3.0, 4.0])
 
 
+def test_close_releases_the_companion_npz_handle(tmp_path):
+    # load() opens the companion .npz eagerly (so get_array reads are fast
+    # and repeatable); close() is the other half of that contract -- it must
+    # actually release the handle, not just clear a flag, or long-lived
+    # analysis scripts that load many entries in a loop would leak open file
+    # descriptors.
+    entry = JournalEntry(title="Handle Lifecycle")
+    entry.log_run("Run", circuit=GaussianCircuit(), arrays={"x": [1.0, 2.0]})
+    saved_path = entry.save(tmp_path)
+
+    reloaded = JournalEntry.load(saved_path)
+    assert reloaded._npz_file is not None  # opened eagerly by load()
+    key = reloaded.runs[0].data_payloads["x"]["npz_key"]
+    np.testing.assert_array_equal(reloaded.get_array(key), [1.0, 2.0])
+
+    reloaded.close()
+    assert reloaded._npz_file is None
+
+    # Calling close() again (no handle open) must be a no-op, not an error --
+    # e.g. a caller wrapping load()/close() in a context manager-style
+    # try/finally shouldn't have to track whether close() already ran.
+    reloaded.close()
+    assert reloaded._npz_file is None
+
+
 # SimulationJournal
 
 

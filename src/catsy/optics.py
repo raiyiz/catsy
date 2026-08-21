@@ -420,6 +420,10 @@ class MachZehnderInterferometer:
     def scan(self, psi_cat_single: qt.Qobj, theta_list: FloatArray) -> ObservableScanData:
         """Scan the phase of the lossy arm and return output observables.
 
+        ``psi_cat_single`` may be a ket or a density matrix -- the latter
+        lets the output of a lossy simulation (e.g. ``KerrCavity.run``) be
+        fed in directly without an intermediate purification step.
+
         The model is input -> 50:50 beam splitter -> fixed-time amplitude
         damping on arm 1 -> phase shift on arm 1 -> second 50:50 beam splitter.
         The returned dictionary contains ``theta``, ``n1``, ``n2`` and
@@ -441,8 +445,17 @@ class MachZehnderInterferometer:
 
         U_BS = ((1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())).expm()
 
-        psi_in = qt.tensor(psi_cat_single, qt.fock(N, 0))
-        psi_after_BS1 = U_BS * psi_in
+        # psi_cat_single may be a ket (e.g. a hand-built cat state) or a
+        # density matrix (e.g. the output of a lossy KerrCavity.run()) -- the
+        # vacuum port and the beam-splitter application below must match it,
+        # since qt.tensor requires both operands to be the same Qobj type
+        # and U*rho (unlike U*psi) needs an explicit U*rho*U.dag() to conjugate.
+        if psi_cat_single.isket:
+            psi_in = qt.tensor(psi_cat_single, qt.fock(N, 0))
+            psi_after_BS1 = U_BS * psi_in
+        else:
+            psi_in = qt.tensor(psi_cat_single, qt.ket2dm(qt.fock(N, 0)))
+            psi_after_BS1 = U_BS * psi_in * U_BS.dag()
 
         c_ops = (
             [np.sqrt(self.kappa) * a1] if self.kappa > 0 and self.loss_time > 0 else []

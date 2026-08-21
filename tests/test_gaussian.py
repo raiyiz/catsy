@@ -282,6 +282,31 @@ def test_gaussian_state_rejects_unphysical_covariance():
         )
 
 
+def test_gaussian_state_rejects_duplicate_mode_names():
+    with pytest.raises(ValueError, match="Duplicate mode"):
+        GaussianState(
+            modes=("a", "a"),
+            displacement=np.zeros(4),
+            covariance=0.5 * np.eye(4),
+        )
+
+
+@pytest.mark.parametrize(
+    ("displacement", "covariance", "match"),
+    [
+        (np.zeros(3), 0.5 * np.eye(2), "displacement must have shape"),
+        (np.zeros(2), 0.5 * np.eye(3), "covariance must have shape"),
+    ],
+)
+def test_gaussian_state_rejects_mismatched_shapes(displacement, covariance, match):
+    # Every other GaussianState validation test below (unphysical,
+    # nonsymmetric, nonfinite) already assumes a correctly-shaped (2, 2)
+    # covariance and a matching displacement -- the shape checks
+    # themselves, which run before any of that, weren't directly exercised.
+    with pytest.raises(ValueError, match=match):
+        GaussianState(modes=("a",), displacement=displacement, covariance=covariance)
+
+
 # Channels
 
 
@@ -325,6 +350,16 @@ def test_gaussian_channel_rejects_nonsymmetric_noise():
         )
 
 
+def test_gaussian_channel_rejects_duplicate_target_modes():
+    with pytest.raises(ValueError, match="Duplicate target mode"):
+        GaussianChannel(
+            target_modes=("a", "a"),
+            X=np.eye(4),
+            Y=np.zeros((4, 4)),
+            d0=np.zeros(4),
+        )
+
+
 def test_thermal_loss_is_a_valid_gaussian_channel():
     channel = LossChannels.thermal_loss(
         mode="a",
@@ -341,6 +376,7 @@ def test_thermal_loss_is_a_valid_gaussian_channel():
         (0.5, -0.5, True),
         (0.5, 0.500001, False),
         (0.0, 1e-6, False),
+        (0.5, np.nan, False),
     ],
 )
 def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation, valid):
@@ -367,9 +403,17 @@ def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation
 # Circuit validation and serialization
 
 
-def test_channel_dimension_validation():
-    with pytest.raises(ValueError):
-        GaussianChannel(target_modes=("a",), X=np.eye(2), Y=np.eye(3), d0=np.zeros(2))
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"X": np.eye(3), "Y": np.eye(2), "d0": np.zeros(2)}, "X must have shape"),
+        ({"X": np.eye(2), "Y": np.eye(3), "d0": np.zeros(2)}, "Y must have shape"),
+        ({"X": np.eye(2), "Y": np.eye(2), "d0": np.zeros(3)}, "d0 must have shape"),
+    ],
+)
+def test_channel_dimension_validation(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        GaussianChannel(target_modes=("a",), **kwargs)
 
 
 def test_circuit_matches_manual_operation_chain():
@@ -405,6 +449,24 @@ def test_circuit_rejects_unregistered_mode():
 def test_circuit_rejects_empty_mode_set():
     with pytest.raises(ValueError):
         GaussianCircuit().compile_and_run()
+
+
+def test_circuit_rejects_duplicate_mode_registration():
+    circuit = GaussianCircuit().add_mode("a")
+    with pytest.raises(ValueError, match="already registered"):
+        circuit.add_mode("a")
+
+
+def test_compile_and_run_rejects_unknown_operation():
+    # The negative-case sibling of test_circuit_extensible_via_registry
+    # below: compile_and_run must still reject an operation name that was
+    # never registered, rather than silently skipping it. _add_op is used
+    # directly here (as in that test) since every public builder method
+    # only ever emits a name that's already in OPERATION_REGISTRY.
+    circuit = GaussianCircuit().add_mode("a")
+    circuit._add_op("NotARealOp", ("a",))
+    with pytest.raises(KeyError, match="NotARealOp"):
+        circuit.compile_and_run()
 
 
 def test_circuit_extensible_via_registry():
@@ -470,6 +532,40 @@ def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
     np.testing.assert_allclose(restored_result.displacement, original_result.displacement)
 
 
+def test_circuit_from_dict_rejects_unknown_operation():
+    # The from_dict counterpart to test_compile_and_run_rejects_unknown_operation
+    # above: a hand-edited or corrupted saved circuit (or one produced by a
+    # newer catsy version using an operation this one doesn't have registered)
+    # must fail at load time with a clear KeyError, not produce a circuit
+    # that only fails later and less informatively at compile_and_run.
+    data = {
+        "modes": ["a"],
+        "initial_alphas": {},
+        "operations": [{"name": "NotARealOp", "modes": ["a"], "kwargs": {}}],
+    }
+    with pytest.raises(KeyError, match="NotARealOp"):
+        GaussianCircuit.from_dict(data)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"alpha": 1.0, "x": 1.0}, "not both"),
+        ({}, "alpha"),
+        ({"x": 1.0}, "p"),
+    ],
+)
+def test_circuit_displace_rejects_invalid_argument_combinations(kwargs, match):
+    # The GaussianCircuit builder counterpart to
+    # test_displacement_rejects_invalid_argument_combinations above: it has
+    # its own copy of the same alpha/(x, p) validation (CircuitOperation
+    # stores plain (x, p) floats rather than a GaussianState-style call), so
+    # it needs its own coverage rather than relying on the state-level test.
+    circuit = GaussianCircuit().add_mode("a")
+    with pytest.raises(ValueError, match=match):
+        circuit.displace(mode="a", **kwargs)
+
+
 def test_homodyne_measurement_collapses_tmsv_correlation():
     circuit = GaussianCircuit()
     circuit.add_mode("a").add_mode("b")
@@ -525,6 +621,17 @@ def test_homodyne_single_mode_returns_valid_empty_state():
     assert collapsed.covariance.shape == (0, 0)
 
 
+def test_homodyne_rejects_numerically_singular_measured_variance():
+    # r=25 squeezes Var(x) to ~1e-22 in float64 -- well below TOL_PHYSICALITY.
+    # This isn't a contrived input: it's what an (unrealistically) very
+    # strongly squeezed source looks like, and homodyning along exactly its
+    # squeezed quadrature must be rejected rather than silently dividing by
+    # a near-zero variance a few lines later (gain = V_RM / V_MM).
+    state = GaussianState.vacuum(("a",)).squeeze("a", r=25.0, theta=0.0)
+    with pytest.raises(ValueError, match="measurement variance"):
+        GaussianMeasurements.homodyne_measurement(state, measured_mode="a", phi=0.0)
+
+
 # Phase-space analysis
 
 
@@ -553,6 +660,35 @@ def test_heterodyne_single_mode_returns_valid_empty_state():
     assert collapsed.modes == ()
     assert collapsed.displacement.shape == (0,)
     assert collapsed.covariance.shape == (0, 0)
+
+
+def test_heterodyne_rejects_non_positive_definite_effective_covariance(monkeypatch):
+    # Unlike the homodyne singular-variance case above, no physical state
+    # naturally drives V_eff = V_MM + 0.5*I below positive-definiteness: the
+    # added vacuum noise floor keeps it comfortably conditioned for any
+    # legal covariance. This guard is defensive, not reachable via normal
+    # inputs, so it's exercised directly by forcing the Cholesky call to
+    # fail rather than by hunting for a state that triggers it naturally.
+    def _always_fails(_matrix):
+        raise np.linalg.LinAlgError("forced failure for test")
+
+    monkeypatch.setattr(np.linalg, "cholesky", _always_fails)
+    state = GaussianState.vacuum(("a",))
+    with pytest.raises(ValueError, match="positive definite"):
+        GaussianMeasurements.heterodyne_measurement(state, measured_mode="a")
+
+
+def test_heterodyne_rejects_nonfinite_effective_covariance():
+    # GaussianState's own construction-time validation rejects a non-finite
+    # covariance outright, so this branch can't be reached by building a
+    # pathological *state* through the public API either -- the covariance
+    # is instead mutated in place after construction (the dataclass isn't
+    # frozen), the same technique test_core_invariants.py uses to reach
+    # equivalent "can't happen through GaussianState" guards in core.py.
+    state = GaussianState.vacuum(("a",))
+    state.covariance[0, 0] = np.inf
+    with pytest.raises(ValueError, match="effective covariance must be finite"):
+        GaussianMeasurements.heterodyne_measurement(state, measured_mode="a")
 
 
 def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):

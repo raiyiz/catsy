@@ -59,9 +59,21 @@ def test_component_to_dict_and_from_dict_agree():
         ("BeamSplitter", ("a", "b"), {"eta": 1.1}, "eta"),
         ("PhaseRotation", ("a",), {"phi": np.inf}, "finite"),
         ("Unknown", ("a",), {}, "Unknown optical component"),
+        ("Loss", ("a",), {"eta": 0.5}, None),  # name="" below, valid otherwise
+        ("BeamSplitter", ("", "b"), {"eta": 0.5}, "non-empty string"),
+        ("BeamSplitter", ("a", "b"), {}, "missing"),
+        ("BeamSplitter", ("a", "b"), {"eta": 0.5, "extra": 1.0}, "unexpected"),
+        ("BeamSplitter", ("a", "b"), {"eta": 0.5 + 0.1j}, "real number"),
     ],
 )
 def test_optical_component_rejects_invalid_definitions(op_type, ports, kwargs, match):
+    if match is None:
+        # The empty-name case needs a component that's otherwise entirely
+        # valid, so it's spelled out separately rather than folded into the
+        # shared match string above.
+        with pytest.raises(ValueError, match="non-empty string"):
+            OpticalComponent("", op_type, ports, kwargs)
+        return
     with pytest.raises(ValueError, match=match):
         OpticalComponent("component", op_type, ports, kwargs)
 
@@ -182,6 +194,84 @@ def test_visual_schematic_draw():
     mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
 
     mzi.draw(input_states={"Route 1": "|α=2.0>", "Route 2": "|0>"})
+
+
+# Cavity and interferometer parameter validation
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"K": np.nan, "kappa": 0.1, "N_cutoff": 10}, "K must be finite"),
+        ({"K": 0.5, "kappa": -0.1, "N_cutoff": 10}, "kappa must be finite and >= 0"),
+        ({"K": 0.5, "kappa": np.inf, "N_cutoff": 10}, "kappa must be finite and >= 0"),
+        ({"K": 0.5, "kappa": 0.1, "N_cutoff": 0}, "N_cutoff must be a positive integer"),
+    ],
+)
+def test_kerr_cavity_rejects_invalid_constructor_parameters(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        KerrCavity(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("run_kwargs", "match"),
+    [
+        ({"tlist": np.array([1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "at least 2"),
+        (
+            {
+                "tlist": np.array([[0.0, 1.0], [2.0, 3.0]]),
+                "amp": 1.0,
+                "t0": 0.0,
+                "sigma": 1.0,
+            },
+            "1D array",
+        ),
+        (
+            {"tlist": np.array([0.0, np.nan, 1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0},
+            "finite values",
+        ),
+        ({"tlist": np.linspace(0, 1, 5), "amp": np.nan, "t0": 0.0, "sigma": 1.0}, "amp"),
+        ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": np.inf, "sigma": 1.0}, "t0"),
+        ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": -1.0}, "sigma"),
+        (
+            {"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": np.nan},
+            "sigma",
+        ),
+    ],
+)
+def test_kerr_cavity_run_rejects_invalid_pulse_parameters(run_kwargs, match):
+    cavity = KerrCavity(K=0.5, kappa=0.1, N_cutoff=6)
+    with pytest.raises(ValueError, match=match):
+        cavity.run(rho_init=qt.ket2dm(qt.fock(6, 0)), **run_kwargs)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"kappa": -0.1, "N_cutoff": 8}, "kappa must be finite and >= 0"),
+        (
+            {"kappa": 0.1, "N_cutoff": 8, "loss_time": -1.0},
+            "loss_time must be finite and >= 0",
+        ),
+        ({"kappa": 0.1, "N_cutoff": 0}, "N_cutoff must be a positive integer"),
+    ],
+)
+def test_mzi_rejects_invalid_constructor_parameters(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        MachZehnderInterferometer(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("theta_list", "match"),
+    [
+        (np.array([]), "non-empty"),
+        (np.array([0.0, np.nan]), "finite values"),
+    ],
+)
+def test_mzi_scan_rejects_invalid_theta_list(theta_list, match):
+    mzi = MachZehnderInterferometer(kappa=0.0, N_cutoff=6)
+    with pytest.raises(ValueError, match=match):
+        mzi.scan(qt.coherent(6, 1.0), theta_list)
 
 
 # Cavity and interferometer visual diagnostics
@@ -317,6 +407,119 @@ def test_mzi_negative_phase_is_not_clipped_to_zero():
 
     # A real phase scan must distinguish a negative phase from zero.
     assert not np.allclose(result["n1"][0], result["n1"][1], atol=1e-8)
+
+
+def test_mzi_scan_accepts_a_density_matrix_input_matching_the_ket_result():
+    # scan() is documented to accept either a ket or a density matrix (e.g.
+    # the output of a lossy KerrCavity.run()), so that state doesn't need to
+    # be purified before being fed into an interferometer. Feeding the same
+    # *pure* state in as a ket and as a density matrix must give identical
+    # observables -- this is the regression test for a bug where qt.tensor
+    # in scan() only ever worked for a ket, silently making that documented
+    # code path (the `else: rho_after_loss = psi_after_BS1` branch) dead:
+    # any density-matrix input raised a QuTiP dimension-mismatch TypeError
+    # before ever reaching it.
+    N_cutoff = 10
+    alpha = 1.3
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+    theta_list = np.array([0.0, 0.6, 1.9, 3.1])
+    mzi = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0)
+
+    result_ket = mzi.scan(psi_cat, theta_list)
+    result_dm = mzi.scan(qt.ket2dm(psi_cat), theta_list)
+
+    for key in ("n1", "n2", "parity1"):
+        np.testing.assert_allclose(result_dm[key], result_ket[key], atol=1e-10)
+
+
+def test_lossy_kerr_cat_feeds_directly_into_mzi_scan():
+    # The composition this bug silently blocked: run a cat state through a
+    # lossy Kerr cavity (KerrCavity.run() returns a genuinely mixed density
+    # matrix once kappa > 0, not just a formally-mixed pure state), then
+    # feed that decohered state straight into an interferometer phase scan
+    # without any manual purification/conversion step in between.
+    N_cutoff = 12
+    tlist = np.linspace(0, 4, 60)
+    states = KerrCavity(K=0.4, kappa=0.08, N_cutoff=N_cutoff).run(
+        rho_init=qt.ket2dm(qt.fock(N_cutoff, 0)),
+        tlist=tlist,
+        amp=4.0,
+        t0=1.5,
+        sigma=0.6,
+    )
+    rho_decohered = states[-1]
+    assert not rho_decohered.isket
+    assert rho_decohered.tr() == pytest.approx(1.0, abs=1e-6)
+    purity = (rho_decohered * rho_decohered).tr().real
+    assert purity < 1.0 - 1e-6  # genuinely mixed, not just represented as a dm
+
+    theta_list = np.linspace(0, 2 * np.pi, 40)
+    result = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0).scan(
+        rho_decohered, theta_list
+    )
+    assert len(result["n1"]) == len(theta_list)
+    assert all(np.isfinite(result["n1"]))
+    assert all(np.isfinite(result["parity1"]))
+
+
+@pytest.mark.visual
+def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
+    # A single pipeline through three modules: a driven Kerr cavity
+    # (optics.py) generates a cat state; cavity photon loss decoheres it
+    # into a genuinely mixed density matrix; that mixed state is fed
+    # straight into an interferometer phase scan (the composition
+    # test_lossy_kerr_cat_feeds_directly_into_mzi_scan checks numerically)
+    # to see how much of the cat's quantum coherence survives as
+    # interference-fringe visibility on the other side. The lossless cavity
+    # is run alongside as the "how good could it have been" control.
+    N_cutoff = 16
+    tlist = np.linspace(0, 4, 80)
+    theta_list = np.linspace(0, 2 * np.pi, 100)
+
+    fig, (ax_purity, ax_fringes) = plt.subplots(1, 2, figsize=(12, 5))
+    purities = []
+    labels = ["lossless\n(kappa=0)", "mildly lossy\n(kappa=0.1)", "lossy\n(kappa=0.2)"]
+    for kappa_cav, label, color in zip(
+        [0.0, 0.1, 0.2], labels, ["darkgreen", "darkorange", "crimson"], strict=True
+    ):
+        states = KerrCavity(K=0.5, kappa=kappa_cav, N_cutoff=N_cutoff).run(
+            rho_init=qt.ket2dm(qt.fock(N_cutoff, 0)),
+            tlist=tlist,
+            amp=5.0,
+            t0=2.0,
+            sigma=0.8,
+        )
+        rho_cat = states[-1]
+        purity = (rho_cat * rho_cat).tr().real
+        purities.append(purity)
+
+        result = MachZehnderInterferometer(
+            kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0
+        ).scan(rho_cat, theta_list)
+        ax_fringes.plot(
+            theta_list / np.pi, result["parity1"], label=label, color=color, lw=2
+        )
+
+    ax_purity.bar(labels, purities, color=["darkgreen", "darkorange", "crimson"])
+    ax_purity.set_ylabel("Cavity output purity Tr(ρ²)")
+    ax_purity.set_title("Cat-state purity after the lossy cavity")
+    ax_purity.set_ylim(0, 1.05)
+
+    ax_fringes.axhline(0, color="black", lw=0.5)
+    ax_fringes.set_xlabel(r"MZI phase $\theta$ ($\times \pi$)")
+    ax_fringes.set_ylabel("Parity expectation value")
+    ax_fringes.set_title("Fringe visibility vs. cavity loss")
+    ax_fringes.legend()
+    ax_fringes.grid(True, ls="--")
+
+    fig.suptitle("Lossy Kerr cavity -> Mach-Zehnder: decoherence eats the fringes")
+    plt.tight_layout()
+    plt.show()
+
+    # Monotonic decay isn't just a plotting flourish here: it's the same
+    # physical claim test_decoherence_mzi_parity_visibility_drops_with_loss
+    # makes for loss inside the interferometer, now for loss upstream of it.
+    assert purities[0] > purities[1] > purities[2]
 
 
 # Kerr and cat-state simulations
