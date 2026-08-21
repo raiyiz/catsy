@@ -10,16 +10,9 @@ from typing import TypedDict, cast
 import numpy as np
 import qutip as qt
 
-from .core import _check_non_negative, _check_positive_int
-from .gaussian import (
-    GaussianCircuit,
-    GaussianOperation,
-    GaussianState,
-    beam_splitter,
-    loss,
-    rotate,
-    squeeze,
-)
+from catsy.gaussian import beam_splitter, loss, rotate, squeeze
+
+from .core import Circuit, Operation, _check_non_negative, _check_positive_int
 from .types import (
     FloatArray,
     Modes,
@@ -44,10 +37,10 @@ _OPTICAL_COMPONENT_OPS = frozenset(
         rotate,
     }
 )
-_OPTICAL_OPERATION_BY_NAME = {op.__name__: op for op in _OPTICAL_COMPONENT_OPS}
+_OPTICAL_OPERATION_BY_NAME = {op.name: op for op in _OPTICAL_COMPONENT_OPS}
 
 # Port count and expected kwarg names per operation.  This is *structural*
-# metadata the executing layer can't provide: GaussianCircuit/GaussianState
+# metadata the executing layer can't provide: Circuit/GaussianState
 # happily accept whatever kwargs a callable's **kwargs picks out and quietly
 # ignore the rest, so a component built with the wrong port count or a
 # mistyped kwarg name would otherwise fail late (an IndexError/KeyError deep
@@ -55,7 +48,7 @@ _OPTICAL_OPERATION_BY_NAME = {op.__name__: op for op in _OPTICAL_COMPONENT_OPS}
 # never read). Physical value constraints (eta in [0, 1], etc.) are
 # deliberately NOT duplicated here -- those already have a single owner in
 # GaussianState.beam_splitter/.loss and are validated there.
-_COMPONENT_INTERFACE: dict[GaussianOperation, tuple[int, tuple[str, ...]]] = {
+_COMPONENT_INTERFACE: dict[Operation, tuple[int, tuple[str, ...]]] = {
     beam_splitter: (2, ("eta",)),
     loss: (1, ("eta",)),
     squeeze: (1, ("r", "theta")),
@@ -68,32 +61,32 @@ class OpticalComponent:
     """Named physical component backed directly by an executable callable."""
 
     name: str
-    op: GaussianOperation
+    operation: Operation
     ports: Modes
     kwargs: OperationParameters
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("OpticalComponent name must be a non-empty string.")
-        if not callable(self.op):
-            raise TypeError("OpticalComponent op must be callable.")
-        if self.op not in _OPTICAL_COMPONENT_OPS:
+        if not callable(self.operation):
+            raise TypeError("OpticalComponent operation must be callable.")
+        if self.operation not in _OPTICAL_COMPONENT_OPS:
             raise ValueError(
-                f"Unknown optical component operation {self.op.__name__!r}. "
-                f"Known operations: {sorted(op.__name__ for op in _OPTICAL_COMPONENT_OPS)}."
+                f"Unknown optical component operation {self.operation.name!r}. "
+                f"Known operations: {sorted(op for op in _OPTICAL_OPERATION_BY_NAME)}."
             )
         self.ports = tuple(self.ports)
         self.kwargs = dict(self.kwargs)
 
-        expected_ports, expected_kwargs = _COMPONENT_INTERFACE[self.op]
+        expected_ports, expected_kwargs = _COMPONENT_INTERFACE[self.operation]
         if len(self.ports) != expected_ports:
             raise ValueError(
-                f"{self.op_type} requires exactly {expected_ports} port(s), "
+                f"{self.operation.name} requires exactly {expected_ports} port(s), "
                 f"got {len(self.ports)}."
             )
         if len(set(self.ports)) != len(self.ports):
             raise ValueError(
-                f"{self.op_type} cannot connect the same port more than once: "
+                f"{self.operation.name} cannot connect the same port more than once: "
                 f"{self.ports!r}."
             )
         if any(not isinstance(port, str) or not port.strip() for port in self.ports):
@@ -108,27 +101,22 @@ class OpticalComponent:
             if extra:
                 details.append(f"unexpected {extra}")
             raise ValueError(
-                f"Invalid kwargs for {self.op_type}: " + ", ".join(details) + "."
+                f"Invalid kwargs for {self.operation.name}: " + ", ".join(details) + "."
             )
         for key, value in self.kwargs.items():
             if not np.isscalar(value) or not np.isfinite(value):
                 raise ValueError(
-                    f"{self.op_type} parameter {key!r} must be a finite scalar, got {value!r}."
+                    f"{self.operation.name} parameter {key!r} must be a finite scalar, got {value!r}."
                 )
 
-    @property
-    def op_type(self) -> str:
-        """Compatibility/readability alias exposing the callable's name."""
-        return self.op.__name__
-
-    def apply_to(self, circuit: GaussianCircuit) -> None:
+    def apply_to(self, circuit: Circuit) -> None:
         """Attach this component's callable directly to ``circuit``."""
-        circuit.add_operation(self.op, self.ports, **self.kwargs)
+        circuit.add_operation(self.operation, self.ports, **self.kwargs)
 
     def to_dict(self) -> OpticalComponentData:
         return {
             "name": self.name,
-            "op_type": self.op.__name__,
+            "op": self.operation.name,
             "ports": list(self.ports),
             "kwargs": self.kwargs,
         }
@@ -136,14 +124,14 @@ class OpticalComponent:
     @classmethod
     def from_dict(cls, data: OpticalComponentData) -> OpticalComponent:
         try:
-            op = _OPTICAL_OPERATION_BY_NAME[data["op_type"]]
+            op = _OPTICAL_OPERATION_BY_NAME[data["op"]]
         except KeyError as exc:
             raise KeyError(
-                f"Unknown optical operation function '{data['op_type']}' in serialized component."
+                f"Unknown optical operation function '{data['op']}' in serialized component."
             ) from exc
         return cls(
             name=data["name"],
-            op=op,
+            operation=op,
             ports=tuple(data["ports"]),
             kwargs=data["kwargs"],
         )
@@ -152,10 +140,10 @@ class OpticalComponent:
 # Abbreviated labels and the kwarg used to render each component's parameter
 # in `OpticalSetup.render_schematic`.
 _TYPE_ABBREVIATIONS = {
-    beam_splitter.__name__: "BS",
-    loss.__name__: "LOSS",
-    squeeze.__name__: "SQZ",
-    rotate.__name__: "PHASE",
+    beam_splitter.name: "BS",
+    loss.name: "LOSS",
+    squeeze.name: "SQZ",
+    rotate.name: "PHASE",
 }
 _LABEL_PARAM_KEYS = ("eta", "phi", "r")
 
@@ -169,7 +157,7 @@ class OpticalSetup:
     """A reusable layout of optical hardware components on a bench.
 
     Each `add_component` call attaches that component's operation directly to
-    an owned `GaussianCircuit`; `process_beam` runs the same accumulated
+    an owned `Circuit`; `process_beam` runs the same accumulated
     circuit against whatever input state it's given, so a single setup can be
     replayed against many different inputs.
     """
@@ -178,10 +166,10 @@ class OpticalSetup:
         self,
         name: str = "Custom Bench Layout",
         *,
-        circuit: GaussianCircuit | None = None,
+        circuit: Circuit | None = None,
     ):
         self.name = name
-        self.circuit = circuit if circuit is not None else GaussianCircuit()
+        self.circuit = circuit if circuit is not None else Circuit()
         self.components: list[OpticalComponent] = []
         self.registered_ports: set[str] = set()
 
@@ -223,7 +211,7 @@ class OpticalSetup:
         if not self.components:
             raise ValueError(f"OpticalSetup '{self.name}' has no components to run.")
 
-        return self.circuit.compile_and_run(initial_state=input_state)
+        return self.circuit.run(input_state)
 
     # -- Serialization --------------------------------------------------------
 
@@ -313,7 +301,7 @@ class OpticalSetup:
                     f" {symbol}={value:.2f}" if key == "phi" else f" {symbol}={value}"
                 )
                 break
-        type_name = _TYPE_ABBREVIATIONS.get(comp.op_type, comp.op_type[:5])
+        type_name = _TYPE_ABBREVIATIONS.get(comp.operation.name, comp.operation.name[:5])
         label = f" {type_name}{param_str} "
         return label, max(len(label) + 2, 12)
 
@@ -327,7 +315,7 @@ class OpticalSetup:
 # ---------------------------------------------------------------------------
 #
 # These operate directly on QuTiP Fock-space states rather than on
-# GaussianState/GaussianCircuit; they model specific pieces of optical
+# GaussianState/Circuit; they model specific pieces of optical
 # hardware (a driven cavity, an interferometer) rather than generic
 # phase-space transformations, which is why they live alongside
 # OpticalSetup instead of in gaussian.py or fock.py.

@@ -2,8 +2,15 @@ import numpy as np
 import pytest
 import qutip as qt
 
+from catsy.core import Circuit
 from catsy.fock import FockOperations
-from catsy.gaussian import GaussianCircuit, GaussianState, LossChannels
+from catsy.gaussian import (
+    GaussianState,
+    LossChannels,
+    beam_splitter,
+    squeeze,
+    thermal_loss,
+)
 
 # Gaussian -> Fock bridge
 
@@ -40,14 +47,13 @@ def test_cv_channel_to_fock_purity_drops_with_loss():
 
 
 def test_qo_epr_purity_drops_below_one_after_loss():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.6, theta=0.0).squeeze(
-        mode="b", r=0.6, theta=np.pi / 2
-    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5).thermal_loss(
-        mode="b", eta=0.7, n_thermal=0.3
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_operation(squeeze, ("a",), r=0.6, theta=0.0).add_operation(
+        squeeze, ("b",), r=0.6, theta=np.pi / 2
+    ).add_operation(beam_splitter, ("a", "b"), eta=0.5).add_operation(
+        thermal_loss, ("b",), eta=0.7, n_thermal=0.3
     )
-    final_cv_state = circuit.compile_and_run()
+    final_cv_state = circuit.run(GaussianState.vacuum(("a", "b")))
     rho_qutip = final_cv_state.to_qutip(N_cutoff=15)
 
     purity = (rho_qutip * rho_qutip).tr().real
@@ -58,10 +64,9 @@ def test_qo_epr_purity_drops_below_one_after_loss():
 
 
 def test_photon_subtraction_state_and_rho_entry_points_agree():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a")
-    circuit.squeeze(mode="a", r=0.55)
-    gaussian_squeezed = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a")
+    circuit.add_operation(squeeze, ("a",), r=0.55, theta=0.0)
+    gaussian_squeezed = circuit.run(GaussianState.vacuum(("a",)))
 
     rho = gaussian_squeezed.to_qutip(N_cutoff=25)
     via_rho = FockOperations.photon_subtraction(rho, mode_idx=0, N_cutoff=25)
@@ -140,9 +145,9 @@ def test_fock_operations_reject_non_qobj_and_non_operator_input():
 def test_native_qutip_wigner_plot_demo():
     import matplotlib.pyplot as plt
 
-    state = GaussianCircuit().add_mode("a")
-    state.squeeze(mode="a", r=0.6, theta=0.0)
-    cv_state = state.compile_and_run()
+    state = Circuit().add_mode("a")
+    state.add_operation(squeeze, ("a",), r=0.6, theta=0.0)
+    cv_state = state.run(GaussianState.vacuum(("a",)))
     rho = cv_state.to_qutip(N_cutoff=15)
 
     xvec = np.linspace(-5, 5, 150)

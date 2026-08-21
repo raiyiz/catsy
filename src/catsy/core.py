@@ -1,19 +1,136 @@
-"""Shared numerical helpers and conventions for the CV phase-space layer."""
+"""Shared numerical helpers, conventions, and the generic executable circuit."""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, Callable, Protocol, cast
 
 import numpy as np
 import scipy.linalg
 
-from .types import FloatArray
+from .types import CircuitData, FloatArray, Modes, OperationParameters, ParameterValue
 
-if TYPE_CHECKING:
-    from .gaussian import GaussianState
 
+class Operation(Protocol):
+    """Callable contract for one executable circuit operation."""
+
+    name: str
+
+    def __call__(self, state: Any, modes: Modes, **kwargs: ParameterValue) -> Any: ...
+
+
+def _named_operation(name: str) -> Callable[[Callable[..., Any]], Operation]:
+    """Attach the stable serialization name to an executable callable."""
+
+    def decorate(fn: Callable[..., Any]) -> Operation:
+        setattr(fn, "name", name)
+        return cast(Operation, fn)
+
+    return decorate
+
+
+class CircuitState(Protocol):
+    """Minimal state interface required by :class:`Circuit`."""
+
+    modes: Modes
+
+    def reorder_modes(self, modes: Modes) -> Any: ...
+
+
+@dataclass
+class Circuit:
+    """An ordered sequence of executable operations over named modes."""
+
+    modes: Modes = field(default_factory=tuple)
+    _operations: list[tuple[Operation, Modes, OperationParameters]] = field(
+        default_factory=list, init=False
+    )
+
+    @classmethod
+    def register(cls, name: str, operation: Operation) -> None:
+        """Register an operation name for deserialization only."""
+        if name != operation.name:
+            raise ValueError(
+                f"Operation registry name {name!r} does not match "
+                f"operation.name {operation.name!r}."
+            )
+        _OPERATION_DESERIALIZERS[name] = operation
+
+    def add_mode(self, mode_name: str) -> Circuit:
+        if mode_name in self.modes:
+            raise ValueError(f"Mode '{mode_name}' is already registered in this circuit.")
+        self.modes = (*self.modes, mode_name)
+        return self
+
+    def add_operation(
+        self, op: Operation, modes: Modes, **kwargs: ParameterValue
+    ) -> Circuit:
+        normalized_modes = tuple(modes)
+        if not normalized_modes:
+            raise ValueError("A circuit operation must target at least one mode.")
+        if any(
+            not isinstance(mode, str) or not mode.strip() for mode in normalized_modes
+        ):
+            raise ValueError("All circuit operation modes must be non-empty strings.")
+        if len(set(normalized_modes)) != len(normalized_modes):
+            raise ValueError(
+                f"{op.name} cannot target the same mode more than once: {normalized_modes!r}."
+            )
+        self._operations.append((op, normalized_modes, dict(kwargs)))
+        return self
+
+    def run(self, initial_state: CircuitState) -> Any:
+        """Run the operation chain against an initial mode-aware state."""
+        if not self.modes:
+            raise ValueError("Circuit has no registered modes.")
+        if set(initial_state.modes) != set(self.modes):
+            raise ValueError("Initial state's modes don't match the circuit's modes.")
+        current_state = initial_state.reorder_modes(self.modes)
+        for idx, (op, modes, kwargs) in enumerate(self._operations):
+            for mode in modes:
+                if mode not in self.modes:
+                    raise ValueError(
+                        f"Op #{idx} ({op.name}): mode '{mode}' is not registered in this circuit."
+                    )
+            current_state = op(current_state, modes, **kwargs)
+        return current_state
+
+    def to_dict(self) -> CircuitData:
+        return {
+            "modes": list(self.modes),
+            "operations": [
+                {"op": op.name, "modes": list(modes), "kwargs": kwargs}
+                for op, modes, kwargs in self._operations
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: CircuitData) -> Circuit:
+        circuit = cls(modes=tuple(data["modes"]))
+        for operation_data in data["operations"]:
+            name = operation_data["op"]
+            try:
+                op = _OPERATION_DESERIALIZERS[name]
+            except KeyError as exc:
+                raise KeyError(
+                    f"Unknown operation function '{name}' in serialized circuit."
+                ) from exc
+            circuit.add_operation(
+                op, tuple(operation_data["modes"]), **operation_data["kwargs"]
+            )
+        return circuit
+
+    def save(self, path: str | Path) -> None:
+        _json_save(self.to_dict(), path)
+
+    @classmethod
+    def load(cls, path: str | Path) -> Circuit:
+        return cls.from_dict(cast(CircuitData, _json_load(path)))
+
+
+_OPERATION_DESERIALIZERS: dict[str, Operation] = {}
 
 TOL_ZERO_ENTRY = 1e-9
 TOL_TRACE_WARN = 1e-6

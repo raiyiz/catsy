@@ -2,7 +2,7 @@
 
 A `JournalEntry` records one experiment: its title, tags, notes, optional
 metadata, and one or more logged simulation runs. Each run may contain an
-inline `GaussianCircuit`, scalar results, a final `GaussianState`, and
+inline `Circuit`, scalar results, a final `GaussianState`, and
 heavy array payloads. `SimulationJournal` indexes a directory of saved
 entries.
 
@@ -43,8 +43,9 @@ from typing import cast
 
 import numpy as np
 
-from .gaussian import GaussianCircuit, GaussianState
-from .types import GaussianCircuitData, JsonObject
+from .core import Circuit
+from .gaussian import GaussianState
+from .types import CircuitData, JsonObject
 
 SCHEMA_VERSION = "2.1.0"
 
@@ -116,7 +117,7 @@ class SimulationRun:
     run_name: str
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
-    circuit: GaussianCircuitData | None = None
+    circuit: CircuitData | None = None
     final_state_cv: dict[str, object] | None = None
     scalar_results: JsonObject = field(default_factory=dict)
     data_payloads: dict[str, dict[str, object]] = field(default_factory=dict)
@@ -155,7 +156,7 @@ class SimulationRun:
             run_id=cast(str, data["run_id"]),
             run_name=cast(str, data["run_name"]),
             timestamp=cast(str, data["timestamp"]),
-            circuit=cast("GaussianCircuitData | None", data.get("circuit")),
+            circuit=cast("CircuitData | None", data.get("circuit")),
             final_state_cv=cast("dict[str, object] | None", data.get("final_state_cv")),
             scalar_results=cast(JsonObject, data.get("scalar_results", {})),
             data_payloads=cast(
@@ -200,14 +201,14 @@ class JournalEntry:
         self,
         run_name: str,
         *,
-        circuit: GaussianCircuit | None = None,
+        circuit: Circuit | None = None,
         final_state: GaussianState | None = None,
         metrics: JsonObject | None = None,
         arrays: dict[str, object] | None = None,
     ) -> SimulationRun:
         """Logs one execution of a hardware setup.
 
-        `circuit` optionally records the `GaussianCircuit` used for the run.
+        `circuit` optionally records the `Circuit` used for the run.
         `final_state` optionally records the resulting `GaussianState`.
         `metrics` holds single-value results (e.g. ``{"purity": 0.98}``).
         `arrays` holds heavy numeric payloads keyed by name, each either a

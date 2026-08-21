@@ -23,18 +23,14 @@ The default branch publishes the latest interactive HTML coverage report through
 ## Quick start
 
 ```python
-from catsy import GaussianCircuit, GaussianState
+from catsy import Circuit, GaussianState, loss
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
 
-circuit = (
-    GaussianCircuit()
-    .add_mode("a")
-    .add_mode("b")
-    .loss("a", eta=0.9)
-)
+circuit = Circuit().add_mode("a").add_mode("b")
+circuit.add_operation(loss, ("a",), eta=0.9)
 
-final = circuit.compile_and_run(initial_state=initial)
+final = circuit.run(initial)
 final.plot_covariance()
 ```
 
@@ -44,7 +40,7 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 | ------------------------------------------- | --------------------------------- |
 | Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L86) |
 | Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L86) |
-| Build a sequence of operations              | [`GaussianCircuit`](src/catsy/gaussian.py#L641) |
+| Build a sequence of operations              | [`Circuit`](src/catsy/core.py) |
 | Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L516), [`GaussianChannel`](src/catsy/gaussian.py#L453) |
 | Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L805) |
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L86) |
@@ -75,25 +71,16 @@ state = state.displace(
 ```
 ## Circuits
 
-For a sequence of operations that you want to keep as a reusable experiment, `GaussianCircuit` provides an explicit representation:
+For a sequence of operations that you want to keep as a reusable experiment, `Circuit` provides an executable sequence independent of the Gaussian state implementation:
 
 ```python
-from catsy import GaussianCircuit, GaussianState
-import numpy as np
+from catsy import Circuit, GaussianState, beam_splitter, squeeze
 
 initial = GaussianState.vacuum(("a", "b"))
-
-circuit = (
-    GaussianCircuit()
-    .add_mode("a")
-    .add_mode("b")
-    .squeeze("a", r=0.7)
-    .squeeze("b", r=0.7, theta=np.pi / 2)
-    .beam_splitter("a", "b", eta=0.5)
-    .loss("a", eta=0.9)
-)
-
-final = circuit.compile_and_run(initial_state=initial)
+circuit = Circuit().add_mode("a").add_mode("b")
+circuit.add_operation(squeeze, ("a",), r=0.7, theta=0.0)
+circuit.add_operation(beam_splitter, ("a", "b"), eta=0.5)
+final = circuit.run(initial)
 ```
 
 Circuits can also be serialized and restored.

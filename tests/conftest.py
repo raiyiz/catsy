@@ -2,7 +2,7 @@
 
 import pytest
 
-from catsy.gaussian import GaussianState
+from catsy import GaussianState
 
 
 def pytest_addoption(parser):

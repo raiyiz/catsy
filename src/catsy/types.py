@@ -28,21 +28,20 @@ class GaussianChannelData(TypedDict):
     d0: list[float]
 
 
-class GaussianOperationData(TypedDict):
-    name: str
+class OperationData(TypedDict):
+    op: str
     modes: list[str]
     kwargs: OperationParameters
 
 
-class GaussianCircuitData(TypedDict):
+class CircuitData(TypedDict):
     modes: list[str]
-    initial_alphas: dict[str, list[float]]
-    operations: list[GaussianOperationData]
+    operations: list[OperationData]
 
 
 class OpticalComponentData(TypedDict):
     name: str
-    op_type: str
+    op: str
     ports: list[str]
     kwargs: OperationParameters
 

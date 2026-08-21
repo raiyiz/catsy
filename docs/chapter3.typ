@@ -5,35 +5,34 @@
 // ==========================================
 = Chapter 3: Compiler Architecture & Extensible Gate Registry
 
-The `GaussianCircuit` class acts as the imperative sequencing layer of the toolkit. At the physics level, the circuit is a finite composition of Gaussian channels and unitaries; the resulting mathematical evolution remains within the Gaussian formalism described by #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)]. Its software design strictly separates the definition of the algorithmic gate sequence from the mathematical execution layer (*execution engine*). This keeps the system fully extensible without needing to modify the compiler core itself.
+The `Circuit` class is the generic imperative sequencing layer of the toolkit. It stores an ordered sequence of executable callables over named modes and does not know whether an operation is Gaussian, Fock-space, or belongs to another backend. The state and operation callable define the computational domain; the circuit only sequences and executes them.
 
 == Callable operations and direct execution
-The circuit stores the executable operation itself rather than an intermediate `CircuitOperation` record. A Gaussian operation is a callable satisfying the `GaussianOperation` protocol:
+The circuit stores the executable operation itself rather than an intermediate `CircuitOperation` record. Operations are typed by the generic `Operation` protocol, while the circuit remains backend-agnostic:
 
 ```python
-class GaussianOperation(Protocol):
-    def __call__(
-        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
-    ) -> GaussianState: ...
+class Operation(Protocol):
+    name: str
+    def __call__(self, state, modes, **kwargs): ...
 ```
 
-The built-in operations are plain functions such as `squeeze`, `rotate`, `displace`, `beam_splitter`, `loss`, and `thermal_loss`. Higher-level domain objects can therefore attach a callable directly to a `GaussianCircuit`. There is no runtime string-to-function dispatch step.
+The built-in operations are plain function objects such as `squeeze`, `rotate`, `displace`, `beam_splitter`, `loss`, and `thermal_loss`. Each operation carries an explicit `name` attribute as part of the Catsy operation contract. Higher-level domain objects can therefore attach a callable directly to a `Circuit`. There is no runtime string-to-function dispatch step.
 
 == Serialization uses the function name
-Function objects are intentionally kept out of JSON. When a circuit is serialized, each operation stores only the callable's bare Python `__name__`, together with its target modes and primitive parameters. For example:
+Function objects are intentionally kept out of JSON. When a circuit is serialized, each operation stores only the callable's explicit `name` attribute, together with its target modes and primitive parameters. For example:
 
 ```json
 {
-  "name": "beam_splitter",
+  "op": "beam_splitter",
   "modes": ["a", "b"],
   "kwargs": {"eta": 0.5}
 }
 ```
 
-The small deserialization mapping is used only when loading JSON; execution never consults it. This preserves the direct callable contract at runtime while keeping the file format simple. Custom callables can be registered for deserialization with `GaussianCircuit.register`; the circuit still executes the callable object that was attached to it.
+The small deserialization mapping is used only when loading JSON; execution never consults it. This preserves the direct callable contract at runtime while keeping the file format simple. Custom callables can be registered for deserialization with `Circuit.register`; the circuit still executes the callable object that was attached to it.
 
 == Compilation and sequential execution
-The `compile_and_run` method resolves the initial state, validates that every operation targets a registered mode, and then invokes the stored callable directly:
+The `run` method resolves the initial state, validates that every operation targets a registered mode, and then invokes the stored callable directly:
 
 ```python
 for idx, (op, modes, kwargs) in enumerate(self._operations):
@@ -43,10 +42,10 @@ for idx, (op, modes, kwargs) in enumerate(self._operations):
     current_state = op(current_state, modes, **kwargs)
 ```
 
-This makes the execution path linear: callable operation -> `GaussianCircuit` -> `GaussianState`. The circuit does not need to understand the domain-specific origin of an operation.
+This makes the execution path linear: callable operation -> `Circuit` -> `GaussianState`. The circuit does not need to understand the domain-specific origin of an operation.
 
 == State storage and roundtrip guarantee
-Circuits remain persistent through `save` and `load`. The runtime callable is replaced in the JSON representation by its bare function name, and the loader resolves that name back to a callable before attaching it to the reconstructed circuit. The per-mode initial amplitudes set via `add_mode(..., alpha=...)` round-trip alongside the operation list.
+Circuits remain persistent through `save` and `load`. The runtime callable is replaced in the JSON representation by its bare function name, and the loader resolves that name back to a callable before attaching it to the reconstructed circuit. Initial state is deliberately supplied to `run`; the generic circuit does not own Gaussian-specific state construction such as vacuum or coherent amplitudes.
 
 
 === Literature

@@ -46,7 +46,7 @@ def log_run(
     return run
 ```
 
-`circuit` directly reuses the serialization from Chapter 3 (`GaussianCircuit.to_dict`), so a logged run carries the exact, reproducible circuit along with it. `final_state` is not stored as a full `GaussianState` JSON blob, but as a displacement-vector/covariance-matrix array pair under generated, run-unique keys — consistently taking the same array path as any other `arrays`. Array data is initially held only *in memory* (`_pending_arrays`) and only actually written to disk on `save`.
+`circuit` directly reuses the serialization from Chapter 3 (`Circuit.to_dict`), so a logged run carries the exact, reproducible circuit along with it. `final_state` is not stored as a full `GaussianState` JSON blob, but as a displacement-vector/covariance-matrix array pair under generated, run-unique keys — consistently taking the same array path as any other `arrays`. Array data is initially held only *in memory* (`_pending_arrays`) and only actually written to disk on `save`.
 
 == Atomic writes
 

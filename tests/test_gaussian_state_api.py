@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from catsy.gaussian import GaussianCircuit, GaussianState
+from catsy.core import Circuit
+from catsy.gaussian import GaussianState, beam_splitter, loss, squeeze
 
 
 def test_gaussian_state_constructors_and_fluent_transformations():
@@ -36,16 +37,13 @@ def test_circuit_matches_fluent_state_chain():
         .loss("a", eta=0.8)
     )
 
-    circuit = (
-        GaussianCircuit()
-        .add_mode("a")
-        .add_mode("b")
-        .squeeze("a", r=0.4)
-        .squeeze("b", r=0.4, theta=np.pi / 2)
-        .beam_splitter("a", "b", eta=0.5)
-        .loss("a", eta=0.8)
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_operation(squeeze, ("a",), r=0.4, theta=0.0).add_operation(
+        squeeze, ("b",), r=0.4, theta=np.pi / 2
+    ).add_operation(beam_splitter, ("a", "b"), eta=0.5).add_operation(
+        loss, ("a",), eta=0.8
     )
-    compiled = circuit.compile_and_run()
+    compiled = circuit.run(GaussianState.vacuum(("a", "b")))
 
     np.testing.assert_allclose(compiled.displacement, direct.displacement)
     np.testing.assert_allclose(compiled.covariance, direct.covariance)
