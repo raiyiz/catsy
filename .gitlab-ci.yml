@@ -14,6 +14,11 @@ stages:
   image: ghcr.io/astral-sh/uv:python3.13-bookworm
   variables:
     UV_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/uv"
+    # matplotlib auto-detects a headless backend in this environment anyway
+    # (no DISPLAY), but pinning it explicitly means `pytest --plot` below
+    # doesn't depend on that auto-detection continuing to work on whatever
+    # runner image this job happens to execute on.
+    MPLBACKEND: "Agg"
   cache:
     key:
       files:
@@ -39,7 +44,13 @@ pytest:
   script:
     - uv sync --group dev --locked
     - mkdir -p coverage
-    - uv run pytest --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
+    # --plot runs the @pytest.mark.visual tests too (skipped by default).
+    # Several of them exercise real, non-plotting code paths (e.g.
+    # OpticalSetup.inline_squeezer) that would otherwise never show up in
+    # the coverage report at all, just because the only test that calls
+    # them also happens to end with a plt.show(). matplotlib is headless
+    # here (see MPLBACKEND above), so plt.show() is a no-op, not a block.
+    - uv run pytest --plot --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
     when: always
     # Gives every pipeline -- not just the default branch -- a direct link

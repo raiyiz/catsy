@@ -93,6 +93,46 @@ def test_fock_operations_are_the_single_implementation_for_photon_ops():
     assert FockOperations.photon_addition.__module__ == "catsy.fock"
 
 
+def test_photon_addition_on_vacuum_gives_exact_single_photon_fock_state():
+    # photon_addition was previously only ever exercised via the __module__
+    # check above -- its actual math (a-dagger rho a-dagger-dag,
+    # renormalized) was never run. Vacuum has an exact, analytically known
+    # image under photon addition: a†|0><0|a / <0|aa†|0> = |1><1| exactly,
+    # so this pins down correctness rather than just "didn't crash".
+    N_cutoff = 10
+    vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
+    result = FockOperations.photon_addition(vacuum, mode_idx=0, N_cutoff=N_cutoff)
+    expected = qt.ket2dm(qt.fock(N_cutoff, 1))
+    assert result.tr() == pytest.approx(1.0, abs=1e-10)
+    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-10)
+
+
+def test_photon_operations_act_only_on_the_selected_mode():
+    # _mode_operator's multi-mode embedding branch (n_modes > 1) is only
+    # exercised by an operation targeting one mode of a multi-mode state --
+    # every other fock.py test here uses a single-mode state. Addition on
+    # mode_idx=1 of a two-mode vacuum must leave mode 0 untouched.
+    N_cutoff = 8
+    two_mode_vacuum = qt.tensor(
+        qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 0))
+    )
+    result = FockOperations.photon_addition(
+        two_mode_vacuum, mode_idx=1, N_cutoff=N_cutoff
+    )
+    expected = qt.tensor(qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 1)))
+    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-10)
+
+
+def test_fock_operations_reject_non_qobj_and_non_operator_input():
+    N_cutoff = 5
+    with pytest.raises(TypeError, match="Qobj"):
+        FockOperations.photon_subtraction(np.eye(N_cutoff), mode_idx=0, N_cutoff=N_cutoff)
+    with pytest.raises(ValueError, match="operator"):
+        FockOperations.photon_subtraction(
+            qt.fock(N_cutoff, 0), mode_idx=0, N_cutoff=N_cutoff
+        )
+
+
 # Visual diagnostics
 
 

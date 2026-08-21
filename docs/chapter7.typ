@@ -41,7 +41,7 @@ The denominator $"tr"(hat(a) rho hat(a)^dagger)$ is simultaneously the physical 
 
 == Driven, dissipative Kerr cavity (`KerrCavity`)
 
-`KerrCavity` (in #src-link("src/catsy/optics.py", line: 330, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
+`KerrCavity` (in #src-link("src/catsy/optics.py", line: 336, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
 $ hat(H)(t) = K hat(a)^(dagger 2) hat(a)^2 + Omega(t)(hat(a) + hat(a)^dagger), quad Omega(t) = A exp(-(t - t_0)^2 / (2 sigma^2)) $
 
 Dissipation is modeled via a single Lindblad collapse operator $sqrt(kappa) hat(a)$, and the full master equation is integrated in time with `qutip.mesolve`:
@@ -66,7 +66,7 @@ The time-dependent part `[a + a.dag(), pulse_shape]` follows QuTiP's standard co
 
 == Mach-Zehnder interferometer with a lossy arm (`MachZehnderInterferometer`)
 
-`MachZehnderInterferometer` (in #src-link("src/catsy/optics.py", line: 398, label: [`optics.py`])) models a two-mode interferometer in which an input state (e.g. a Schrödinger-cat state plus vacuum in the second port) passes through the sequence
+`MachZehnderInterferometer` (in #src-link("src/catsy/optics.py", line: 404, label: [`optics.py`])) models a two-mode interferometer in which an input state (e.g. a Schrödinger-cat state plus vacuum in the second port) passes through the sequence
 $ "50:50 BS" arrow.r "lossy arm (fixed time)" arrow.r "phase shift" theta arrow.r "50:50 BS" $
 and is then read out in a photon-number- and parity-resolved way. The first beam splitter is constructed as an exact QuTiP unitary operator:
 $ hat(U)_"BS" = exp(i pi/4 (hat(a)_1^dagger hat(a)_2 + hat(a)_1 hat(a)_2^dagger)) $

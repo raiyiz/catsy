@@ -9,7 +9,11 @@ from catsy.fock import FockOperations
 from catsy.gaussian import (
     GaussianCircuit,
     GaussianState,
+    beam_splitter,
     compute_duan_inseparability,
+    loss,
+    rotate,
+    squeeze,
 )
 from catsy.optics import (
     KerrCavity,
@@ -21,11 +25,38 @@ from catsy.optics import (
 # Layout assembly and serialization
 
 
-def test_beam_splitter_registers_both_ports():
+def test_beam_splitter_registers_both_ports_and_populates_circuit():
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
     assert setup.registered_ports == {"a", "b"}
-    assert setup.components[0].op_type == "BeamSplitter"
+    assert setup.circuit.modes == ("a", "b")
+    assert setup.circuit.to_dict()["operations"] == [
+        {"name": "beam_splitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
+    ]
+    assert setup.components[0].op_type == "beam_splitter"
     assert setup.components[0].kwargs == {"eta": 0.5}
+
+
+def test_optical_setup_uses_injected_circuit():
+    circuit = GaussianCircuit().add_mode("a")
+    setup = OpticalSetup("Bench", circuit=circuit).phase_shifter(
+        "Phase", port="a", phi=0.25
+    )
+
+    assert setup.circuit is circuit
+    assert setup.circuit.to_dict()["operations"] == [
+        {"name": "rotate", "modes": ["a"], "kwargs": {"phi": 0.25}}
+    ]
+
+
+def test_process_beam_does_not_rebuild_or_duplicate_circuit_operations():
+    setup = OpticalSetup("Bench").phase_shifter("Phase", port="a", phi=0.25)
+    input_state = GaussianState.coherent(modes=("a",), alphas=[1.0])
+
+    first = setup.process_beam(input_state)
+    second = setup.process_beam(input_state)
+
+    assert np.allclose(first.displacement, second.displacement)
+    assert len(setup.circuit.to_dict()["operations"]) == 1
 
 
 def test_layout_roundtrips_through_file(tmp_path):
@@ -46,24 +77,104 @@ def test_layout_roundtrips_through_file(tmp_path):
 
 
 def test_component_to_dict_and_from_dict_agree():
-    comp = OpticalComponent("BS1", "BeamSplitter", ("a", "b"), {"eta": 0.5})
+    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
     assert OpticalComponent.from_dict(comp.to_dict()) == comp
 
 
 @pytest.mark.parametrize(
-    ("op_type", "ports", "kwargs", "match"),
+    ("op", "ports", "kwargs", "match"),
     [
-        ("BeamSplitter", ("a",), {"eta": 0.5}, "exactly 2 port"),
-        ("Loss", ("a", "b"), {"eta": 0.9}, "exactly 1 port"),
-        ("BeamSplitter", ("a", "a"), {"eta": 0.5}, "same port"),
-        ("BeamSplitter", ("a", "b"), {"eta": 1.1}, "eta"),
-        ("PhaseRotation", ("a",), {"phi": np.inf}, "finite"),
-        ("Unknown", ("a",), {}, "Unknown optical component"),
+        (beam_splitter, ("a",), {"eta": 0.5}, "exactly 2 port"),
+        (loss, ("a", "b"), {"eta": 0.9}, "exactly 1 port"),
+        (beam_splitter, ("a", "a"), {"eta": 0.5}, "same port"),
+        (rotate, ("a",), {"phi": np.inf}, "finite"),
+        (beam_splitter, ("", "b"), {"eta": 0.5}, "non-empty string"),
+        (beam_splitter, ("a", "b"), {}, "missing"),
+        (beam_splitter, ("a", "b"), {"eta": 0.5, "extra": 1.0}, "unexpected"),
     ],
 )
-def test_optical_component_rejects_invalid_definitions(op_type, ports, kwargs, match):
+def test_optical_component_rejects_invalid_definitions(op, ports, kwargs, match):
+    # The port-count/name and kwarg-completeness checks here are structural
+    # metadata the executing layer can't supply on its own -- GaussianCircuit
+    # happily calls op(state, ports, **kwargs) with whatever it's given, so a
+    # wrong port count surfaces as a bare IndexError deep inside the callable
+    # and an unrecognized extra kwarg is silently never read at all. Physical
+    # value constraints eta already owns downstream (eta in [0, 1], not
+    # complex) are intentionally NOT re-tested here; see
+    # test_optical_component_defers_physical_validation_to_gaussian_state
+    # below for that split.
     with pytest.raises(ValueError, match=match):
-        OpticalComponent("component", op_type, ports, kwargs)
+        OpticalComponent("component", op, ports, kwargs)
+
+
+def test_optical_component_rejects_empty_name():
+    with pytest.raises(ValueError, match="non-empty string"):
+        OpticalComponent("", beam_splitter, ("a", "b"), {"eta": 0.5})
+
+
+def test_optical_component_defers_physical_validation_to_gaussian_state():
+    # eta's range/realness is validated exactly once, downstream in
+    # GaussianState.beam_splitter -- constructing the component doesn't fail,
+    # but attaching it to a circuit and running it does.
+    component = OpticalComponent("bad-eta", beam_splitter, ("a", "b"), {"eta": 1.5})
+    setup = OpticalSetup("Bench").add_component(component)
+    with pytest.raises(ValueError, match="eta"):
+        setup.process_beam(GaussianState.vacuum(("a", "b")))
+
+
+def test_component_owns_the_executable_callable():
+    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
+
+    assert comp.op is beam_splitter
+    assert comp.op_type == "beam_splitter"
+    assert comp.ports == ("a", "b")
+    assert comp.kwargs == {"eta": 0.5}
+
+
+def test_optical_component_serializes_the_bare_function_name():
+    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
+
+    assert comp.to_dict() == {
+        "name": "BS1",
+        "op_type": "beam_splitter",
+        "ports": ["a", "b"],
+        "kwargs": {"eta": 0.5},
+    }
+    assert OpticalComponent.from_dict(comp.to_dict()).op is beam_splitter
+
+
+@pytest.mark.parametrize("op", [beam_splitter, loss, squeeze, rotate])
+def test_optical_component_accepts_only_known_optical_callables(op):
+    component = {
+        beam_splitter: OpticalComponent("BS", beam_splitter, ("a", "b"), {"eta": 0.5}),
+        loss: OpticalComponent("Loss", loss, ("a",), {"eta": 0.9}),
+        squeeze: OpticalComponent("Sqz", squeeze, ("a",), {"r": 0.5, "theta": 0.0}),
+        rotate: OpticalComponent("Phase", rotate, ("a",), {"phi": 0.2}),
+    }[op]
+    assert component.op is op
+
+
+def test_optical_component_rejects_unknown_callable():
+    def custom_operation(state, modes, **kwargs):
+        return state
+
+    with pytest.raises(ValueError, match="Unknown optical component operation"):
+        OpticalComponent("Custom", custom_operation, ("a",), {})
+
+
+def test_optical_component_rejects_non_callable_op():
+    with pytest.raises(TypeError, match="must be callable"):
+        OpticalComponent("Bad", "beam_splitter", ("a", "b"), {"eta": 0.5})  # type: ignore[arg-type]
+
+
+def test_optical_component_from_dict_rejects_unknown_op_type():
+    # The deserialization counterpart to test_optical_component_rejects_
+    # unknown_callable above: a hand-edited or corrupted saved layout (or one
+    # produced by a newer catsy version with an operation this one doesn't
+    # know) must fail at load time with a clear KeyError.
+    data = {"name": "Bad", "op_type": "not_a_real_op", "ports": ["a"], "kwargs": {}}
+    with pytest.raises(KeyError, match="not_a_real_op"):
+        OpticalComponent.from_dict(data)
 
 
 # Execution
@@ -128,15 +239,22 @@ def test_render_schematic_labels_each_component_and_input_state():
     setup.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
     setup.fiber_loss("Loss_A", port="line_1", eta=0.9)
     setup.phase_shifter("Phase_B", port="line_2", phi=0.785)
+    setup.inline_squeezer("Sqz_C", port="line_1", r=0.4)
 
     schematic = setup.render_schematic(
         input_states={"line_1": "|a=1.5>", "line_2": "|b=0.8>"}
     )
     assert "|a=1.5>" in schematic
     assert "|b=0.8>" in schematic
+    # _TYPE_ABBREVIATIONS keys are the operation callables' bare __name__
+    # (e.g. beam_splitter.__name__ == "beam_splitter"); a stale mismatch
+    # there (PascalCase keys against lowercase op_type) would silently fall
+    # through to a truncated raw name instead of raising, so this checks the
+    # actual intended abbreviation, not just "something got printed".
     assert "BS" in schematic
     assert "LOSS" in schematic
     assert "PHASE" in schematic
+    assert "SQZ" in schematic
     assert "line_1" in schematic and "line_2" in schematic
     # print(schematic)
 
@@ -182,6 +300,84 @@ def test_visual_schematic_draw():
     mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
 
     mzi.draw(input_states={"Route 1": "|α=2.0>", "Route 2": "|0>"})
+
+
+# Cavity and interferometer parameter validation
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"K": np.nan, "kappa": 0.1, "N_cutoff": 10}, "K must be finite"),
+        ({"K": 0.5, "kappa": -0.1, "N_cutoff": 10}, "kappa must be finite and >= 0"),
+        ({"K": 0.5, "kappa": np.inf, "N_cutoff": 10}, "kappa must be finite and >= 0"),
+        ({"K": 0.5, "kappa": 0.1, "N_cutoff": 0}, "N_cutoff must be a positive integer"),
+    ],
+)
+def test_kerr_cavity_rejects_invalid_constructor_parameters(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        KerrCavity(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("run_kwargs", "match"),
+    [
+        ({"tlist": np.array([1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "at least 2"),
+        (
+            {
+                "tlist": np.array([[0.0, 1.0], [2.0, 3.0]]),
+                "amp": 1.0,
+                "t0": 0.0,
+                "sigma": 1.0,
+            },
+            "1D array",
+        ),
+        (
+            {"tlist": np.array([0.0, np.nan, 1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0},
+            "finite values",
+        ),
+        ({"tlist": np.linspace(0, 1, 5), "amp": np.nan, "t0": 0.0, "sigma": 1.0}, "amp"),
+        ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": np.inf, "sigma": 1.0}, "t0"),
+        ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": -1.0}, "sigma"),
+        (
+            {"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": np.nan},
+            "sigma",
+        ),
+    ],
+)
+def test_kerr_cavity_run_rejects_invalid_pulse_parameters(run_kwargs, match):
+    cavity = KerrCavity(K=0.5, kappa=0.1, N_cutoff=6)
+    with pytest.raises(ValueError, match=match):
+        cavity.run(rho_init=qt.ket2dm(qt.fock(6, 0)), **run_kwargs)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"kappa": -0.1, "N_cutoff": 8}, "kappa must be finite and >= 0"),
+        (
+            {"kappa": 0.1, "N_cutoff": 8, "loss_time": -1.0},
+            "loss_time must be finite and >= 0",
+        ),
+        ({"kappa": 0.1, "N_cutoff": 0}, "N_cutoff must be a positive integer"),
+    ],
+)
+def test_mzi_rejects_invalid_constructor_parameters(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        MachZehnderInterferometer(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("theta_list", "match"),
+    [
+        (np.array([]), "non-empty"),
+        (np.array([0.0, np.nan]), "finite values"),
+    ],
+)
+def test_mzi_scan_rejects_invalid_theta_list(theta_list, match):
+    mzi = MachZehnderInterferometer(kappa=0.0, N_cutoff=6)
+    with pytest.raises(ValueError, match=match):
+        mzi.scan(qt.coherent(6, 1.0), theta_list)
 
 
 # Cavity and interferometer visual diagnostics
@@ -317,6 +513,119 @@ def test_mzi_negative_phase_is_not_clipped_to_zero():
 
     # A real phase scan must distinguish a negative phase from zero.
     assert not np.allclose(result["n1"][0], result["n1"][1], atol=1e-8)
+
+
+def test_mzi_scan_accepts_a_density_matrix_input_matching_the_ket_result():
+    # scan() is documented to accept either a ket or a density matrix (e.g.
+    # the output of a lossy KerrCavity.run()), so that state doesn't need to
+    # be purified before being fed into an interferometer. Feeding the same
+    # *pure* state in as a ket and as a density matrix must give identical
+    # observables -- this is the regression test for a bug where qt.tensor
+    # in scan() only ever worked for a ket, silently making that documented
+    # code path (the `else: rho_after_loss = psi_after_BS1` branch) dead:
+    # any density-matrix input raised a QuTiP dimension-mismatch TypeError
+    # before ever reaching it.
+    N_cutoff = 10
+    alpha = 1.3
+    psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
+    theta_list = np.array([0.0, 0.6, 1.9, 3.1])
+    mzi = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0)
+
+    result_ket = mzi.scan(psi_cat, theta_list)
+    result_dm = mzi.scan(qt.ket2dm(psi_cat), theta_list)
+
+    for key in ("n1", "n2", "parity1"):
+        np.testing.assert_allclose(result_dm[key], result_ket[key], atol=1e-10)
+
+
+def test_lossy_kerr_cat_feeds_directly_into_mzi_scan():
+    # The composition this bug silently blocked: run a cat state through a
+    # lossy Kerr cavity (KerrCavity.run() returns a genuinely mixed density
+    # matrix once kappa > 0, not just a formally-mixed pure state), then
+    # feed that decohered state straight into an interferometer phase scan
+    # without any manual purification/conversion step in between.
+    N_cutoff = 12
+    tlist = np.linspace(0, 4, 60)
+    states = KerrCavity(K=0.4, kappa=0.08, N_cutoff=N_cutoff).run(
+        rho_init=qt.ket2dm(qt.fock(N_cutoff, 0)),
+        tlist=tlist,
+        amp=4.0,
+        t0=1.5,
+        sigma=0.6,
+    )
+    rho_decohered = states[-1]
+    assert not rho_decohered.isket
+    assert rho_decohered.tr() == pytest.approx(1.0, abs=1e-6)
+    purity = (rho_decohered * rho_decohered).tr().real
+    assert purity < 1.0 - 1e-6  # genuinely mixed, not just represented as a dm
+
+    theta_list = np.linspace(0, 2 * np.pi, 40)
+    result = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0).scan(
+        rho_decohered, theta_list
+    )
+    assert len(result["n1"]) == len(theta_list)
+    assert all(np.isfinite(result["n1"]))
+    assert all(np.isfinite(result["parity1"]))
+
+
+@pytest.mark.visual
+def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
+    # A single pipeline through three modules: a driven Kerr cavity
+    # (optics.py) generates a cat state; cavity photon loss decoheres it
+    # into a genuinely mixed density matrix; that mixed state is fed
+    # straight into an interferometer phase scan (the composition
+    # test_lossy_kerr_cat_feeds_directly_into_mzi_scan checks numerically)
+    # to see how much of the cat's quantum coherence survives as
+    # interference-fringe visibility on the other side. The lossless cavity
+    # is run alongside as the "how good could it have been" control.
+    N_cutoff = 16
+    tlist = np.linspace(0, 4, 80)
+    theta_list = np.linspace(0, 2 * np.pi, 100)
+
+    fig, (ax_purity, ax_fringes) = plt.subplots(1, 2, figsize=(12, 5))
+    purities = []
+    labels = ["lossless\n(kappa=0)", "mildly lossy\n(kappa=0.1)", "lossy\n(kappa=0.2)"]
+    for kappa_cav, label, color in zip(
+        [0.0, 0.1, 0.2], labels, ["darkgreen", "darkorange", "crimson"], strict=True
+    ):
+        states = KerrCavity(K=0.5, kappa=kappa_cav, N_cutoff=N_cutoff).run(
+            rho_init=qt.ket2dm(qt.fock(N_cutoff, 0)),
+            tlist=tlist,
+            amp=5.0,
+            t0=2.0,
+            sigma=0.8,
+        )
+        rho_cat = states[-1]
+        purity = (rho_cat * rho_cat).tr().real
+        purities.append(purity)
+
+        result = MachZehnderInterferometer(
+            kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0
+        ).scan(rho_cat, theta_list)
+        ax_fringes.plot(
+            theta_list / np.pi, result["parity1"], label=label, color=color, lw=2
+        )
+
+    ax_purity.bar(labels, purities, color=["darkgreen", "darkorange", "crimson"])
+    ax_purity.set_ylabel("Cavity output purity Tr(ρ²)")
+    ax_purity.set_title("Cat-state purity after the lossy cavity")
+    ax_purity.set_ylim(0, 1.05)
+
+    ax_fringes.axhline(0, color="black", lw=0.5)
+    ax_fringes.set_xlabel(r"MZI phase $\theta$ ($\times \pi$)")
+    ax_fringes.set_ylabel("Parity expectation value")
+    ax_fringes.set_title("Fringe visibility vs. cavity loss")
+    ax_fringes.legend()
+    ax_fringes.grid(True, ls="--")
+
+    fig.suptitle("Lossy Kerr cavity -> Mach-Zehnder: decoherence eats the fringes")
+    plt.tight_layout()
+    plt.show()
+
+    # Monotonic decay isn't just a plotting flourish here: it's the same
+    # physical claim test_decoherence_mzi_parity_visibility_drops_with_loss
+    # makes for loss inside the interferometer, now for loss upstream of it.
+    assert purities[0] > purities[1] > purities[2]
 
 
 # Kerr and cat-state simulations
