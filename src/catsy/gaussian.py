@@ -562,18 +562,20 @@ class LossChannels:
 logger = logging.getLogger("catsy")
 
 
-@dataclass
-class CircuitOperation:
-    """One step in a compiled circuit: a registry key + its target modes and
-    kwargs. Deliberately holds no function reference, so it stays trivially
-    JSON-serializable."""
+# Gaussian operations are stored as the callable itself.  Serialization uses
+# the function's bare ``__name__``; the small lookup below is only needed when
+# loading serialized circuits and is never involved in execution.
+class GaussianOperation(Protocol):
+    __name__: str
+    def __call__(
+        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
+    ) -> GaussianState: ...
 
-    name: str
-    modes: Modes
-    kwargs: OperationParameters
 
-
-def _op_squeeze(
+# Built-in operation functions.  These are intentionally plain callables so a
+# higher-level domain object can attach one directly to a circuit without an
+# intermediate operation-data object or runtime name lookup.
+def squeeze(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return state.squeeze(
@@ -583,13 +585,13 @@ def _op_squeeze(
     )
 
 
-def _op_rotate(
+def rotate(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
 
 
-def _op_displace(
+def displace(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return state.displace(
@@ -599,7 +601,7 @@ def _op_displace(
     )
 
 
-def _op_beam_splitter(
+def beam_splitter(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return state.beam_splitter(
@@ -609,13 +611,13 @@ def _op_beam_splitter(
     )
 
 
-def _op_loss(
+def loss(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
 
 
-def _op_thermal_loss(
+def thermal_loss(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     channel = LossChannels.thermal_loss(
@@ -626,60 +628,71 @@ def _op_thermal_loss(
     return channel.apply(state)
 
 
-# Registry maps serialized operation names to their state-transforming functions.
-class GaussianOperation(Protocol):
-    def __call__(
-        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
-    ) -> GaussianState: ...
-
-
-OPERATION_REGISTRY: dict[str, GaussianOperation] = {
-    "Squeezing": _op_squeeze,
-    "PhaseRotation": _op_rotate,
-    "Displacement": _op_displace,
-    "BeamSplitter": _op_beam_splitter,
-    "Loss": _op_loss,
-    "ThermalLossChannel": _op_thermal_loss,
+# This mapping is deliberately limited to deserialization.  Execution uses
+# the callable stored in the circuit directly.
+_OPERATION_DESERIALIZERS: dict[str, GaussianOperation] = {
+    squeeze.__name__: squeeze,
+    rotate.__name__: rotate,
+    displace.__name__: displace,
+    beam_splitter.__name__: beam_splitter,
+    loss.__name__: loss,
+    thermal_loss.__name__: thermal_loss,
 }
 
 
 @dataclass
 class GaussianCircuit:
-    """Sequences a chain of Gaussian gates/channels and runs them over a
-    registered set of modes."""
+    """Sequences Gaussian operation callables and runs them over registered modes."""
 
     modes: Modes = field(default_factory=tuple)
-    _operations: list[CircuitOperation] = field(default_factory=list, init=False)
+    _operations: list[tuple[GaussianOperation, Modes, OperationParameters]] = field(
+        default_factory=list, init=False
+    )
     # Per-mode starting amplitude (0 -> vacuum), used by compile_and_run when
     # no initial_state is supplied -- see add_mode(alpha=...).
     _initial_alphas: dict[str, complex] = field(default_factory=dict, init=False)
 
     @classmethod
     def register(cls, name: str, fn: GaussianOperation) -> None:
-        """Register a new circuit-operation kind so `.compile_and_run` can execute it."""
-        OPERATION_REGISTRY[name] = fn
+        """Register a callable name for deserialization of custom operations.
+
+        The callable itself is still what the circuit executes; this mapping is
+        only consulted when reconstructing a circuit from serialized data.
+        """
+        _OPERATION_DESERIALIZERS[name] = fn
 
     def add_mode(self, mode_name: str, alpha: complex = 0.0) -> GaussianCircuit:
-        """Register a new mode, optionally starting it in the coherent state
-        |alpha> instead of vacuum (only takes effect when `compile_and_run`
-        is called without an explicit `initial_state`)."""
+        """Register a new mode, optionally starting it in coherent state |alpha>."""
         if mode_name in self.modes:
             raise ValueError(f"Mode '{mode_name}' is already registered in this circuit.")
         self.modes = (*self.modes, mode_name)
         self._initial_alphas[mode_name] = alpha
         return self
 
-    def _add_op(
-        self, name: str, modes: Modes, **kwargs: ParameterValue
+    def add_operation(
+        self,
+        op: GaussianOperation,
+        modes: Modes,
+        **kwargs: ParameterValue,
     ) -> GaussianCircuit:
-        self._operations.append(CircuitOperation(name=name, modes=modes, kwargs=kwargs))
+        """Attach an executable operation callable directly to the circuit."""
+        normalized_modes = tuple(modes)
+        if not normalized_modes:
+            raise ValueError("A circuit operation must target at least one mode.")
+        if any(not isinstance(mode, str) or not mode.strip() for mode in normalized_modes):
+            raise ValueError("All circuit operation modes must be non-empty strings.")
+        if len(set(normalized_modes)) != len(normalized_modes):
+            raise ValueError(
+                f"{op.__name__} cannot target the same mode more than once: {normalized_modes!r}."
+            )
+        self._operations.append((op, normalized_modes, dict(kwargs)))
         return self
 
     def squeeze(self, mode: str, r: float, theta: float = 0.0) -> GaussianCircuit:
-        return self._add_op("Squeezing", (mode,), r=r, theta=theta)
+        return self.add_operation(squeeze, (mode,), r=r, theta=theta)
 
     def rotate(self, mode: str, phi: float) -> GaussianCircuit:
-        return self._add_op("PhaseRotation", (mode,), phi=phi)
+        return self.add_operation(rotate, (mode,), phi=phi)
 
     def displace(
         self,
@@ -689,31 +702,30 @@ class GaussianCircuit:
         x: float | None = None,
         p: float | None = None,
     ) -> GaussianCircuit:
-        """Add a displacement gate. Give either `alpha` or both `x` and `p`;
-        either way the op is stored as (x, p) so the circuit stays plain-
-        float JSON-serializable (see `to_dict`)."""
+        """Add a displacement gate, storing it as real x/p parameters."""
         if alpha is not None and (x is not None or p is not None):
             raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
         if alpha is not None:
             x, p = np.sqrt(2.0) * np.real(alpha), np.sqrt(2.0) * np.imag(alpha)
         elif x is None or p is None:
             raise ValueError("Must supply either `alpha` or both `x` and `p`.")
-        return self._add_op("Displacement", (mode,), x=x, p=p)
+        return self.add_operation(displace, (mode,), x=x, p=p)
 
     def beam_splitter(self, mode_a: str, mode_b: str, eta: float) -> GaussianCircuit:
-        return self._add_op("BeamSplitter", (mode_a, mode_b), eta=eta)
+        return self.add_operation(beam_splitter, (mode_a, mode_b), eta=eta)
 
     def loss(self, mode: str, eta: float) -> GaussianCircuit:
-        return self._add_op("Loss", (mode,), eta=eta)
+        return self.add_operation(loss, (mode,), eta=eta)
 
     def thermal_loss(self, mode: str, eta: float, n_thermal: float) -> GaussianCircuit:
-        return self._add_op("ThermalLossChannel", (mode,), eta=eta, n_thermal=n_thermal)
+        return self.add_operation(
+            thermal_loss, (mode,), eta=eta, n_thermal=n_thermal
+        )
 
     def compile_and_run(
         self, initial_state: GaussianState | None = None
     ) -> GaussianState:
-        """Validate every operation against the registered modes and run the
-        chain sequentially."""
+        """Validate every operation against the registered modes and run the chain sequentially."""
         if not self.modes:
             raise ValueError("Circuit has no registered modes.")
 
@@ -723,35 +735,25 @@ class GaussianCircuit:
         else:
             if set(initial_state.modes) != set(self.modes):
                 raise ValueError("Initial state's modes don't match the circuit's modes.")
-            # Circuit order is canonical.  A state may arrive with the same
-            # named modes in a different order; reorder it once at the boundary
-            # so every subsequent operation sees the same positional layout.
             current_state = initial_state.reorder_modes(self.modes)
 
         logger.debug(
             "Running circuit over modes %s (%d ops)", self.modes, len(self._operations)
         )
 
-        for idx, op in enumerate(self._operations):
-            for m in op.modes:
-                if m not in self.modes:
+        for idx, (op, modes, kwargs) in enumerate(self._operations):
+            for mode in modes:
+                if mode not in self.modes:
                     raise ValueError(
-                        f"Op #{idx} ({op.name}): mode '{m}' is not registered in this circuit."
+                        f"Op #{idx} ({op.__name__}): mode '{mode}' is not registered in this circuit."
                     )
-            if op.name not in OPERATION_REGISTRY:
-                raise KeyError(
-                    f"Op #{idx}: unknown operation '{op.name}'. "
-                    f"Known ops: {sorted(OPERATION_REGISTRY)}."
-                )
-            current_state = OPERATION_REGISTRY[op.name](
-                current_state, op.modes, **op.kwargs
-            )
+            current_state = op(current_state, modes, **kwargs)
             logger.debug(
                 "[%d/%d] applied %s on %s",
                 idx + 1,
                 len(self._operations),
-                op.name,
-                op.modes,
+                op.__name__,
+                modes,
             )
 
         return current_state
@@ -761,14 +763,13 @@ class GaussianCircuit:
     def to_dict(self) -> GaussianCircuitData:
         return {
             "modes": list(self.modes),
-            # Stored as [re, im] pairs -- complex isn't JSON-serializable.
             "initial_alphas": {
                 m: [float(np.real(a)), float(np.imag(a))]
                 for m, a in self._initial_alphas.items()
             },
             "operations": [
-                {"name": op.name, "modes": list(op.modes), "kwargs": op.kwargs}
-                for op in self._operations
+                {"name": op.__name__, "modes": list(modes), "kwargs": kwargs}
+                for op, modes, kwargs in self._operations
             ],
         }
 
@@ -778,13 +779,16 @@ class GaussianCircuit:
         circuit._initial_alphas = {
             m: complex(re, im) for m, (re, im) in data.get("initial_alphas", {}).items()
         }
-        for op in data["operations"]:
-            if op["name"] not in OPERATION_REGISTRY:
-                raise KeyError(f"Unknown operation '{op['name']}' in serialized circuit.")
-            circuit._operations.append(
-                CircuitOperation(
-                    name=op["name"], modes=tuple(op["modes"]), kwargs=op["kwargs"]
-                )
+        for operation_data in data["operations"]:
+            name = operation_data["name"]
+            try:
+                op = _OPERATION_DESERIALIZERS[name]
+            except KeyError as exc:
+                raise KeyError(
+                    f"Unknown operation function '{name}' in serialized circuit."
+                ) from exc
+            circuit.add_operation(
+                op, tuple(operation_data["modes"]), **operation_data["kwargs"]
             )
         return circuit
 

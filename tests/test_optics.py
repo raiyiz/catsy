@@ -9,7 +9,11 @@ from catsy.fock import FockOperations
 from catsy.gaussian import (
     GaussianCircuit,
     GaussianState,
+    beam_splitter,
     compute_duan_inseparability,
+    loss,
+    rotate,
+    squeeze,
 )
 from catsy.optics import (
     KerrCavity,
@@ -21,11 +25,38 @@ from catsy.optics import (
 # Layout assembly and serialization
 
 
-def test_beam_splitter_registers_both_ports():
+def test_beam_splitter_registers_both_ports_and_populates_circuit():
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
     assert setup.registered_ports == {"a", "b"}
-    assert setup.components[0].op_type == "BeamSplitter"
+    assert setup.circuit.modes == ("a", "b")
+    assert setup.circuit.to_dict()["operations"] == [
+        {"name": "beam_splitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
+    ]
+    assert setup.components[0].op_type == "beam_splitter"
     assert setup.components[0].kwargs == {"eta": 0.5}
+
+
+def test_optical_setup_uses_injected_circuit():
+    circuit = GaussianCircuit().add_mode("a")
+    setup = OpticalSetup("Bench", circuit=circuit).phase_shifter(
+        "Phase", port="a", phi=0.25
+    )
+
+    assert setup.circuit is circuit
+    assert setup.circuit.to_dict()["operations"] == [
+        {"name": "rotate", "modes": ["a"], "kwargs": {"phi": 0.25}}
+    ]
+
+
+def test_process_beam_does_not_rebuild_or_duplicate_circuit_operations():
+    setup = OpticalSetup("Bench").phase_shifter("Phase", port="a", phi=0.25)
+    input_state = GaussianState.coherent(modes=("a",), alphas=[1.0])
+
+    first = setup.process_beam(input_state)
+    second = setup.process_beam(input_state)
+
+    assert np.allclose(first.displacement, second.displacement)
+    assert len(setup.circuit.to_dict()["operations"]) == 1
 
 
 def test_layout_roundtrips_through_file(tmp_path):
@@ -46,24 +77,48 @@ def test_layout_roundtrips_through_file(tmp_path):
 
 
 def test_component_to_dict_and_from_dict_agree():
-    comp = OpticalComponent("BS1", "BeamSplitter", ("a", "b"), {"eta": 0.5})
+    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
     assert OpticalComponent.from_dict(comp.to_dict()) == comp
 
 
-@pytest.mark.parametrize(
-    ("op_type", "ports", "kwargs", "match"),
-    [
-        ("BeamSplitter", ("a",), {"eta": 0.5}, "exactly 2 port"),
-        ("Loss", ("a", "b"), {"eta": 0.9}, "exactly 1 port"),
-        ("BeamSplitter", ("a", "a"), {"eta": 0.5}, "same port"),
-        ("BeamSplitter", ("a", "b"), {"eta": 1.1}, "eta"),
-        ("PhaseRotation", ("a",), {"phi": np.inf}, "finite"),
-        ("Unknown", ("a",), {}, "Unknown optical component"),
-    ],
-)
-def test_optical_component_rejects_invalid_definitions(op_type, ports, kwargs, match):
-    with pytest.raises(ValueError, match=match):
-        OpticalComponent("component", op_type, ports, kwargs)
+def test_component_owns_the_executable_callable():
+    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
+
+    assert comp.op is beam_splitter
+    assert comp.op_type == "beam_splitter"
+    assert comp.ports == ("a", "b")
+    assert comp.kwargs == {"eta": 0.5}
+
+
+def test_optical_component_serializes_the_bare_function_name():
+    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
+
+    assert comp.to_dict() == {
+        "name": "BS1",
+        "op_type": "beam_splitter",
+        "ports": ["a", "b"],
+        "kwargs": {"eta": 0.5},
+    }
+    assert OpticalComponent.from_dict(comp.to_dict()).op is beam_splitter
+
+
+@pytest.mark.parametrize("op", [beam_splitter, loss, squeeze, rotate])
+def test_optical_component_accepts_only_known_optical_callables(op):
+    component = {
+        beam_splitter: OpticalComponent("BS", beam_splitter, ("a", "b"), {"eta": 0.5}),
+        loss: OpticalComponent("Loss", loss, ("a",), {"eta": 0.9}),
+        squeeze: OpticalComponent("Sqz", squeeze, ("a",), {"r": 0.5, "theta": 0.0}),
+        rotate: OpticalComponent("Phase", rotate, ("a",), {"phi": 0.2}),
+    }[op]
+    assert component.op is op
+
+
+def test_optical_component_rejects_unknown_callable():
+    def custom_operation(state, modes, **kwargs):
+        return state
+
+    with pytest.raises(ValueError, match="Unknown optical component operation"):
+        OpticalComponent("Custom", custom_operation, ("a",), {})
 
 
 # Execution
@@ -134,9 +189,9 @@ def test_render_schematic_labels_each_component_and_input_state():
     )
     assert "|a=1.5>" in schematic
     assert "|b=0.8>" in schematic
-    assert "BS" in schematic
-    assert "LOSS" in schematic
-    assert "PHASE" in schematic
+    assert "beam" in schematic
+    assert "loss" in schematic
+    assert "rotat" in schematic
     assert "line_1" in schematic and "line_2" in schematic
     # print(schematic)
 

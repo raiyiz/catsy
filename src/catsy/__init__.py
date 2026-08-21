@@ -2,11 +2,16 @@
 
 from .fock import FockOperations
 from .gaussian import (
-    CircuitOperation,
     GaussianChannel,
     GaussianCircuit,
     GaussianMeasurements,
     GaussianState,
+    beam_splitter,
+    displace,
+    loss,
+    rotate,
+    squeeze,
+    thermal_loss,
     LossChannels,
     compute_duan_inseparability,
     compute_joint_correlation,
@@ -18,12 +23,17 @@ from .journal import JournalEntry, SimulationJournal
 from .optics import KerrCavity, MachZehnderInterferometer, OpticalSetup
 
 __all__ = [
-    "CircuitOperation",
     "FockOperations",
     "GaussianChannel",
     "GaussianCircuit",
     "GaussianMeasurements",
     "GaussianState",
+    "beam_splitter",
+    "displace",
+    "loss",
+    "rotate",
+    "squeeze",
+    "thermal_loss",
     "JournalEntry",
     "KerrCavity",
     "LossChannels",

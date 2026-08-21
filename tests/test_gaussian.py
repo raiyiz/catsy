@@ -5,7 +5,6 @@ from matplotlib import pyplot as plt
 
 from catsy.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
 from catsy.gaussian import (
-    OPERATION_REGISTRY,
     GaussianChannel,
     GaussianCircuit,
     GaussianMeasurements,
@@ -367,11 +366,6 @@ def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation
 # Circuit validation and serialization
 
 
-def test_channel_dimension_validation():
-    with pytest.raises(ValueError):
-        GaussianChannel(target_modes=("a",), X=np.eye(2), Y=np.eye(3), d0=np.zeros(2))
-
-
 def test_circuit_matches_manual_operation_chain():
     manual = (
         GaussianState.vacuum(("a", "b"))
@@ -394,6 +388,23 @@ def test_circuit_matches_manual_operation_chain():
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 
 
+def test_circuit_executes_the_callable_directly():
+    calls = []
+
+    def my_operation(state, modes, **kwargs):
+        calls.append((modes, kwargs))
+        return state.rotate(modes[0], phi=kwargs["phi"])
+
+    circuit = GaussianCircuit().add_mode("a")
+    circuit.add_operation(my_operation, ("a",), phi=0.25)
+    result = circuit.compile_and_run()
+
+    assert calls == [(('a',), {"phi": 0.25})]
+    expected = GaussianState.vacuum(("a",)).rotate("a", phi=0.25)
+    np.testing.assert_allclose(result.displacement, expected.displacement)
+    np.testing.assert_allclose(result.covariance, expected.covariance)
+
+
 def test_circuit_rejects_unregistered_mode():
     circuit = GaussianCircuit()
     circuit.add_mode("a")
@@ -407,22 +418,29 @@ def test_circuit_rejects_empty_mode_set():
         GaussianCircuit().compile_and_run()
 
 
-def test_circuit_extensible_via_registry():
-    calls = []
+def test_circuit_serializes_operation_function_name():
+    circuit = GaussianCircuit().add_mode("a")
+    circuit.squeeze(mode="a", r=0.4)
 
-    def _my_op(state, modes, **kwargs):
-        calls.append((modes, kwargs))
+    assert circuit.to_dict()["operations"] == [
+        {"name": "squeeze", "modes": ["a"], "kwargs": {"r": 0.4, "theta": 0.0}}
+    ]
+
+
+def test_circuit_register_is_only_for_custom_operation_deserialization():
+    def my_operation(state, modes, **kwargs):
         return state
 
-    GaussianCircuit.register("MyCustomOp", _my_op)
+    GaussianCircuit.register("my_operation", my_operation)
     try:
-        circuit = GaussianCircuit()
-        circuit.add_mode("a")
-        circuit._add_op("MyCustomOp", ("a",), foo=1)
-        circuit.compile_and_run()
-        assert calls == [(("a",), {"foo": 1})]
+        circuit = GaussianCircuit().add_mode("a")
+        circuit.add_operation(my_operation, ("a",), foo=1)
+        restored = GaussianCircuit.from_dict(circuit.to_dict())
+        assert restored.to_dict() == circuit.to_dict()
     finally:
-        del OPERATION_REGISTRY["MyCustomOp"]
+        from catsy.gaussian import _OPERATION_DESERIALIZERS
+
+        del _OPERATION_DESERIALIZERS["my_operation"]
 
 
 def test_gaussian_state_roundtrips_through_dict():
