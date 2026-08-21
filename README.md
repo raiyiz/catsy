@@ -42,12 +42,12 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 | Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L86) |
 | Build a sequence of operations              | [`Circuit`](src/catsy/core.py) |
 | Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L516), [`GaussianChannel`](src/catsy/gaussian.py#L453) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L805) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L646) |
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L86) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L932) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L773) |
 | Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L292) |
-| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L168) |
-| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L354) |
+| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L159) |
+| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
 
 States are represented in phase space by their first moments and covariance matrix. Common operations include:

@@ -23,9 +23,9 @@ from .journal import JournalEntry, SimulationJournal
 from .optics import KerrCavity, MachZehnderInterferometer, OpticalSetup
 
 __all__ = [
+    "Circuit",
     "FockOperations",
     "GaussianChannel",
-    "Circuit",
     "GaussianMeasurements",
     "GaussianState",
     "JournalEntry",

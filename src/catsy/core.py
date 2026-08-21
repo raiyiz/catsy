@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import numpy as np
 import scipy.linalg
 
 from .types import CircuitData, FloatArray, Modes, OperationParameters, ParameterValue
+
+if TYPE_CHECKING:
+    from .gaussian import GaussianState
 
 
 class Operation(Protocol):
@@ -25,8 +29,9 @@ def _named_operation(name: str) -> Callable[[Callable[..., Any]], Operation]:
     """Attach the stable serialization name to an executable callable."""
 
     def decorate(fn: Callable[..., Any]) -> Operation:
-        setattr(fn, "name", name)
-        return cast(Operation, fn)
+        operation = cast(Operation, fn)
+        operation.name = name
+        return operation
 
     return decorate
 

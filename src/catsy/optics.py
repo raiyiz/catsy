@@ -5,14 +5,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import numpy as np
 import qutip as qt
 
-from catsy.gaussian import beam_splitter, loss, rotate, squeeze
-
 from .core import Circuit, Operation, _check_non_negative, _check_positive_int
+from .gaussian import beam_splitter, loss, rotate, squeeze
 from .types import (
     FloatArray,
     Modes,
@@ -20,6 +19,9 @@ from .types import (
     OpticalComponentData,
     OpticalSetupData,
 )
+
+if TYPE_CHECKING:
+    from .gaussian import GaussianState
 
 # ---------------------------------------------------------------------------
 # Component blueprint
@@ -71,8 +73,9 @@ class OpticalComponent:
         if not callable(self.operation):
             raise TypeError("OpticalComponent operation must be callable.")
         if self.operation not in _OPTICAL_COMPONENT_OPS:
+            operation_label = getattr(self.operation, "name", repr(self.operation))
             raise ValueError(
-                f"Unknown optical component operation {self.operation.name!r}. "
+                f"Unknown optical component operation {operation_label!r}. "
                 f"Known operations: {sorted(op for op in _OPTICAL_OPERATION_BY_NAME)}."
             )
         self.ports = tuple(self.ports)
@@ -211,7 +214,7 @@ class OpticalSetup:
         if not self.components:
             raise ValueError(f"OpticalSetup '{self.name}' has no components to run.")
 
-        return self.circuit.run(input_state)
+        return cast("GaussianState", self.circuit.run(input_state))
 
     # -- Serialization --------------------------------------------------------
 

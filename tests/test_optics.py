@@ -165,7 +165,6 @@ def test_optical_component_accepts_only_known_optical_callables(op):
     assert component.operation is op
 
 
-@pytest.mark.skip("failing, custom func does not have name attribute")
 def test_optical_component_rejects_unknown_callable():
     def custom_operation(state, modes, **kwargs):
         return state
