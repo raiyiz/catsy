@@ -45,15 +45,15 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L86) |
-| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L86) |
+| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L85) |
+| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L85) |
 | Build a sequence of operations              | [`Circuit`](src/catsy/core.py) |
-| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L516), [`GaussianChannel`](src/catsy/gaussian.py#L453) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L805) |
-| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L86) |
+| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L515), [`GaussianChannel`](src/catsy/gaussian.py#L452) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L653) |
+| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L85) |
 | Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L932) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L292) |
-| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L168) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L291) |
+| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L59) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L354) |
 ## Gaussian states
 
