@@ -5,47 +5,71 @@
 // ==========================================
 = Chapter 3: Circuit Architecture & Gate Serialization
 
-The `Circuit` class is the generic imperative sequencing layer of the toolkit. It stores an ordered sequence of executable callables over named modes and does not know whether a gate is Gaussian, Fock-space, or belongs to another backend. The state and gate callable define the computational domain; the circuit only sequences and executes them.
+The `Circuit` class is the generic imperative sequencing layer of the toolkit. It stores an ordered sequence of fully bound `Gate` instances over named modes. A `Gate` contains the stable noun-style gate name, its executable `transform`, the target `modes`, and the bound `kwargs`.
 
-== Callable gates and direct execution
-The circuit stores the executable gate itself rather than an intermediate gate record. Gates are typed by the generic `Gate` protocol, while the circuit remains backend-agnostic:
+== Gate instances and direct execution
+The central abstraction is deliberately small:
 
 ```python
-class Gate(Protocol):
+@dataclass(frozen=True)
+class Gate:
     name: str
-    def __call__(self, state, modes, **kwargs): ...
+    transform: GateTransform
+    modes: tuple[str, ...]
+    kwargs: dict[str, object]
+
+    def apply(self, state):
+        return self.transform(state, self.modes, **self.kwargs)
 ```
 
-The built-in gates are plain function objects such as `squeeze`, `rotate`, `displace`, `beam_splitter`, `loss`, and `thermal_loss`. Each gate carries an explicit `name` attribute as part of the Catsy gate contract. Higher-level domain objects can therefore attach a callable directly to a `Circuit`. There is no runtime string-to-function dispatch step.
+The mathematical transformations remain ordinary verb-named functions such as `squeeze`, `rotate`, `displace`, `beam_splitter`, `loss`, and `thermal_loss`. A concrete Gate instance binds one such transform to its noun-style identity and parameters:
 
-== Serialization uses the function name
-Function objects are intentionally kept out of JSON. When a circuit is serialized, each gate stores only the callable's explicit `name` attribute, together with its target modes and primitive parameters. For example:
+```python
+squeezer = Gate(
+    name="Squeezer",
+    transform=squeeze,
+    modes=("a",),
+    kwargs={"r": 0.5},
+)
+```
+
+The same Gate can be applied directly with `squeezer.apply(state)` or attached to a circuit with `circuit.add_gate(squeezer)`. Construction and attachment never execute the transformation.
+
+== Fluent circuit construction
+Registered transforms are also exposed as fluent Circuit methods. These methods construct the same kind of Gate instance and append it to the circuit:
+
+```python
+circuit.squeeze("a", r=0.5)
+circuit.displace("a", alpha=0.2)
+```
+
+The fluent call is therefore equivalent to constructing a Gate explicitly and passing it to `add_gate`. The verb is the transformation/function name; the bound Gate carries the noun-style name.
+
+== Serialization uses the Gate name
+Function objects are intentionally kept out of JSON. A serialized gate contains its stable noun-style `name`, target modes, and primitive parameters. For example:
 
 ```json
 {
-  "gate": "beam_splitter",
+  "gate": "BeamSplitter",
   "modes": ["a", "b"],
   "kwargs": {"eta": 0.5}
 }
 ```
 
-The small deserialization mapping is used only when loading JSON; execution never consults it. This preserves the direct callable contract at runtime while keeping the file format simple. Custom callables can be registered for deserialization with `Circuit.register`; the circuit still executes the callable object that was attached to it.
+The registry maps serialized Gate names back to their transform functions when loading a circuit. Execution itself uses the transform already stored in each Gate instance.
 
-== Compilation and sequential execution
-The `run` method resolves the initial state, validates that every gate targets a registered mode, and then invokes the stored callable directly:
+== Sequential execution
+The `run` method validates the Gate modes and then applies the bound Gates in order:
 
 ```python
-for idx, (gate, modes, kwargs) in enumerate(self._gates):
-    for mode in modes:
-        if mode not in self.modes:
-            raise ValueError(...)
-    current_state = gate(current_state, modes, **kwargs)
+for gate in self._gates:
+    current_state = gate.apply(current_state)
 ```
 
-This makes the execution path linear: gate callable → `Circuit` → state. The circuit does not need to understand the domain-specific origin of an operation.
+This gives a linear execution path: `Gate` → `transform` → state. The circuit does not need a separate operation record or execution wrapper.
 
 == State storage and roundtrip guarantee
-Circuits remain persistent through `save` and `load`. The runtime callable is replaced in the JSON representation by its bare function name, and the loader resolves that name back to a callable before attaching it to the reconstructed circuit. A circuit can also contain an `initial_state` gate. When present, `run()` can construct the initial state from that gate; an explicit state passed to `run()` overrides it.
+Circuits remain persistent through `save` and `load`. Serialization stores only the Gate name, modes, and bound parameters; deserialization reconstructs a concrete Gate with the corresponding transform. A circuit can also contain an `InitialState` Gate. When present, `run()` can construct the initial state from that Gate; an explicit state passed to `run()` overrides it.
 
 
 === Literature

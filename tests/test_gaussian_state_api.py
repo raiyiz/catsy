@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from catsy.core import Circuit
+from catsy.core import Circuit, Gate
 from catsy.gaussian import GaussianState, beam_splitter, loss, squeeze
 
 
@@ -38,9 +38,28 @@ def test_circuit_matches_fluent_state_chain():
     )
 
     circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(squeeze, ("a",), r=0.4, theta=0.0).add_gate(
-        squeeze, ("b",), r=0.4, theta=np.pi / 2
-    ).add_gate(beam_splitter, ("a", "b"), eta=0.5).add_gate(loss, ("a",), eta=0.8)
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.4, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.4, "theta": np.pi / 2},
+        )
+    ).add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    ).add_gate(Gate(name="Noise", transform=loss, modes=("a",), kwargs={"eta": 0.8}))
     compiled = circuit.run(GaussianState.vacuum(("a", "b")))
 
     np.testing.assert_allclose(compiled.displacement, direct.displacement)

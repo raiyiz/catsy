@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
@@ -17,25 +16,25 @@ if TYPE_CHECKING:
     from .gaussian import GaussianState
 
 
-class Gate(Protocol):
-    """Callable contract for one executable circuit gate."""
-
-    name: str
+class GateTransform(Protocol):
+    """Callable contract for a state transformation."""
 
     def __call__(
         self, state: Any | None, modes: Modes, **kwargs: ParameterValue
     ) -> GaussianState: ...
 
 
-def _named_gate(name: str) -> Callable[[Callable[..., Any]], Gate]:
-    """Attach the stable serialization name to an executable gate."""
+@dataclass(frozen=True)
+class Gate:
+    """One fully bound transformation over named modes."""
 
-    def decorate(fn: Callable[..., Any]) -> Gate:
-        fn = cast(Gate, fn)
-        fn.name = name
-        return fn
+    name: str
+    transform: GateTransform
+    modes: Modes
+    kwargs: GateParameters
 
-    return decorate
+    def apply(self, state: Any | None) -> GaussianState:
+        return self.transform(state, self.modes, **self.kwargs)
 
 
 class CircuitState(Protocol):
@@ -51,18 +50,14 @@ class Circuit:
     """An ordered sequence of executable gates over named modes."""
 
     modes: Modes = field(default_factory=tuple)
-    _gates: list[tuple[Gate, Modes, GateParameters]] = field(
-        default_factory=list, init=False
-    )
+    _gates: list[Gate] = field(default_factory=list, init=False)
 
     @classmethod
-    def register(cls, name: str, gate: Gate) -> None:
-        """Register a gate name for deserialization only."""
-        if name != gate.name:
-            raise ValueError(
-                f"Gate registry name {name!r} does not match gate.name {gate.name!r}."
-            )
-        _GATE_DESERIALIZERS[name] = gate
+    def register(cls, name: str, transform: GateTransform) -> None:
+        """Register a gate name and its transformation for construction/loading."""
+        if not name.strip():
+            raise ValueError("Gate name must be a non-empty string.")
+        _GATE_DESERIALIZERS[name] = transform
 
     def __getattr__(self, name: str) -> Any:
         """Expose registered gates as fluent circuit-building methods.
@@ -71,13 +66,31 @@ class Circuit:
         the gate against a state. This keeps the convenience API identical to
         ``add_gate`` while allowing ``circuit.squeeze(...)`` style DSLs.
         """
-        try:
-            gate = _GATE_DESERIALIZERS[name]
-        except KeyError as exc:
-            raise AttributeError(name) from exc
+        transform = next(
+            (
+                candidate
+                for candidate in _GATE_DESERIALIZERS.values()
+                if getattr(candidate, "__name__", "") == name
+            ),
+            None,
+        )
+        if transform is None:
+            raise AttributeError(name)
+        gate_name = next(
+            registered_name
+            for registered_name, candidate in _GATE_DESERIALIZERS.items()
+            if candidate is transform
+        )
 
         def apply(*modes: str, **kwargs: ParameterValue) -> Circuit:
-            return self.add_gate(gate, tuple(modes), **kwargs)
+            return self.add_gate(
+                Gate(
+                    name=gate_name,
+                    transform=transform,
+                    modes=tuple(modes),
+                    kwargs=dict(kwargs),
+                )
+            )
 
         return apply
 
@@ -87,8 +100,8 @@ class Circuit:
         self.modes = (*self.modes, mode_name)
         return self
 
-    def add_gate(self, gate: Gate, modes: Modes, **kwargs: ParameterValue) -> Circuit:
-        normalized_modes = tuple(modes)
+    def add_gate(self, gate: Gate) -> Circuit:
+        normalized_modes = tuple(gate.modes)
         if not normalized_modes:
             raise ValueError("A circuit gate must target at least one mode.")
         if any(
@@ -99,7 +112,7 @@ class Circuit:
             raise ValueError(
                 f"{gate.name} cannot target the same mode more than once: {normalized_modes!r}."
             )
-        self._gates.append((gate, normalized_modes, dict(kwargs)))
+        self._gates.append(gate)
         return self
 
     def initial_state(
@@ -107,10 +120,17 @@ class Circuit:
     ) -> Circuit:
         """Append the registered ``initial_state`` gate to the circuit."""
         try:
-            gate = _GATE_DESERIALIZERS["initial_state"]
+            transform = _GATE_DESERIALIZERS["InitialState"]
         except KeyError as exc:
-            raise RuntimeError("No initial_state gate has been registered.") from exc
-        return self.add_gate(gate, tuple(modes), kind=kind, **kwargs)
+            raise RuntimeError("No InitialState gate has been registered.") from exc
+        return self.add_gate(
+            Gate(
+                name="InitialState",
+                transform=transform,
+                modes=tuple(modes),
+                kwargs={"kind": kind, **kwargs},
+            )
+        )
 
     def run(self, initial_state: CircuitState | None = None) -> Any:
         """Run the gate chain, optionally constructing the state from a first gate."""
@@ -118,7 +138,7 @@ class Circuit:
             raise ValueError("Circuit has no registered modes.")
 
         if initial_state is None:
-            if not self._gates or self._gates[0][0].name != "initial_state":
+            if not self._gates or self._gates[0].name != "InitialState":
                 raise ValueError(
                     "No initial state was supplied and the circuit has no initial_state gate."
                 )
@@ -128,17 +148,17 @@ class Circuit:
                 raise ValueError("Initial state's modes don't match the circuit's modes.")
             current_state = initial_state.reorder_modes(self.modes)
 
-        for idx, (gate, modes, kwargs) in enumerate(self._gates):
-            for mode in modes:
+        for idx, gate in enumerate(self._gates):
+            for mode in gate.modes:
                 if mode not in self.modes:
                     raise ValueError(
                         f"Gate #{idx} ({gate.name}): mode '{mode}' is not registered in this circuit."
                     )
-            if current_state is None and gate.name != "initial_state":
+            if current_state is None and gate.name != "InitialState":
                 raise ValueError(
                     f"Gate #{idx} ({gate.name}) cannot run before an initial_state gate."
                 )
-            current_state = gate(current_state, modes, **kwargs)
+            current_state = gate.apply(current_state)
 
         return current_state
 
@@ -146,8 +166,8 @@ class Circuit:
         return {
             "modes": list(self.modes),
             "gates": [
-                {"gate": gate.name, "modes": list(modes), "kwargs": kwargs}
-                for gate, modes, kwargs in self._gates
+                {"gate": gate.name, "modes": list(gate.modes), "kwargs": gate.kwargs}
+                for gate in self._gates
             ],
         }
 
@@ -157,12 +177,17 @@ class Circuit:
         for gate_data in data["gates"]:
             name = gate_data["gate"]
             try:
-                gate = _GATE_DESERIALIZERS[name]
+                transform = _GATE_DESERIALIZERS[name]
             except KeyError as exc:
-                raise KeyError(
-                    f"Unknown gate function '{name}' in serialized circuit."
-                ) from exc
-            circuit.add_gate(gate, tuple(gate_data["modes"]), **gate_data["kwargs"])
+                raise KeyError(f"Unknown gate '{name}' in serialized circuit.") from exc
+            circuit.add_gate(
+                Gate(
+                    name=name,
+                    transform=transform,
+                    modes=tuple(gate_data["modes"]),
+                    kwargs=dict(gate_data["kwargs"]),
+                )
+            )
         return circuit
 
     def save(self, path: str | Path) -> None:
@@ -173,7 +198,7 @@ class Circuit:
         return cls.from_dict(cast(CircuitData, _json_load(path)))
 
 
-_GATE_DESERIALIZERS: dict[str, Gate] = {}
+_GATE_DESERIALIZERS: dict[str, GateTransform] = {}
 
 TOL_ZERO_ENTRY = 1e-9
 TOL_TRACE_WARN = 1e-6

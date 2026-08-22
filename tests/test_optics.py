@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from time import perf_counter
 
 import numpy as np
@@ -5,7 +7,7 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catsy.core import Circuit
+from catsy.core import Circuit, Gate
 from catsy.fock import FockGates
 from catsy.gaussian import (
     GaussianState,
@@ -18,7 +20,6 @@ from catsy.gaussian import (
 from catsy.optics import (
     KerrCavity,
     MachZehnderInterferometer,
-    OpticalComponent,
     OpticalSetup,
 )
 
@@ -26,30 +27,28 @@ from catsy.optics import (
 
 
 def test_beam_splitter_registers_both_ports_and_populates_circuit():
-    setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
+    setup = OpticalSetup("Bench").beam_splitter(port_a="a", port_b="b", eta=0.5)
     assert setup.registered_ports == {"a", "b"}
     assert setup.circuit.modes == ("a", "b")
     assert setup.circuit.to_dict()["gates"] == [
-        {"gate": "beam_splitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
+        {"gate": "BeamSplitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
     ]
-    assert setup.components[0].gate.name == "beam_splitter"
-    assert setup.components[0].kwargs == {"eta": 0.5}
+    assert setup.gates[0].name == "BeamSplitter"
+    assert setup.gates[0].kwargs == {"eta": 0.5}
 
 
 def test_optical_setup_uses_injected_circuit():
     circuit = Circuit().add_mode("a")
-    setup = OpticalSetup("Bench", circuit=circuit).phase_shifter(
-        "Phase", port="a", phi=0.25
-    )
+    setup = OpticalSetup("Bench", circuit=circuit).phase_shifter(port="a", phi=0.25)
 
     assert setup.circuit is circuit
     assert setup.circuit.to_dict()["gates"] == [
-        {"gate": "rotate", "modes": ["a"], "kwargs": {"phi": 0.25}}
+        {"gate": "Rotator", "modes": ["a"], "kwargs": {"phi": 0.25}}
     ]
 
 
 def test_process_beam_does_not_rebuild_or_duplicate_circuit_gates():
-    setup = OpticalSetup("Bench").phase_shifter("Phase", port="a", phi=0.25)
+    setup = OpticalSetup("Bench").phase_shifter(port="a", phi=0.25)
     input_state = GaussianState.coherent(modes=("a",), alphas=[1.0])
 
     first = setup.process_beam(input_state)
@@ -61,133 +60,96 @@ def test_process_beam_does_not_rebuild_or_duplicate_circuit_gates():
 
 def test_layout_roundtrips_through_file(tmp_path):
     setup = OpticalSetup("MZI Node")
-    setup.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
-    setup.fiber_loss("Loss_A", port="line_1", eta=0.9)
-    setup.phase_shifter("Phase_B", port="line_2", phi=0.785)
-    setup.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
+    setup.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
+    setup.fiber_loss(port="line_1", eta=0.9)
+    setup.phase_shifter(port="line_2", phi=0.785)
+    setup.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
 
     layout_path = tmp_path / "mzi_node.json"
     setup.save_layout(layout_path)
     loaded = OpticalSetup.load_layout(layout_path)
 
     assert loaded.name == "MZI Node"
-    assert [c.name for c in loaded.components] == ["BS1", "Loss_A", "Phase_B", "BS2"]
+    assert [gate.name for gate in loaded.gates] == [
+        "BeamSplitter",
+        "Noise",
+        "Rotator",
+        "BeamSplitter",
+    ]
     assert loaded.registered_ports == {"line_1", "line_2"}
-    assert loaded.components[2].kwargs == {"phi": 0.785}
+    assert loaded.gates[2].kwargs == {"phi": 0.785}
 
 
-def test_component_to_dict_and_from_dict_agree():
-    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
-    assert OpticalComponent.from_dict(comp.to_dict()) == comp
+def test_optical_setup_gate_roundtrip_agrees(tmp_path):
+    setup = OpticalSetup("Bench").beam_splitter(port_a="a", port_b="b", eta=0.5)
+    path = tmp_path / "bench.json"
+    setup.save_layout(path)
+    restored = OpticalSetup.load_layout(path)
+    assert restored.to_dict() == setup.to_dict()
 
 
 @pytest.mark.parametrize(
-    ("gate", "ports", "kwargs", "match"),
+    ("gate_name", "transform", "modes", "kwargs", "match"),
     [
-        (beam_splitter, ("a",), {"eta": 0.5}, "exactly 2 port"),
-        (loss, ("a", "b"), {"eta": 0.9}, "exactly 1 port"),
-        (beam_splitter, ("a", "a"), {"eta": 0.5}, "same port"),
-        (rotate, ("a",), {"phi": np.inf}, "finite"),
-        (beam_splitter, ("", "b"), {"eta": 0.5}, "non-empty string"),
-        (beam_splitter, ("a", "b"), {}, "missing"),
-        (beam_splitter, ("a", "b"), {"eta": 0.5, "extra": 1.0}, "unexpected"),
+        ("BeamSplitter", beam_splitter, ("a",), {"eta": 0.5}, "exactly 2 mode"),
+        ("Noise", loss, ("a", "b"), {"eta": 0.9}, "exactly 1 mode"),
+        ("BeamSplitter", beam_splitter, ("a", "a"), {"eta": 0.5}, "same mode"),
+        ("Rotator", rotate, ("a",), {"phi": np.inf}, "finite"),
+        ("BeamSplitter", beam_splitter, ("", "b"), {"eta": 0.5}, "non-empty string"),
+        ("BeamSplitter", beam_splitter, ("a", "b"), {}, "missing"),
+        (
+            "BeamSplitter",
+            beam_splitter,
+            ("a", "b"),
+            {"eta": 0.5, "extra": 1.0},
+            "unexpected",
+        ),
     ],
 )
-def test_optical_component_rejects_invalid_definitions(gate, ports, kwargs, match):
-    """
-    The port-count/name and kwarg-completeness checks here are structural
-    metadata the executing layer can't supply on its own -- Circuit
-    happily calls op(state, ports, **kwargs) with whatever it's given, so a
-    wrong port count surfaces as a bare IndexError deep inside the callable
-    and an unrecognized extra kwarg is silently never read at all. Physical
-    value constraints eta already owns downstream (eta in [0, 1]) are
-    intentionally NOT re-tested here; see
-    `test_optical_component_defers_physical_validation_to_gaussian_state()`
-    below for that split.
-    """
+def test_optical_setup_rejects_invalid_gate_definitions(
+    gate_name, transform, modes, kwargs, match
+):
     with pytest.raises(ValueError, match=match):
-        OpticalComponent("component", gate, ports, kwargs)
+        OpticalSetup("Bench").add_gate(Gate(gate_name, transform, modes, kwargs))
 
 
-def test_optical_component_rejects_empty_name():
-    with pytest.raises(ValueError, match="non-empty string"):
-        OpticalComponent("", beam_splitter, ("a", "b"), {"eta": 0.5})
-
-
-def test_optical_component_defers_physical_validation_to_gaussian_state():
-    # eta's range/realness is validated exactly once, downstream in
-    # GaussianState.beam_splitter -- constructing the component doesn't fail,
-    # but attaching it to a circuit and running it does.
-    component = OpticalComponent("bad-eta", beam_splitter, ("a", "b"), {"eta": 1.5})
-    setup = OpticalSetup("Bench").add_component(component)
+def test_optical_setup_defers_physical_validation_to_gaussian_state():
+    gate = Gate("BeamSplitter", beam_splitter, ("a", "b"), {"eta": 1.5})
+    setup = OpticalSetup("Bench").add_gate(gate)
     with pytest.raises(ValueError, match="eta"):
         setup.process_beam(GaussianState.vacuum(("a", "b")))
 
 
-def test_component_accepts_operation_as_named_field():
-    comp = OpticalComponent(
-        name="BS1",
-        gate=beam_splitter,
-        ports=("a", "b"),
-        kwargs={"eta": 0.5},
-    )
-
-    assert comp.gate is beam_splitter
-
-
-def test_component_owns_the_executable_operation():
-    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
-
-    assert comp.gate is beam_splitter
-    assert comp.gate.name == "beam_splitter"
-    assert comp.ports == ("a", "b")
-    assert comp.kwargs == {"eta": 0.5}
+def test_optical_setup_stores_the_gate_instance():
+    gate = Gate("BeamSplitter", beam_splitter, ("a", "b"), {"eta": 0.5})
+    setup = OpticalSetup("Bench").add_gate(gate)
+    assert setup.gates[0] is gate
+    assert setup.gates[0].name == "BeamSplitter"
+    assert setup.gates[0].transform is beam_splitter
+    assert setup.gates[0].modes == ("a", "b")
+    assert setup.gates[0].kwargs == {"eta": 0.5}
 
 
-def test_optical_component_serializes_the_bare_function_name():
-    comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
-
-    assert comp.to_dict() == {
-        "name": "BS1",
-        "gate": "beam_splitter",
-        "ports": ["a", "b"],
-        "kwargs": {"eta": 0.5},
-    }
-    assert OpticalComponent.from_dict(comp.to_dict()).gate is beam_splitter
-
-
-@pytest.mark.parametrize("gate", [beam_splitter, loss, squeeze, rotate])
-def test_optical_component_accepts_only_known_optical_callables(gate):
-    component = {
-        beam_splitter: OpticalComponent("BS", beam_splitter, ("a", "b"), {"eta": 0.5}),
-        loss: OpticalComponent("Loss", loss, ("a",), {"eta": 0.9}),
-        squeeze: OpticalComponent("Sqz", squeeze, ("a",), {"r": 0.5, "theta": 0.0}),
-        rotate: OpticalComponent("Phase", rotate, ("a",), {"phi": 0.2}),
-    }[gate]
-    assert component.gate is gate
-
-
-def test_optical_component_rejects_unknown_callable():
+def test_optical_setup_rejects_unknown_gate():
     def custom_gate(state, modes, **kwargs):
         return state
 
-    with pytest.raises(ValueError, match="Unknown optical component gate"):
-        OpticalComponent("Custom", custom_gate, ("a",), {})
+    with pytest.raises(ValueError, match="Unknown optical gate"):
+        OpticalSetup("Bench").add_gate(Gate("CustomGate", custom_gate, ("a",), {}))
 
 
-def test_optical_component_rejects_non_callable_op():
-    with pytest.raises(TypeError, match="must be callable"):
-        OpticalComponent("Bad", "beam_splitter", ("a", "b"), {"eta": 0.5})  # type: ignore[arg-type]
-
-
-def test_optical_component_from_dict_rejects_unknown_op():
-    # The deserialization counterpart to test_optical_component_rejects_
-    # unknown_callable above: a hand-edited or corrupted saved layout (or one
-    # produced by a newer catsy version with a gate this one doesn't
-    # know) must fail at load time with a clear KeyError.
-    data = {"name": "Bad", "gate": "not_a_real_op", "ports": ["a"], "kwargs": {}}
-    with pytest.raises(KeyError, match="not_a_real_op"):
-        OpticalComponent.from_dict(data)
+def test_optical_setup_from_dict_rejects_unknown_gate():
+    data = {
+        "layout_name": "Bad",
+        "gates": [{"gate": "not_a_real_gate", "modes": ["a"], "kwargs": {}}],
+    }
+    path = Path("bad_layout.json")
+    try:
+        path.write_text(json.dumps(data))
+        with pytest.raises(KeyError, match="not_a_real_gate"):
+            OpticalSetup.load_layout(path)
+    finally:
+        path.unlink(missing_ok=True)
 
 
 # Execution
@@ -202,23 +164,23 @@ def test_process_beam_rejects_empty_setup():
 
 def test_mzi_setup_preserves_purity_for_coherent_input():
     mzi = OpticalSetup("MZI Node")
-    mzi.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
-    mzi.phase_shifter("Phase", port="line_2", phi=0.785)
-    mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.phase_shifter(port="line_2", phi=0.785)
+    mzi.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
 
     coherent_in = GaussianState.coherent(
         modes=("line_1", "line_2"), alphas=[1.5 + 0.0j, 2.0j]
     )
     result = mzi.process_beam(coherent_in)
-    # A lossless 2-mode MZI (no fiber_loss component) is purity-preserving:
+    # A lossless 2-mode MZI (no fiber_loss gate) is purity-preserving:
     # det(V) stays at the pure-state value of 0.5**(2*n_modes) == 0.0625.
     assert np.linalg.det(result.covariance) == pytest.approx(0.0625, rel=1e-9)
 
 
 def test_lossy_channel_setup_weakens_but_can_preserve_entanglement():
     setup = OpticalSetup("Lossy Channel")
-    setup.fiber_loss("Loss_A", port="line_1", eta=0.9)
-    setup.fiber_loss("Loss_B", port="line_2", eta=1.0)  # lossless reference arm
+    setup.fiber_loss(port="line_1", eta=0.9)
+    setup.fiber_loss(port="line_2", eta=1.0)  # lossless reference arm
 
     tmsv_in = GaussianState.tmsv(mode_a="line_1", mode_b="line_2", r=1.2)
     duan_before = compute_duan_inseparability(tmsv_in, "line_1", "line_2")
@@ -233,7 +195,7 @@ def test_lossy_channel_setup_weakens_but_can_preserve_entanglement():
 
 
 def test_process_beam_rejects_input_state_missing_a_registered_port():
-    setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
+    setup = OpticalSetup("Bench").beam_splitter(port_a="a", port_b="b", eta=0.5)
     mismatched = GaussianState.vacuum(modes=("a",))
     with pytest.raises(ValueError):
         setup.process_beam(mismatched)
@@ -247,19 +209,16 @@ def test_render_schematic_of_empty_setup():
     assert "Empty Bench Layout" in schematic
 
 
-def test_render_schematic_labels_each_component_and_input_state():
+def test_render_schematic_labels_each_gate_and_input_state():
     """
-    _TYPE_ABBREVIATIONS keys are the gate callables' explicit names
-    (e.g. beam_splitter.name == "beam_splitter"); a stale mismatch
-    there (PascalCase keys against lowercase op) would silently fall
-    through to a truncated raw name instead of raising, so this checks the
-    actual intended abbreviation, not just "something got printed".
+    The schematic uses the Gate's noun-style name for its abbreviation,
+    rather than the underlying transform function name.
     """
     setup = OpticalSetup("MZI Node")
-    setup.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
-    setup.fiber_loss("Loss_A", port="line_1", eta=0.9)
-    setup.phase_shifter("Phase_B", port="line_2", phi=0.785)
-    setup.inline_squeezer("Sqz_C", port="line_1", r=0.4)
+    setup.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
+    setup.fiber_loss(port="line_1", eta=0.9)
+    setup.phase_shifter(port="line_2", phi=0.785)
+    setup.inline_squeezer(port="line_1", r=0.4)
 
     schematic = setup.render_schematic(
         input_states={"line_1": "|a=1.5>", "line_2": "|b=0.8>"}
@@ -274,13 +233,13 @@ def test_render_schematic_labels_each_component_and_input_state():
     assert "line_1" in schematic and "line_2" in schematic
 
 
-def test_render_schematic_bridges_ports_a_multi_port_component_skips_over():
+def test_render_schematic_bridges_ports_a_multi_port_gate_skips_over():
     # 3 ports, but the beam splitter only touches the outer two -- the
     # middle port ("b") must be bridged, not silently dropped or crashed on
     # (this is the involved_ports[0] vs involved_ports comparison bug).
     setup = OpticalSetup("Bridge Test")
-    setup.beam_splitter("BS1", port_a="a", port_b="c", eta=0.5)
-    setup.phase_shifter("Phase", port="b", phi=0.1)
+    setup.beam_splitter(port_a="a", port_b="c", eta=0.5)
+    setup.phase_shifter(port="b", phi=0.1)
 
     schematic = setup.render_schematic()
     lines = schematic.splitlines()
@@ -289,7 +248,7 @@ def test_render_schematic_bridges_ports_a_multi_port_component_skips_over():
 
 
 def test_draw_prints_the_rendered_schematic(capsys):
-    setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
+    setup = OpticalSetup("Bench").beam_splitter(port_a="a", port_b="b", eta=0.5)
     setup.draw()
     captured = capsys.readouterr()
     assert captured.out.strip() == setup.render_schematic().strip()
@@ -299,20 +258,20 @@ def test_draw_prints_the_rendered_schematic(capsys):
 def test_visual_schematic_draw():
     # Schema one
     mzi = OpticalSetup("MZI Interferometer Node")
-    mzi.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
-    mzi.fiber_loss("Loss_A", port="line_1", eta=0.9)
-    mzi.phase_shifter("Phase_B", port="line_2", phi=0.785)
-    mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.fiber_loss(port="line_1", eta=0.9)
+    mzi.phase_shifter(port="line_2", phi=0.785)
+    mzi.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
 
     mzi.draw(input_states={"Route 1": "|α=1.5>", "Route 2": "|ξ=0.8>"})
 
     # Schema two
     mzi = OpticalSetup("Colored MZI Architecture")
-    mzi.inline_squeezer("Sqz_Input", port="line_2", r=0.7)
-    mzi.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
-    mzi.fiber_loss("Loss_A", port="line_1", eta=0.85)
-    mzi.phase_shifter("Phase_B", port="line_2", phi=1.57)
-    mzi.beam_splitter("BS2", port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.inline_squeezer(port="line_2", r=0.7)
+    mzi.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
+    mzi.fiber_loss(port="line_1", eta=0.85)
+    mzi.phase_shifter(port="line_2", phi=1.57)
+    mzi.beam_splitter(port_a="line_1", port_b="line_2", eta=0.5)
 
     mzi.draw(input_states={"Route 1": "|α=2.0>", "Route 2": "|0>"})
 
@@ -451,7 +410,14 @@ def test_full_cavity_multipanel_plot_demo():
 
 def test_triggered_cavity_end_to_end():
     cv_circuit = Circuit().add_mode("c")
-    cv_circuit.add_gate(squeeze, ("c",), r=0.1, theta=0.0)
+    cv_circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("c",),
+            kwargs={"r": 0.1, "theta": 0.0},
+        )
+    )
     initial_state = cv_circuit.run(GaussianState.vacuum(("c",)))
 
     N_fock = 15

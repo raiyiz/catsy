@@ -21,7 +21,7 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
   [#src-link("src/catsy/core.py")], [`Circuit` (generic executable gate sequence).],
   [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
-  [#src-link("src/catsy/optics.py")], [`OpticalSetup`/`OpticalComponent`: reusable bench layouts (Chapter 8); `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7).],
+  [#src-link("src/catsy/optics.py")], [`OpticalSetup`: reusable bench layouts (Chapter 8); `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 

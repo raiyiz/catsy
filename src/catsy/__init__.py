@@ -1,6 +1,6 @@
 """Small continuous-variable quantum-optics toolkit."""
 
-from .core import Circuit
+from .core import Circuit, Gate
 from .fock import FockGates
 from .gaussian import (
     GaussianChannel,
@@ -26,6 +26,7 @@ __all__ = [
     "FockGates",
     "GaussianChannel",
     "Circuit",
+    "Gate",
     "GaussianMeasurements",
     "GaussianState",
     "JournalEntry",

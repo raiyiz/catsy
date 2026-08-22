@@ -5,69 +5,85 @@
 // ==========================================
 = Chapter 8: Optical Bench Layouts (`OpticalSetup`)
 
-`Circuit` (Chapter 3) describes a *ordered gate sequence* — abstract and independent of a particular laboratory layout. `optics.py` adds a layer on top that models a reusable, named *hardware bench layout*: components with fixed ports that can be run repeatedly against different input states, saved/loaded, and visualized as a text schematic. The physical component vocabulary is consistent with standard linear/Gaussian optical processing; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)].
+`Circuit` (Chapter 3) describes an *ordered gate sequence* — abstract and independent of a particular laboratory layout. `optics.py` adds `OpticalSetup`, a reusable named hardware-bench layout whose gates have fixed modes and can be run repeatedly against different input states, saved/loaded, and visualized as a text schematic. The physical gate vocabulary is consistent with standard linear/Gaussian optical processing; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)].
 
-== The component blueprint (`OpticalComponent`)
+== Gates in an optical setup
 
-Every component is a named physical wrapper around one executable Gaussian gate. The component stores the callable itself as `gate`, its target ports, and its parameters; the optical layer adds the physical component name and layout semantics. This avoids a separate intermediate gate representation and means the component can attach its gate directly to the setup's circuit. The callable is the executable contract and carries an explicit `name` attribute; serialization stores only that name.
+There is no separate component abstraction. A `Gate` already contains everything needed to describe one concrete optical transformation:
+
+```python
+Gate(
+    name="BeamSplitter",
+    transform=beam_splitter,
+    modes=("a", "b"),
+    kwargs={"eta": 0.5},
+)
+```
+
+The `name` is the noun used as the stable gate identity and serialization key. The `transform` is the executable mathematical function; `modes` identify where it acts; and `kwargs` contain the parameters bound to this particular gate instance.
 
 == Declaratively assembling a bench (`OpticalSetup`)
 
-`OpticalSetup` collects components in registration order and offers a fluent, chainable builder API for doing so:
+`OpticalSetup` stores Gates in registration order and offers a fluent, chainable builder API:
 
 ```python
-def beam_splitter(
-    self, name: str, port_a: str, port_b: str, eta: float = 0.5
-) -> OpticalSetup:
-    return self.add_component(
-        OpticalComponent(
-            name, beam_splitter, (port_a, port_b), {"eta": eta}
-        )
-    )
-
-def fiber_loss(self, name: str, port: str, eta: float) -> OpticalSetup:
-    return self.add_component(
-        OpticalComponent(name, loss, (port,), {"eta": eta})
-    )
+setup = (
+    OpticalSetup("Bench A")
+    .inline_squeezer("a", r=0.6)
+    .beam_splitter("a", "b", eta=0.5)
+    .fiber_loss("b", eta=0.9)
+)
 ```
 
-Every call returns `self`, so a setup can be expressed as a readable chain, e.g. `OpticalSetup("Bench A").inline_squeezer("SQZ1", "a", r=0.6).beam_splitter("BS1", "a", "b")`.
+Each convenience method constructs one fully bound `Gate` and attaches it to the setup. The same Gate can also be constructed explicitly and passed to `add_gate`:
+
+```python
+gate = Gate(
+    name="Squeezer",
+    transform=squeeze,
+    modes=("a",),
+    kwargs={"r": 0.6, "theta": 0.0},
+)
+setup.add_gate(gate)
+```
+
+No separate component object is required, and the setup does not maintain a second representation of the transformation.
 
 == Execution: `OpticalSetup` owns a `Circuit`
 
-`OpticalSetup` composes with `Circuit` rather than translating a stored layout into a new circuit every time `process_beam` is called. The circuit is injected optionally and is created by default, following the same composition pattern as `Vehicle(circuit=Circuit())`:
+`OpticalSetup` composes with `Circuit` rather than translating a stored layout into a new circuit every time `process_beam` is called. The circuit is injected optionally and is created by default:
 
 ```python
 setup = OpticalSetup("Bench A", circuit=Circuit())
 ```
 
-Each `OpticalComponent` contains its executable callable, and `add_component` attaches that same callable directly to the setup's circuit. There is no second gate representation and no component-to-gate conversion step:
+`add_gate` registers the Gate's modes with the setup and attaches the exact same Gate instance to the owned circuit:
 
 ```python
-def add_component(self, component: OpticalComponent) -> OpticalSetup:
-    self.registered_ports.update(component.ports)
-    for port in component.ports:
-        if port not in self.circuit.modes:
-            self.circuit.add_mode(port)
-    self.components.append(component)
-    component.apply_to(self.circuit)
+def add_gate(self, gate: Gate) -> OpticalSetup:
+    self.registered_ports.update(gate.modes)
+    for mode in gate.modes:
+        if mode not in self.circuit.modes:
+            self.circuit.add_mode(mode)
+    self.gates.append(gate)
+    self.circuit.add_gate(gate)
     return self
 ```
 
-`process_beam` is consequently just the execution boundary:
+`process_beam` is the execution boundary:
 
 ```python
 def process_beam(self, input_state: GaussianState) -> GaussianState:
-    if not self.components:
-        raise ValueError(f"OpticalSetup '{self.name}' has no components to run.")
+    if not self.gates:
+        raise ValueError(f"OpticalSetup '{self.name}' has no gates to run.")
     return self.circuit.run(input_state)
 ```
 
-This removes the second `_CIRCUIT_BUILDERS` dispatch table and, more importantly, removes the duplicate executable representation. `Circuit` remains the single owner of Gaussian execution, while `OpticalSetup` retains the physical component metadata used for layout, serialization, and schematic rendering. The injected circuit is not serialized as part of the layout; loading a layout constructs its normal default circuit and repopulates it through `add_component`.
+`Circuit` remains the single owner of sequential Gaussian execution. `OpticalSetup` adds only the physical layout concerns: registered modes, gate ordering, persistence, and schematic rendering.
 
 == Serialization and text schematic
 
-Like `Circuit`, `OpticalSetup` is JSON-persistent via `to_dict`/`save_layout`/`load_layout`. In addition, `render_schematic` provides a pure, deterministic text visualization of the setup (one port per line, components left to right in registration order), which `draw` simply passes to `print`. The purity of `render_schematic` — no side effects, just a returned string — makes the schematic directly assertable in tests, while `draw` serves the interactive notebook use case.
+Like `Circuit`, `OpticalSetup` is JSON-persistent via `to_dict`/`save_layout`/`load_layout`. The serialized layout stores its ordered Gates using the same `gate`/`modes`/`kwargs` representation as a Circuit. `render_schematic` provides a pure, deterministic text visualization of the setup (one mode per line, gates left to right in registration order), which `draw` simply passes to `print`.
 
 ---
 

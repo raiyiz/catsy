@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from catsy.core import Circuit
+from catsy.core import Circuit, Gate
 from catsy.fock import FockGates
 from catsy.gaussian import (
     GaussianState,
@@ -48,10 +48,34 @@ def test_cv_channel_to_fock_purity_drops_with_loss():
 
 def test_qo_epr_purity_drops_below_one_after_loss():
     circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(squeeze, ("a",), r=0.6, theta=0.0).add_gate(
-        squeeze, ("b",), r=0.6, theta=np.pi / 2
-    ).add_gate(beam_splitter, ("a", "b"), eta=0.5).add_gate(
-        thermal_loss, ("b",), eta=0.7, n_thermal=0.3
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.6, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.6, "theta": np.pi / 2},
+        )
+    ).add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    ).add_gate(
+        Gate(
+            name="ThermalLoss",
+            transform=thermal_loss,
+            modes=("b",),
+            kwargs={"eta": 0.7, "n_thermal": 0.3},
+        )
     )
     final_cv_state = circuit.run(GaussianState.vacuum(("a", "b")))
     rho_qutip = final_cv_state.to_qutip(N_cutoff=15)
@@ -65,7 +89,14 @@ def test_qo_epr_purity_drops_below_one_after_loss():
 
 def test_photon_subtraction_state_and_rho_entry_points_agree():
     circuit = Circuit().add_mode("a")
-    circuit.add_gate(squeeze, ("a",), r=0.55, theta=0.0)
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.55, "theta": 0.0},
+        )
+    )
     gaussian_squeezed = circuit.run(GaussianState.vacuum(("a",)))
 
     rho = gaussian_squeezed.to_qutip(N_cutoff=25)
@@ -142,7 +173,14 @@ def test_native_qutip_wigner_plot_demo():
     import matplotlib.pyplot as plt
 
     state = Circuit().add_mode("a")
-    state.add_gate(squeeze, ("a",), r=0.6, theta=0.0)
+    state.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.6, "theta": 0.0},
+        )
+    )
     cv_state = state.run(GaussianState.vacuum(("a",)))
     rho = cv_state.to_qutip(N_cutoff=15)
 

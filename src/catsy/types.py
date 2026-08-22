@@ -39,13 +39,6 @@ class CircuitData(TypedDict):
     gates: list[GateData]
 
 
-class OpticalComponentData(TypedDict):
-    name: str
-    gate: str
-    ports: list[str]
-    kwargs: GateParameters
-
-
 class OpticalSetupData(TypedDict):
     layout_name: str
-    components: list[OpticalComponentData]
+    gates: list[GateData]

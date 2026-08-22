@@ -10,13 +10,12 @@ from typing import TYPE_CHECKING, Any, TypedDict, cast
 import numpy as np
 import qutip as qt
 
-from .core import Circuit, Gate, _check_non_negative, _check_positive_int
+from .core import Circuit, Gate, GateTransform, _check_non_negative, _check_positive_int
 from .gaussian import beam_splitter, loss, rotate, squeeze
 from .types import (
     FloatArray,
     GateParameters,
     Modes,
-    OpticalComponentData,
     OpticalSetupData,
 )
 
@@ -25,131 +24,37 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Component blueprint
+# Optical gate interface
 # ---------------------------------------------------------------------------
 
 
-# Optical components are the subset of Gaussian gates that have a direct
-# physical optical-bench interpretation.  The gate itself is stored as a
-# callable; the optical layer adds the component name and layout semantics.
-_OPTICAL_COMPONENT_GATES = frozenset(
+_OPTICAL_GATE_NAMES = frozenset(
     {
-        beam_splitter,
-        loss,
-        squeeze,
-        rotate,
+        "BeamSplitter",
+        "Noise",
+        "Squeezer",
+        "Rotator",
     }
 )
-_OPTICAL_GATE_BY_NAME = {op.name: op for op in _OPTICAL_COMPONENT_GATES}
 
-# Port count and expected kwarg names per gate.  This is *structural*
-# metadata the executing layer can't provide: Circuit/GaussianState
-# happily accept whatever kwargs a callable's **kwargs picks out and quietly
-# ignore the rest, so a component built with the wrong port count or a
-# mistyped kwarg name would otherwise fail late (an IndexError/KeyError deep
-# inside the callable) or not at all (an unrecognized extra kwarg is simply
-# never read). Physical value constraints (eta in [0, 1], etc.) are
-# deliberately NOT duplicated here -- those already have a single owner in
-# GaussianState.beam_splitter/.loss and are validated there.
-_COMPONENT_INTERFACE: dict[Gate, tuple[int, tuple[str, ...]]] = {
-    beam_splitter: (2, ("eta",)),
-    loss: (1, ("eta",)),
-    squeeze: (1, ("r", "theta")),
-    rotate: (1, ("phi",)),
+# Port count and expected kwarg names per gate. Physical value constraints are
+# deliberately left to the Gaussian transformations themselves.
+_OPTICAL_GATE_INTERFACE: dict[str, tuple[int, tuple[str, ...]]] = {
+    "BeamSplitter": (2, ("eta",)),
+    "Noise": (1, ("eta",)),
+    "Squeezer": (1, ("r", "theta")),
+    "Rotator": (1, ("phi",)),
 }
 
 
-@dataclass
-class OpticalComponent:
-    """Named physical component backed directly by an executable callable."""
-
-    name: str
-    gate: Gate
-    ports: Modes
-    kwargs: GateParameters
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError("OpticalComponent name must be a non-empty string.")
-        if not callable(self.gate):
-            raise TypeError("OpticalComponent gate must be callable.")
-        if self.gate not in _OPTICAL_COMPONENT_GATES:
-            gate_label = getattr(self.gate, "name", repr(self.gate))
-            raise ValueError(
-                f"Unknown optical component gate {gate_label!r}. "
-                f"Known gates: {sorted(name for name in _OPTICAL_GATE_BY_NAME)}."
-            )
-        self.ports = tuple(self.ports)
-        self.kwargs = dict(self.kwargs)
-
-        expected_ports, expected_kwargs = _COMPONENT_INTERFACE[self.gate]
-        if len(self.ports) != expected_ports:
-            raise ValueError(
-                f"{self.gate.name} requires exactly {expected_ports} port(s), "
-                f"got {len(self.ports)}."
-            )
-        if len(set(self.ports)) != len(self.ports):
-            raise ValueError(
-                f"{self.gate.name} cannot connect the same port more than once: "
-                f"{self.ports!r}."
-            )
-        if any(not isinstance(port, str) or not port.strip() for port in self.ports):
-            raise ValueError("All optical component ports must be non-empty strings.")
-
-        if set(self.kwargs) != set(expected_kwargs):
-            missing = sorted(set(expected_kwargs) - set(self.kwargs))
-            extra = sorted(set(self.kwargs) - set(expected_kwargs))
-            details = []
-            if missing:
-                details.append(f"missing {missing}")
-            if extra:
-                details.append(f"unexpected {extra}")
-            raise ValueError(
-                f"Invalid kwargs for {self.gate.name}: " + ", ".join(details) + "."
-            )
-        for key, value in self.kwargs.items():
-            if not np.isscalar(value) or not np.isfinite(value):
-                raise ValueError(
-                    f"{self.gate.name} parameter {key!r} must be a finite scalar, got {value!r}."
-                )
-
-    def apply_to(self, circuit: Circuit) -> None:
-        """Attach this component's callable directly to ``circuit``."""
-        circuit.add_gate(self.gate, self.ports, **self.kwargs)
-
-    def to_dict(self) -> OpticalComponentData:
-        return {
-            "name": self.name,
-            "gate": self.gate.name,
-            "ports": list(self.ports),
-            "kwargs": self.kwargs,
-        }
-
-    @classmethod
-    def from_dict(cls, data: OpticalComponentData) -> OpticalComponent:
-        try:
-            op = _OPTICAL_GATE_BY_NAME[data["gate"]]
-        except KeyError as exc:
-            raise KeyError(
-                f"Unknown optical gate function '{data['gate']}' in serialized component."
-            ) from exc
-        return cls(
-            name=data["name"],
-            gate=op,
-            ports=tuple(data["ports"]),
-            kwargs=data["kwargs"],
-        )
-
-
-# Abbreviated labels and the kwarg used to render each component's parameter
+# Abbreviated labels and the kwarg used to render each gate's parameter
 # in `OpticalSetup.render_schematic`.
 _TYPE_ABBREVIATIONS = {
-    beam_splitter.name: "BS",
-    loss.name: "LOSS",
-    squeeze.name: "SQZ",
-    rotate.name: "PHASE",
+    "BeamSplitter": "BS",
+    "Noise": "LOSS",
+    "Squeezer": "SQZ",
+    "Rotator": "PHASE",
 }
-_LABEL_PARAM_KEYS = ("eta", "phi", "r")
 
 
 # ---------------------------------------------------------------------------
@@ -158,12 +63,11 @@ _LABEL_PARAM_KEYS = ("eta", "phi", "r")
 
 
 class OpticalSetup:
-    """A reusable layout of optical hardware components on a bench.
+    """A reusable layout of optical gates on a bench.
 
-    Each `add_component` call attaches that component's gate directly to
-    an owned `Circuit`; `process_beam` runs the same accumulated
-    circuit against whatever input state it's given, so a single setup can be
-    replayed against many different inputs.
+    Gates are stored in registration order and attached directly to the
+    owned :class:`Circuit`. The same setup can therefore be replayed against
+    many different input states without rebuilding its gate sequence.
     """
 
     def __init__(
@@ -174,46 +78,94 @@ class OpticalSetup:
     ):
         self.name = name
         self.circuit = circuit if circuit is not None else Circuit()
-        self.components: list[OpticalComponent] = []
+        self.gates: list[Gate] = []
         self.registered_ports: set[str] = set()
 
-    def add_component(self, component: OpticalComponent) -> OpticalSetup:
-        self.registered_ports.update(component.ports)
-        for port in component.ports:
-            if port not in self.circuit.modes:
-                self.circuit.add_mode(port)
-        self.components.append(component)
-        component.apply_to(self.circuit)
+    def add_gate(self, gate: Gate) -> OpticalSetup:
+        if gate.name not in _OPTICAL_GATE_NAMES:
+            raise ValueError(
+                f"Unknown optical gate {gate.name!r}. "
+                f"Known gates: {sorted(_OPTICAL_GATE_NAMES)}."
+            )
+
+        modes = tuple(gate.modes)
+        kwargs = gate.kwargs
+        expected_modes, expected_kwargs = _OPTICAL_GATE_INTERFACE[gate.name]
+        if len(modes) != expected_modes:
+            raise ValueError(
+                f"{gate.name} requires exactly {expected_modes} mode(s), "
+                f"got {len(modes)}."
+            )
+        if len(set(modes)) != len(modes):
+            raise ValueError(
+                f"{gate.name} cannot connect the same mode more than once: {modes!r}."
+            )
+        if any(not isinstance(mode, str) or not mode.strip() for mode in modes):
+            raise ValueError("All optical gate modes must be non-empty strings.")
+
+        if set(kwargs) != set(expected_kwargs):
+            missing = sorted(set(expected_kwargs) - set(kwargs))
+            extra = sorted(set(kwargs) - set(expected_kwargs))
+            details = []
+            if missing:
+                details.append(f"missing {missing}")
+            if extra:
+                details.append(f"unexpected {extra}")
+            raise ValueError(
+                f"Invalid kwargs for {gate.name}: " + ", ".join(details) + "."
+            )
+        for key, value in kwargs.items():
+            if not np.isscalar(value) or not np.isfinite(value):
+                raise ValueError(
+                    f"{gate.name} parameter {key!r} must be a finite scalar, got {value!r}."
+                )
+
+        self.registered_ports.update(modes)
+        for mode in modes:
+            if mode not in self.circuit.modes:
+                self.circuit.add_mode(mode)
+        self.gates.append(gate)
+        self.circuit.add_gate(gate)
         return self
 
     # -- Syntactic sugar for quick assembly ---------------------------------
 
-    def beam_splitter(
-        self, name: str, port_a: str, port_b: str, eta: float = 0.5
-    ) -> OpticalSetup:
-        return self.add_component(
-            OpticalComponent(name, beam_splitter, (port_a, port_b), {"eta": eta})
+    def beam_splitter(self, port_a: str, port_b: str, eta: float = 0.5) -> OpticalSetup:
+        return self.add_gate(
+            Gate(
+                name="BeamSplitter",
+                transform=beam_splitter,
+                modes=(port_a, port_b),
+                kwargs={"eta": eta},
+            )
         )
 
-    def fiber_loss(self, name: str, port: str, eta: float) -> OpticalSetup:
-        return self.add_component(OpticalComponent(name, loss, (port,), {"eta": eta}))
-
-    def inline_squeezer(
-        self, name: str, port: str, r: float, theta: float = 0.0
-    ) -> OpticalSetup:
-        return self.add_component(
-            OpticalComponent(name, squeeze, (port,), {"r": r, "theta": theta})
+    def fiber_loss(self, port: str, eta: float) -> OpticalSetup:
+        return self.add_gate(
+            Gate(name="Noise", transform=loss, modes=(port,), kwargs={"eta": eta})
         )
 
-    def phase_shifter(self, name: str, port: str, phi: float) -> OpticalSetup:
-        return self.add_component(OpticalComponent(name, rotate, (port,), {"phi": phi}))
+    def inline_squeezer(self, port: str, r: float, theta: float = 0.0) -> OpticalSetup:
+        return self.add_gate(
+            Gate(
+                name="Squeezer",
+                transform=squeeze,
+                modes=(port,),
+                kwargs={"r": r, "theta": theta},
+            )
+        )
+
+    def phase_shifter(self, port: str, phi: float) -> OpticalSetup:
+        return self.add_gate(
+            Gate(name="Rotator", transform=rotate, modes=(port,), kwargs={"phi": phi})
+        )
 
     # -- Execution ------------------------------------------------------------
 
     def process_beam(self, input_state: GaussianState) -> Any:
-        """Runs a pre-built quantum state through this hardware layout."""
-        if not self.components:
-            raise ValueError(f"OpticalSetup '{self.name}' has no components to run.")
+        """Runs a pre-built quantum state through this optical gate layout."""
+        if not self.gates:
+            raise ValueError(f"OpticalSetup '{self.name}' has no gates to run.")
 
         return self.circuit.run(input_state)
 
@@ -222,7 +174,14 @@ class OpticalSetup:
     def to_dict(self) -> OpticalSetupData:
         return {
             "layout_name": self.name,
-            "components": [c.to_dict() for c in self.components],
+            "gates": [
+                {
+                    "gate": gate.name,
+                    "modes": list(gate.modes),
+                    "kwargs": gate.kwargs,
+                }
+                for gate in self.gates
+            ],
         }
 
     def save_layout(self, file_path: str | Path) -> None:
@@ -234,20 +193,38 @@ class OpticalSetup:
     def load_layout(cls, file_path: str | Path) -> OpticalSetup:
         data = cast(OpticalSetupData, json.loads(Path(file_path).read_text()))
         setup = cls(name=data["layout_name"])
-        for c in data["components"]:
-            setup.add_component(OpticalComponent.from_dict(c))
+        transform_by_name: dict[str, GateTransform] = {
+            "BeamSplitter": beam_splitter,
+            "Noise": loss,
+            "Squeezer": squeeze,
+            "Rotator": rotate,
+        }
+        for gate_data in data["gates"]:
+            try:
+                transform = transform_by_name[gate_data["gate"]]
+            except KeyError as exc:
+                raise KeyError(
+                    f"Unknown optical gate '{gate_data['gate']}' in serialized setup."
+                ) from exc
+            setup.add_gate(
+                Gate(
+                    name=gate_data["gate"],
+                    transform=transform,
+                    modes=tuple(gate_data["modes"]),
+                    kwargs=dict(gate_data["kwargs"]),
+                )
+            )
         return setup
 
     # -- Visualization ----------------------------------------------------
 
     def render_schematic(self, input_states: dict[str, str] | None = None) -> str:
-        """Renders the layout as a plain-text schematic, one line per port,
-        left to right through the components in registration order.
+        """Render the layout as a plain-text schematic.
 
-        Pure and deterministic (no printing), so it's easy to assert on in
-        tests; `draw` prints the result for interactive/notebook use.
+        Gates are shown left to right in registration order, one line per
+        registered mode. The rendering is pure and deterministic.
         """
-        if not self.components:
+        if not self.gates:
             return f"┌─── {self.name} ───┐\n│   (Empty Bench Layout)   │\n└──────────────────────────┘"
 
         ordered_ports = sorted(self.registered_ports)
@@ -258,9 +235,9 @@ class OpticalSetup:
             for port in ordered_ports
         }
 
-        for comp in self.components:
-            label, block_width = self._render_label(comp)
-            involved_ports = sorted(comp.ports)
+        for gate in self.gates:
+            label, block_width = self._render_label(gate)
+            involved_ports = sorted(gate.modes)
 
             for port in ordered_ports:
                 if port in involved_ports:
@@ -279,8 +256,6 @@ class OpticalSetup:
                     len(involved_ports) > 1
                     and involved_ports[0] < port < involved_ports[-1]
                 ):
-                    # A multi-port component spans over this port without
-                    # touching it -- draw a vertical bridge, not a gap.
                     bridge = "│".center(block_width + 2, "─")
                     lines[port] += f"─{bridge}─"
                 else:
@@ -294,23 +269,22 @@ class OpticalSetup:
         return "\n".join(out)
 
     @staticmethod
-    def _render_label(comp: OpticalComponent) -> tuple[str, int]:
-        """Picks the abbreviated type name + parameter string used for one
-        component's block in the schematic, and the block's display width."""
+    def _render_label(gate: Gate) -> tuple[str, int]:
+        """Pick the abbreviated gate type and parameter for one schematic block."""
         param_str = ""
         for key, symbol in (("eta", "η"), ("phi", "φ"), ("r", "r")):
-            if key in comp.kwargs:
-                value = comp.kwargs[key]
+            if key in gate.kwargs:
+                value = gate.kwargs[key]
                 param_str = (
                     f" {symbol}={value:.2f}" if key == "phi" else f" {symbol}={value}"
                 )
                 break
-        type_name = _TYPE_ABBREVIATIONS.get(comp.gate.name, comp.gate.name[:5])
+        type_name = _TYPE_ABBREVIATIONS.get(gate.name, gate.name[:5])
         label = f" {type_name}{param_str} "
         return label, max(len(label) + 2, 12)
 
     def draw(self, input_states: dict[str, str] | None = None) -> None:
-        """Prints the schematic to stdout for interactive/notebook use."""
+        """Print the schematic to stdout for interactive/notebook use."""
         print("\n" + self.render_schematic(input_states) + "\n")
 
 

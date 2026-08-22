@@ -28,7 +28,6 @@ from .core import (
     _check_unit_interval,
     _json_load,
     _json_save,
-    _named_gate,
     _symplectic_form,
     _validate_finite_array,
     _validate_gaussian_channel,
@@ -562,12 +561,10 @@ class LossChannels:
 logger = logging.getLogger("catsy")
 
 
-# Gaussian gates are stored as the callable itself. Each callable has a stable
-# explicit ``name`` used only for diagnostics and serialization. Deserialization
-# is the only place where that name is resolved back to a callable.
+# Gaussian transforms remain ordinary functions. A :class:`Gate` binds one
+# transform to its concrete name, target modes, and parameters.
 
 
-@_named_gate("squeeze")
 def squeeze(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
@@ -578,12 +575,10 @@ def squeeze(
     )
 
 
-@_named_gate("rotate")
 def rotate(state: GaussianState, modes: Modes, **kwargs: ParameterValue) -> GaussianState:
     return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
 
 
-@_named_gate("displace")
 def displace(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
@@ -595,7 +590,6 @@ def displace(
     )
 
 
-@_named_gate("beam_splitter")
 def beam_splitter(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
@@ -606,12 +600,10 @@ def beam_splitter(
     )
 
 
-@_named_gate("loss")
 def loss(state: GaussianState, modes: Modes, **kwargs: ParameterValue) -> GaussianState:
     return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
 
 
-@_named_gate("thermal_loss")
 def thermal_loss(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
@@ -623,17 +615,10 @@ def thermal_loss(
     return channel.apply(state)
 
 
-# This mapping is deliberately limited to deserialization.  Execution uses
-# the callable stored in the circuit directly.
-@_named_gate("initial_state")
 def initial_state(
     state: GaussianState | None, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
-    """Construct the initial Gaussian state for a circuit.
-
-    If an explicit state was supplied to ``Circuit.run``, this gate leaves it
-    unchanged, allowing a serialized/default initial state to be overridden.
-    """
+    """Construct the initial Gaussian state for a circuit."""
     if state is not None:
         return state
     kind = cast(str, kwargs.get("kind", "vacuum"))
@@ -648,16 +633,16 @@ def initial_state(
     raise ValueError(f"Unknown Gaussian initial state kind {kind!r}.")
 
 
-for _gate in (
-    initial_state,
-    squeeze,
-    rotate,
-    displace,
-    beam_splitter,
-    loss,
-    thermal_loss,
+for _name, _transform in (
+    ("Squeezer", squeeze),
+    ("Rotator", rotate),
+    ("Displacer", displace),
+    ("BeamSplitter", beam_splitter),
+    ("Noise", loss),
+    ("ThermalLoss", thermal_loss),
+    ("InitialState", initial_state),
 ):
-    Circuit.register(_gate.name, _gate)
+    Circuit.register(_name, _transform)
 
 
 # ========================================================================

@@ -23,12 +23,19 @@ The default branch publishes the latest interactive HTML coverage report through
 ## Quick start
 
 ```python
-from catsy import Circuit, GaussianState, loss
+from catsy import Circuit, GaussianState, Gate, loss
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
 
+noise = Gate(
+    name="Noise",
+    transform=loss,
+    modes=("a",),
+    kwargs={"eta": 0.9},
+)
+
 circuit = Circuit().add_mode("a").add_mode("b")
-circuit.add_gate(loss, ("a",), eta=0.9)
+circuit.add_gate(noise)
 
 final = circuit.run(initial)
 final.plot_covariance()
@@ -74,12 +81,12 @@ state = state.displace(
 For a sequence of operations that you want to keep as a reusable experiment, `Circuit` provides an executable sequence independent of the Gaussian state implementation:
 
 ```python
-from catsy import Circuit, GaussianState, beam_splitter, squeeze
+from catsy import Circuit, GaussianState
 
 initial = GaussianState.vacuum(("a", "b"))
 circuit = Circuit().add_mode("a").add_mode("b")
-circuit.add_gate(squeeze, ("a",), r=0.7, theta=0.0)
-circuit.add_gate(beam_splitter, ("a", "b"), eta=0.5)
+circuit.squeeze("a", r=0.7, theta=0.0)
+circuit.beam_splitter("a", "b", eta=0.5)
 final = circuit.run(initial)
 ```
 
