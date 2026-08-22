@@ -17,10 +17,16 @@ if TYPE_CHECKING:
 
 
 class GateTransform(Protocol):
-    """Callable contract for a state transformation."""
+    """Callable contract for a state transformation.
+
+    Concrete transforms (``squeeze``, ``rotate``, ...) require a real
+    ``GaussianState``. The one exception is ``InitialState``, whose own
+    signature accepts ``GaussianState | None`` -- a function that accepts a
+    wider input type than this protocol requires still satisfies it.
+    """
 
     def __call__(
-        self, state: GaussianState , modes: Modes, **kwargs: ParameterValue
+        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
     ) -> GaussianState: ...
 
 
@@ -34,7 +40,11 @@ class Gate:
     kwargs: GateParameters
 
     def apply(self, state: Any | None) -> GaussianState:
-        return self.transform(state, self.modes, **self.kwargs)
+        # `state` is None only when this is (or precedes) an InitialState
+        # gate; Circuit.run() enforces that invariant before calling apply()
+        # on any other gate, so the cast reflects an already-checked fact
+        # rather than papering over an unchecked one.
+        return self.transform(cast("GaussianState", state), self.modes, **self.kwargs)
 
 
 class CircuitState(Protocol):
@@ -121,7 +131,6 @@ class Circuit:
         """Append the registered ``initial_state`` gate to the circuit."""
         try:
             transform = _GATE_DESERIALIZERS["InitialState"]
-            # transform = lambda x: x
         except KeyError as exc:
             raise RuntimeError("No InitialState gate has been registered.") from exc
         return self.add_gate(
@@ -133,23 +142,23 @@ class Circuit:
             )
         )
 
+    def run(self, initial_state: GaussianState | None = None) -> Any:
+        """Run the gate chain, optionally constructing the state from a first gate.
 
-    def run(self, initial_state :GaussianState | None = None) -> Any:
-        """Run the gate chain, optionally constructing the state from a first gate."""
-
-        if initial_state is None:
-            from IPython import embed; embed()
-            current_state = self.initial_state(modes = ("a",))
-        else:
-            current_state = initial_state
-
+        If ``initial_state`` is given, it is reordered to match this
+        circuit's mode order and used as-is. If it is omitted, the circuit's
+        own ``InitialState`` gate (added via :meth:`initial_state`) must be
+        the first gate and is responsible for constructing the state; every
+        other gate requires a state to already exist.
+        """
         if not self.modes:
             raise ValueError("Circuit has no registered modes.")
-        if set(current_state.modes) != set(self.modes):
-            raise ValueError("Initial state's modes don't match the circuit's modes.")
-        if (current_state is None ) :#and (self.initial_state is None):
-            raise AttributeError("Circuit has to be initalized with a state.")
 
+        current_state: Any = None
+        if initial_state is not None:
+            if set(initial_state.modes) != set(self.modes):
+                raise ValueError("Initial state's modes don't match the circuit's modes.")
+            current_state = initial_state.reorder_modes(self.modes)
 
         for idx, gate in enumerate(self._gates):
             for mode in gate.modes:
@@ -162,6 +171,12 @@ class Circuit:
                     f"Gate #{idx} ({gate.name}) cannot run before an initial_state gate."
                 )
             current_state = gate.apply(current_state)
+
+        if current_state is None:
+            raise ValueError(
+                "Circuit has to be initialized with a state: pass initial_state to "
+                "run(), or add an InitialState gate via Circuit.initial_state(...)."
+            )
 
         return current_state
 

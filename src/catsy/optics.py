@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
@@ -12,12 +11,7 @@ import qutip as qt
 
 from .core import Circuit, Gate, GateTransform, _check_non_negative, _check_positive_int
 from .gaussian import beam_splitter, loss, rotate, squeeze
-from .types import (
-    FloatArray,
-    GateParameters,
-    Modes,
-    OpticalSetupData,
-)
+from .types import FloatArray, OpticalSetupData
 
 if TYPE_CHECKING:
     from .gaussian import GaussianState

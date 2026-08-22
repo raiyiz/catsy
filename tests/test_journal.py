@@ -7,9 +7,9 @@ from catsy.core import Circuit, Gate
 from catsy.gaussian import (
     GaussianState,
     beam_splitter,
-    squeeze,
     compute_duan_inseparability,
     compute_joint_correlation,
+    squeeze,
 )
 from catsy.journal import JournalEntry, SimulationJournal
 
