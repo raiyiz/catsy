@@ -20,7 +20,7 @@ class GateTransform(Protocol):
     """Callable contract for a state transformation."""
 
     def __call__(
-        self, state: Any | None, modes: Modes, **kwargs: ParameterValue
+        self, state: GaussianState , modes: Modes, **kwargs: ParameterValue
     ) -> GaussianState: ...
 
 
@@ -121,6 +121,7 @@ class Circuit:
         """Append the registered ``initial_state`` gate to the circuit."""
         try:
             transform = _GATE_DESERIALIZERS["InitialState"]
+            # transform = lambda x: x
         except KeyError as exc:
             raise RuntimeError("No InitialState gate has been registered.") from exc
         return self.add_gate(
@@ -132,21 +133,23 @@ class Circuit:
             )
         )
 
-    def run(self, initial_state: CircuitState | None = None) -> Any:
+
+    def run(self, initial_state :GaussianState | None = None) -> Any:
         """Run the gate chain, optionally constructing the state from a first gate."""
-        if not self.modes:
-            raise ValueError("Circuit has no registered modes.")
 
         if initial_state is None:
-            if not self._gates or self._gates[0].name != "InitialState":
-                raise ValueError(
-                    "No initial state was supplied and the circuit has no initial_state gate."
-                )
-            current_state = None
+            from IPython import embed; embed()
+            current_state = self.initial_state(modes = ("a",))
         else:
-            if set(initial_state.modes) != set(self.modes):
-                raise ValueError("Initial state's modes don't match the circuit's modes.")
-            current_state = initial_state.reorder_modes(self.modes)
+            current_state = initial_state
+
+        if not self.modes:
+            raise ValueError("Circuit has no registered modes.")
+        if set(current_state.modes) != set(self.modes):
+            raise ValueError("Initial state's modes don't match the circuit's modes.")
+        if (current_state is None ) :#and (self.initial_state is None):
+            raise AttributeError("Circuit has to be initalized with a state.")
+
 
         for idx, gate in enumerate(self._gates):
             for mode in gate.modes:
