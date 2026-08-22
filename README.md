@@ -51,10 +51,10 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 | Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L515), [`GaussianChannel`](src/catsy/gaussian.py#L452) |
 | Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L653) |
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L85) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L932) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L780) |
 | Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L291) |
 | Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L59) |
-| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L354) |
+| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
 
 States are represented in phase space by their first moments and covariance matrix. Common operations include:
