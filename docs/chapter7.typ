@@ -4,13 +4,13 @@
 // ==========================================
 // CHAPTER 7
 // ==========================================
-= Chapter 7: Non-Gaussian Operations & Physical Simulations
+= Chapter 7: Non-Gaussian Gates & Physical Simulations
 
 Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require Fock-space structure. These operations consistently live outside `gaussian.py`: #src-link("src/catsy/fock.py") provides primitive photon operations on already-existing QuTiP states, while #src-link("src/catsy/optics.py") implements concrete, time-resolved hardware models (a driven Kerr cavity, a Mach-Zehnder interferometer) alongside the Gaussian-optics `OpticalSetup` layouts -- both describe specific pieces of optical hardware rather than generic phase-space transformations, which is why they share a module.
 
-== Primitive photon operations (`FockOperations`)
+== Primitive photon operations (`FockGates`)
 
-`FockOperations` deliberately operates *not* on `GaussianState`, but directly on QuTiP density matrices — the conversion is expected to be performed explicitly via `GaussianState.to_qutip()` (Chapter 5). This separation keeps the Fock layer lean and avoids a second, competing convenience layer for conversion.
+`FockGates` deliberately operates *not* on `GaussianState`, but directly on QuTiP density matrices — the conversion is expected to be performed explicitly via `GaussianState.to_qutip()` (Chapter 5). This separation keeps the Fock layer lean and avoids a second, competing convenience layer for conversion.
 
 === Subtraction and addition
 
@@ -30,18 +30,18 @@ def _apply_and_renormalize(rho, op, label: str):
 
 @staticmethod
 def photon_subtraction(rho, mode_idx: int = 0, N_cutoff: int = 20):
-    n_modes = FockOperations._validate_state(rho, N_cutoff, mode_idx)
-    a_op = FockOperations._mode_operator(
+    n_modes = FockGates._validate_state(rho, N_cutoff, mode_idx)
+    a_op = FockGates._mode_operator(
         qt.destroy(N_cutoff), n_modes, mode_idx, N_cutoff
     )
-    return FockOperations._apply_and_renormalize(rho, a_op, "photon_subtraction")
+    return FockGates._apply_and_renormalize(rho, a_op, "photon_subtraction")
 ```
 
 The denominator $"tr"(hat(a) rho hat(a)^dagger)$ is simultaneously the physical *heralding success probability*: if it drops below the numerical tolerance `TOL_PHYSICALITY`, the renormalization would be singular (e.g. when attempting to subtract a photon from the vacuum), and the method aborts in a controlled way with a `ValueError` rather than silently producing `NaN` values. `_mode_operator` embeds the local $hat(a)$ or $hat(a)^dagger$ operator via `qt.tensor` at the correct mode position, provided `rho` has more than one mode; `_validate_state` checks beforehand that `rho` is indeed an operator whose Fock dimensions match `N_cutoff`.
 
 == Driven, dissipative Kerr cavity (`KerrCavity`)
 
-`KerrCavity` (in #src-link("src/catsy/optics.py", line: 327, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
+`KerrCavity` (in #src-link("src/catsy/optics.py", line: 336, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
 $ hat(H)(t) = K hat(a)^(dagger 2) hat(a)^2 + Omega(t)(hat(a) + hat(a)^dagger), quad Omega(t) = A exp(-(t - t_0)^2 / (2 sigma^2)) $
 
 Dissipation is modeled via a single Lindblad collapse operator $sqrt(kappa) hat(a)$, and the full master equation is integrated in time with `qutip.mesolve`:
@@ -66,7 +66,7 @@ The time-dependent part `[a + a.dag(), pulse_shape]` follows QuTiP's standard co
 
 == Mach-Zehnder interferometer with a lossy arm (`MachZehnderInterferometer`)
 
-`MachZehnderInterferometer` (in #src-link("src/catsy/optics.py", line: 395, label: [`optics.py`])) models a two-mode interferometer in which an input state (e.g. a Schrödinger-cat state plus vacuum in the second port) passes through the sequence
+`MachZehnderInterferometer` (in #src-link("src/catsy/optics.py", line: 404, label: [`optics.py`])) models a two-mode interferometer in which an input state (e.g. a Schrödinger-cat state plus vacuum in the second port) passes through the sequence
 $ "50:50 BS" arrow.r "lossy arm (fixed time)" arrow.r "phase shift" theta arrow.r "50:50 BS" $
 and is then read out in a photon-number- and parity-resolved way. The first beam splitter is constructed as an exact QuTiP unitary operator:
 $ hat(U)_"BS" = exp(i pi/4 (hat(a)_1^dagger hat(a)_2 + hat(a)_1 hat(a)_2^dagger)) $

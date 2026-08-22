@@ -5,11 +5,11 @@
 // ==========================================
 = Chapter 8: Optical Bench Layouts (`OpticalSetup`)
 
-`Circuit` (Chapter 3) describes a *gate sequence* — abstract and independent of a particular laboratory layout. `optics.py` adds a layer on top that models a reusable, named *hardware bench layout*: components with fixed ports that can be run repeatedly against different input states, saved/loaded, and visualized as a text schematic. The physical component vocabulary is consistent with standard linear/Gaussian optical processing; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)].
+`Circuit` (Chapter 3) describes a *ordered gate sequence* — abstract and independent of a particular laboratory layout. `optics.py` adds a layer on top that models a reusable, named *hardware bench layout*: components with fixed ports that can be run repeatedly against different input states, saved/loaded, and visualized as a text schematic. The physical component vocabulary is consistent with standard linear/Gaussian optical processing; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)].
 
 == The component blueprint (`OpticalComponent`)
 
-Every component is a named physical wrapper around one executable Gaussian callable. The component stores the callable itself as `operation`, its target ports, and its parameters; the optical layer adds the physical component name and layout semantics. This avoids a separate `CircuitOperation` representation and means the component can attach its operation directly to the setup's circuit. The callable is the executable contract and carries an explicit `name` attribute; serialization stores only that name.
+Every component is a named physical wrapper around one executable Gaussian gate. The component stores the callable itself as `gate`, its target ports, and its parameters; the optical layer adds the physical component name and layout semantics. This avoids a separate intermediate gate representation and means the component can attach its gate directly to the setup's circuit. The callable is the executable contract and carries an explicit `name` attribute; serialization stores only that name.
 
 == Declaratively assembling a bench (`OpticalSetup`)
 
@@ -41,7 +41,7 @@ Every call returns `self`, so a setup can be expressed as a readable chain, e.g.
 setup = OpticalSetup("Bench A", circuit=Circuit())
 ```
 
-Each `OpticalComponent` contains its executable callable, and `add_component` attaches that same callable directly to the setup's circuit. There is no second operation representation and no component-to-operation conversion step:
+Each `OpticalComponent` contains its executable callable, and `add_component` attaches that same callable directly to the setup's circuit. There is no second gate representation and no component-to-gate conversion step:
 
 ```python
 def add_component(self, component: OpticalComponent) -> OpticalSetup:

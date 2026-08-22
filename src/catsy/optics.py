@@ -5,17 +5,17 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import numpy as np
 import qutip as qt
 
-from .core import Circuit, Operation, _check_non_negative, _check_positive_int
+from .core import Circuit, Gate, _check_non_negative, _check_positive_int
 from .gaussian import beam_splitter, loss, rotate, squeeze
 from .types import (
     FloatArray,
+    GateParameters,
     Modes,
-    OperationParameters,
     OpticalComponentData,
     OpticalSetupData,
 )
@@ -23,15 +23,16 @@ from .types import (
 if TYPE_CHECKING:
     from .gaussian import GaussianState
 
+
 # ---------------------------------------------------------------------------
 # Component blueprint
 # ---------------------------------------------------------------------------
 
 
-# Optical components are the subset of Gaussian operations that have a direct
-# physical optical-bench interpretation.  The operation itself is stored as a
+# Optical components are the subset of Gaussian gates that have a direct
+# physical optical-bench interpretation.  The gate itself is stored as a
 # callable; the optical layer adds the component name and layout semantics.
-_OPTICAL_COMPONENT_OPS = frozenset(
+_OPTICAL_COMPONENT_GATES = frozenset(
     {
         beam_splitter,
         loss,
@@ -39,9 +40,9 @@ _OPTICAL_COMPONENT_OPS = frozenset(
         rotate,
     }
 )
-_OPTICAL_OPERATION_BY_NAME = {op.name: op for op in _OPTICAL_COMPONENT_OPS}
+_OPTICAL_GATE_BY_NAME = {op.name: op for op in _OPTICAL_COMPONENT_GATES}
 
-# Port count and expected kwarg names per operation.  This is *structural*
+# Port count and expected kwarg names per gate.  This is *structural*
 # metadata the executing layer can't provide: Circuit/GaussianState
 # happily accept whatever kwargs a callable's **kwargs picks out and quietly
 # ignore the rest, so a component built with the wrong port count or a
@@ -50,7 +51,7 @@ _OPTICAL_OPERATION_BY_NAME = {op.name: op for op in _OPTICAL_COMPONENT_OPS}
 # never read). Physical value constraints (eta in [0, 1], etc.) are
 # deliberately NOT duplicated here -- those already have a single owner in
 # GaussianState.beam_splitter/.loss and are validated there.
-_COMPONENT_INTERFACE: dict[Operation, tuple[int, tuple[str, ...]]] = {
+_COMPONENT_INTERFACE: dict[Gate, tuple[int, tuple[str, ...]]] = {
     beam_splitter: (2, ("eta",)),
     loss: (1, ("eta",)),
     squeeze: (1, ("r", "theta")),
@@ -63,33 +64,33 @@ class OpticalComponent:
     """Named physical component backed directly by an executable callable."""
 
     name: str
-    operation: Operation
+    gate: Gate
     ports: Modes
-    kwargs: OperationParameters
+    kwargs: GateParameters
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("OpticalComponent name must be a non-empty string.")
-        if not callable(self.operation):
-            raise TypeError("OpticalComponent operation must be callable.")
-        if self.operation not in _OPTICAL_COMPONENT_OPS:
-            operation_label = getattr(self.operation, "name", repr(self.operation))
+        if not callable(self.gate):
+            raise TypeError("OpticalComponent gate must be callable.")
+        if self.gate not in _OPTICAL_COMPONENT_GATES:
+            gate_label = getattr(self.gate, "name", repr(self.gate))
             raise ValueError(
-                f"Unknown optical component operation {operation_label!r}. "
-                f"Known operations: {sorted(op for op in _OPTICAL_OPERATION_BY_NAME)}."
+                f"Unknown optical component gate {gate_label!r}. "
+                f"Known gates: {sorted(name for name in _OPTICAL_GATE_BY_NAME)}."
             )
         self.ports = tuple(self.ports)
         self.kwargs = dict(self.kwargs)
 
-        expected_ports, expected_kwargs = _COMPONENT_INTERFACE[self.operation]
+        expected_ports, expected_kwargs = _COMPONENT_INTERFACE[self.gate]
         if len(self.ports) != expected_ports:
             raise ValueError(
-                f"{self.operation.name} requires exactly {expected_ports} port(s), "
+                f"{self.gate.name} requires exactly {expected_ports} port(s), "
                 f"got {len(self.ports)}."
             )
         if len(set(self.ports)) != len(self.ports):
             raise ValueError(
-                f"{self.operation.name} cannot connect the same port more than once: "
+                f"{self.gate.name} cannot connect the same port more than once: "
                 f"{self.ports!r}."
             )
         if any(not isinstance(port, str) or not port.strip() for port in self.ports):
@@ -104,22 +105,22 @@ class OpticalComponent:
             if extra:
                 details.append(f"unexpected {extra}")
             raise ValueError(
-                f"Invalid kwargs for {self.operation.name}: " + ", ".join(details) + "."
+                f"Invalid kwargs for {self.gate.name}: " + ", ".join(details) + "."
             )
         for key, value in self.kwargs.items():
             if not np.isscalar(value) or not np.isfinite(value):
                 raise ValueError(
-                    f"{self.operation.name} parameter {key!r} must be a finite scalar, got {value!r}."
+                    f"{self.gate.name} parameter {key!r} must be a finite scalar, got {value!r}."
                 )
 
     def apply_to(self, circuit: Circuit) -> None:
         """Attach this component's callable directly to ``circuit``."""
-        circuit.add_operation(self.operation, self.ports, **self.kwargs)
+        circuit.add_gate(self.gate, self.ports, **self.kwargs)
 
     def to_dict(self) -> OpticalComponentData:
         return {
             "name": self.name,
-            "op": self.operation.name,
+            "gate": self.gate.name,
             "ports": list(self.ports),
             "kwargs": self.kwargs,
         }
@@ -127,14 +128,14 @@ class OpticalComponent:
     @classmethod
     def from_dict(cls, data: OpticalComponentData) -> OpticalComponent:
         try:
-            op = _OPTICAL_OPERATION_BY_NAME[data["op"]]
+            op = _OPTICAL_GATE_BY_NAME[data["gate"]]
         except KeyError as exc:
             raise KeyError(
-                f"Unknown optical operation function '{data['op']}' in serialized component."
+                f"Unknown optical gate function '{data['gate']}' in serialized component."
             ) from exc
         return cls(
             name=data["name"],
-            operation=op,
+            gate=op,
             ports=tuple(data["ports"]),
             kwargs=data["kwargs"],
         )
@@ -159,7 +160,7 @@ _LABEL_PARAM_KEYS = ("eta", "phi", "r")
 class OpticalSetup:
     """A reusable layout of optical hardware components on a bench.
 
-    Each `add_component` call attaches that component's operation directly to
+    Each `add_component` call attaches that component's gate directly to
     an owned `Circuit`; `process_beam` runs the same accumulated
     circuit against whatever input state it's given, so a single setup can be
     replayed against many different inputs.
@@ -209,12 +210,12 @@ class OpticalSetup:
 
     # -- Execution ------------------------------------------------------------
 
-    def process_beam(self, input_state: GaussianState) -> GaussianState:
+    def process_beam(self, input_state: GaussianState) -> Any:
         """Runs a pre-built quantum state through this hardware layout."""
         if not self.components:
             raise ValueError(f"OpticalSetup '{self.name}' has no components to run.")
 
-        return cast("GaussianState", self.circuit.run(input_state))
+        return self.circuit.run(input_state)
 
     # -- Serialization --------------------------------------------------------
 
@@ -304,7 +305,7 @@ class OpticalSetup:
                     f" {symbol}={value:.2f}" if key == "phi" else f" {symbol}={value}"
                 )
                 break
-        type_name = _TYPE_ABBREVIATIONS.get(comp.operation.name, comp.operation.name[:5])
+        type_name = _TYPE_ABBREVIATIONS.get(comp.gate.name, comp.gate.name[:5])
         label = f" {type_name}{param_str} "
         return label, max(len(label) + 2, 12)
 

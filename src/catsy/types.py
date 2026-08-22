@@ -10,8 +10,8 @@ from numpy.typing import NDArray
 FloatArray = NDArray[np.float64]
 Mode = str
 Modes = tuple[Mode, ...]
-ParameterValue = int | float | complex
-OperationParameters = dict[str, ParameterValue]
+ParameterValue = int | float | complex | str
+GateParameters = dict[str, ParameterValue]
 JsonObject = dict[str, object]
 
 
@@ -28,22 +28,22 @@ class GaussianChannelData(TypedDict):
     d0: list[float]
 
 
-class OperationData(TypedDict):
-    op: str
+class GateData(TypedDict):
+    gate: str
     modes: list[str]
-    kwargs: OperationParameters
+    kwargs: GateParameters
 
 
 class CircuitData(TypedDict):
     modes: list[str]
-    operations: list[OperationData]
+    gates: list[GateData]
 
 
 class OpticalComponentData(TypedDict):
     name: str
-    op: str
+    gate: str
     ports: list[str]
-    kwargs: OperationParameters
+    kwargs: GateParameters
 
 
 class OpticalSetupData(TypedDict):

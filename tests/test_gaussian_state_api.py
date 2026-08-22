@@ -38,11 +38,9 @@ def test_circuit_matches_fluent_state_chain():
     )
 
     circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_operation(squeeze, ("a",), r=0.4, theta=0.0).add_operation(
+    circuit.add_gate(squeeze, ("a",), r=0.4, theta=0.0).add_gate(
         squeeze, ("b",), r=0.4, theta=np.pi / 2
-    ).add_operation(beam_splitter, ("a", "b"), eta=0.5).add_operation(
-        loss, ("a",), eta=0.8
-    )
+    ).add_gate(beam_splitter, ("a", "b"), eta=0.5).add_gate(loss, ("a",), eta=0.8)
     compiled = circuit.run(GaussianState.vacuum(("a", "b")))
 
     np.testing.assert_allclose(compiled.displacement, direct.displacement)

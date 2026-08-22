@@ -6,7 +6,7 @@ import qutip as qt
 from matplotlib import pyplot as plt
 
 from catsy.core import Circuit
-from catsy.fock import FockOperations
+from catsy.fock import FockGates
 from catsy.gaussian import (
     GaussianState,
     beam_splitter,
@@ -29,10 +29,10 @@ def test_beam_splitter_registers_both_ports_and_populates_circuit():
     setup = OpticalSetup("Bench").beam_splitter("BS1", port_a="a", port_b="b", eta=0.5)
     assert setup.registered_ports == {"a", "b"}
     assert setup.circuit.modes == ("a", "b")
-    assert setup.circuit.to_dict()["operations"] == [
-        {"op": "beam_splitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
+    assert setup.circuit.to_dict()["gates"] == [
+        {"gate": "beam_splitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
     ]
-    assert setup.components[0].operation.name == "beam_splitter"
+    assert setup.components[0].gate.name == "beam_splitter"
     assert setup.components[0].kwargs == {"eta": 0.5}
 
 
@@ -43,12 +43,12 @@ def test_optical_setup_uses_injected_circuit():
     )
 
     assert setup.circuit is circuit
-    assert setup.circuit.to_dict()["operations"] == [
-        {"op": "rotate", "modes": ["a"], "kwargs": {"phi": 0.25}}
+    assert setup.circuit.to_dict()["gates"] == [
+        {"gate": "rotate", "modes": ["a"], "kwargs": {"phi": 0.25}}
     ]
 
 
-def test_process_beam_does_not_rebuild_or_duplicate_circuit_operations():
+def test_process_beam_does_not_rebuild_or_duplicate_circuit_gates():
     setup = OpticalSetup("Bench").phase_shifter("Phase", port="a", phi=0.25)
     input_state = GaussianState.coherent(modes=("a",), alphas=[1.0])
 
@@ -56,7 +56,7 @@ def test_process_beam_does_not_rebuild_or_duplicate_circuit_operations():
     second = setup.process_beam(input_state)
 
     assert np.allclose(first.displacement, second.displacement)
-    assert len(setup.circuit.to_dict()["operations"]) == 1
+    assert len(setup.circuit.to_dict()["gates"]) == 1
 
 
 def test_layout_roundtrips_through_file(tmp_path):
@@ -82,7 +82,7 @@ def test_component_to_dict_and_from_dict_agree():
 
 
 @pytest.mark.parametrize(
-    ("op", "ports", "kwargs", "match"),
+    ("gate", "ports", "kwargs", "match"),
     [
         (beam_splitter, ("a",), {"eta": 0.5}, "exactly 2 port"),
         (loss, ("a", "b"), {"eta": 0.9}, "exactly 1 port"),
@@ -93,18 +93,20 @@ def test_component_to_dict_and_from_dict_agree():
         (beam_splitter, ("a", "b"), {"eta": 0.5, "extra": 1.0}, "unexpected"),
     ],
 )
-def test_optical_component_rejects_invalid_definitions(op, ports, kwargs, match):
-    # The port-count/name and kwarg-completeness checks here are structural
-    # metadata the executing layer can't supply on its own -- Circuit
-    # happily calls op(state, ports, **kwargs) with whatever it's given, so a
-    # wrong port count surfaces as a bare IndexError deep inside the callable
-    # and an unrecognized extra kwarg is silently never read at all. Physical
-    # value constraints eta already owns downstream (eta in [0, 1], not
-    # complex) are intentionally NOT re-tested here; see
-    # test_optical_component_defers_physical_validation_to_gaussian_state
-    # below for that split.
+def test_optical_component_rejects_invalid_definitions(gate, ports, kwargs, match):
+    """
+    The port-count/name and kwarg-completeness checks here are structural
+    metadata the executing layer can't supply on its own -- Circuit
+    happily calls op(state, ports, **kwargs) with whatever it's given, so a
+    wrong port count surfaces as a bare IndexError deep inside the callable
+    and an unrecognized extra kwarg is silently never read at all. Physical
+    value constraints eta already owns downstream (eta in [0, 1]) are
+    intentionally NOT re-tested here; see
+    `test_optical_component_defers_physical_validation_to_gaussian_state()`
+    below for that split.
+    """
     with pytest.raises(ValueError, match=match):
-        OpticalComponent("component", op, ports, kwargs)
+        OpticalComponent("component", gate, ports, kwargs)
 
 
 def test_optical_component_rejects_empty_name():
@@ -125,19 +127,19 @@ def test_optical_component_defers_physical_validation_to_gaussian_state():
 def test_component_accepts_operation_as_named_field():
     comp = OpticalComponent(
         name="BS1",
-        operation=beam_splitter,
+        gate=beam_splitter,
         ports=("a", "b"),
         kwargs={"eta": 0.5},
     )
 
-    assert comp.operation is beam_splitter
+    assert comp.gate is beam_splitter
 
 
 def test_component_owns_the_executable_operation():
     comp = OpticalComponent("BS1", beam_splitter, ("a", "b"), {"eta": 0.5})
 
-    assert comp.operation is beam_splitter
-    assert comp.operation.name == "beam_splitter"
+    assert comp.gate is beam_splitter
+    assert comp.gate.name == "beam_splitter"
     assert comp.ports == ("a", "b")
     assert comp.kwargs == {"eta": 0.5}
 
@@ -147,30 +149,30 @@ def test_optical_component_serializes_the_bare_function_name():
 
     assert comp.to_dict() == {
         "name": "BS1",
-        "op": "beam_splitter",
+        "gate": "beam_splitter",
         "ports": ["a", "b"],
         "kwargs": {"eta": 0.5},
     }
-    assert OpticalComponent.from_dict(comp.to_dict()).operation is beam_splitter
+    assert OpticalComponent.from_dict(comp.to_dict()).gate is beam_splitter
 
 
-@pytest.mark.parametrize("op", [beam_splitter, loss, squeeze, rotate])
-def test_optical_component_accepts_only_known_optical_callables(op):
+@pytest.mark.parametrize("gate", [beam_splitter, loss, squeeze, rotate])
+def test_optical_component_accepts_only_known_optical_callables(gate):
     component = {
         beam_splitter: OpticalComponent("BS", beam_splitter, ("a", "b"), {"eta": 0.5}),
         loss: OpticalComponent("Loss", loss, ("a",), {"eta": 0.9}),
         squeeze: OpticalComponent("Sqz", squeeze, ("a",), {"r": 0.5, "theta": 0.0}),
         rotate: OpticalComponent("Phase", rotate, ("a",), {"phi": 0.2}),
-    }[op]
-    assert component.operation is op
+    }[gate]
+    assert component.gate is gate
 
 
 def test_optical_component_rejects_unknown_callable():
-    def custom_operation(state, modes, **kwargs):
+    def custom_gate(state, modes, **kwargs):
         return state
 
-    with pytest.raises(ValueError, match="Unknown optical component operation"):
-        OpticalComponent("Custom", custom_operation, ("a",), {})
+    with pytest.raises(ValueError, match="Unknown optical component gate"):
+        OpticalComponent("Custom", custom_gate, ("a",), {})
 
 
 def test_optical_component_rejects_non_callable_op():
@@ -181,9 +183,9 @@ def test_optical_component_rejects_non_callable_op():
 def test_optical_component_from_dict_rejects_unknown_op():
     # The deserialization counterpart to test_optical_component_rejects_
     # unknown_callable above: a hand-edited or corrupted saved layout (or one
-    # produced by a newer catsy version with an operation this one doesn't
+    # produced by a newer catsy version with a gate this one doesn't
     # know) must fail at load time with a clear KeyError.
-    data = {"name": "Bad", "op": "not_a_real_op", "ports": ["a"], "kwargs": {}}
+    data = {"name": "Bad", "gate": "not_a_real_op", "ports": ["a"], "kwargs": {}}
     with pytest.raises(KeyError, match="not_a_real_op"):
         OpticalComponent.from_dict(data)
 
@@ -246,6 +248,13 @@ def test_render_schematic_of_empty_setup():
 
 
 def test_render_schematic_labels_each_component_and_input_state():
+    """
+    _TYPE_ABBREVIATIONS keys are the gate callables' explicit names
+    (e.g. beam_splitter.name == "beam_splitter"); a stale mismatch
+    there (PascalCase keys against lowercase op) would silently fall
+    through to a truncated raw name instead of raising, so this checks the
+    actual intended abbreviation, not just "something got printed".
+    """
     setup = OpticalSetup("MZI Node")
     setup.beam_splitter("BS1", port_a="line_1", port_b="line_2", eta=0.5)
     setup.fiber_loss("Loss_A", port="line_1", eta=0.9)
@@ -257,17 +266,12 @@ def test_render_schematic_labels_each_component_and_input_state():
     )
     assert "|a=1.5>" in schematic
     assert "|b=0.8>" in schematic
-    # _TYPE_ABBREVIATIONS keys are the operation callables' explicit names
-    # (e.g. beam_splitter.name == "beam_splitter"); a stale mismatch
-    # there (PascalCase keys against lowercase op) would silently fall
-    # through to a truncated raw name instead of raising, so this checks the
-    # actual intended abbreviation, not just "something got printed".
+
     assert "BS" in schematic
     assert "LOSS" in schematic
     assert "PHASE" in schematic
     assert "SQZ" in schematic
     assert "line_1" in schematic and "line_2" in schematic
-    # print(schematic)
 
 
 def test_render_schematic_bridges_ports_a_multi_port_component_skips_over():
@@ -447,7 +451,7 @@ def test_full_cavity_multipanel_plot_demo():
 
 def test_triggered_cavity_end_to_end():
     cv_circuit = Circuit().add_mode("c")
-    cv_circuit.add_operation(squeeze, ("c",), r=0.1, theta=0.0)
+    cv_circuit.add_gate(squeeze, ("c",), r=0.1, theta=0.0)
     initial_state = cv_circuit.run(GaussianState.vacuum(("c",)))
 
     N_fock = 15
@@ -465,9 +469,7 @@ def test_triggered_cavity_end_to_end():
     rho_kerr_cat = states[-1]
     assert rho_kerr_cat.tr() == pytest.approx(1.0, abs=1e-6)
 
-    rho_final_non_gaussian = FockOperations.photon_subtraction(
-        rho_kerr_cat, N_cutoff=N_fock
-    )
+    rho_final_non_gaussian = FockGates.photon_subtraction(rho_kerr_cat, N_cutoff=N_fock)
     purity = (rho_final_non_gaussian * rho_final_non_gaussian).tr().real
     assert 0.0 < purity <= 1.0 + 1e-9
 

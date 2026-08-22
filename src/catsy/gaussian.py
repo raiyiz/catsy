@@ -28,7 +28,7 @@ from .core import (
     _check_unit_interval,
     _json_load,
     _json_save,
-    _named_operation,
+    _named_gate,
     _symplectic_form,
     _validate_finite_array,
     _validate_gaussian_channel,
@@ -562,42 +562,40 @@ class LossChannels:
 logger = logging.getLogger("catsy")
 
 
-# Gaussian operations are stored as the callable itself.  Each callable has a
-# stable explicit ``name`` used only for diagnostics and serialization.
-# Deserialization is the only place where that name is resolved back to a callable.
+# Gaussian gates are stored as the callable itself. Each callable has a stable
+# explicit ``name`` used only for diagnostics and serialization. Deserialization
+# is the only place where that name is resolved back to a callable.
 
 
-# Built-in operation functions.  These remain plain function objects so a
-# higher-level domain object can attach one directly to a circuit without an
-# intermediate operation-data object or runtime name lookup.
-@_named_operation("squeeze")
+@_named_gate("squeeze")
 def squeeze(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return state.squeeze(
         mode=modes[0],
         r=cast(float, kwargs["r"]),
-        theta=cast(float, kwargs["theta"]),
+        theta=cast(float, kwargs.get("theta", 0.0)),
     )
 
 
-@_named_operation("rotate")
+@_named_gate("rotate")
 def rotate(state: GaussianState, modes: Modes, **kwargs: ParameterValue) -> GaussianState:
     return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
 
 
-@_named_operation("displace")
+@_named_gate("displace")
 def displace(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
     return state.displace(
         mode=modes[0],
-        x=cast(float, kwargs["x"]),
-        p=cast(float, kwargs["p"]),
+        alpha=cast(complex, kwargs["alpha"]) if "alpha" in kwargs else None,
+        x=cast(float, kwargs["x"]) if "x" in kwargs else None,
+        p=cast(float, kwargs["p"]) if "p" in kwargs else None,
     )
 
 
-@_named_operation("beam_splitter")
+@_named_gate("beam_splitter")
 def beam_splitter(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
@@ -608,12 +606,12 @@ def beam_splitter(
     )
 
 
-@_named_operation("loss")
+@_named_gate("loss")
 def loss(state: GaussianState, modes: Modes, **kwargs: ParameterValue) -> GaussianState:
     return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
 
 
-@_named_operation("thermal_loss")
+@_named_gate("thermal_loss")
 def thermal_loss(
     state: GaussianState, modes: Modes, **kwargs: ParameterValue
 ) -> GaussianState:
@@ -627,7 +625,31 @@ def thermal_loss(
 
 # This mapping is deliberately limited to deserialization.  Execution uses
 # the callable stored in the circuit directly.
-for _operation in (
+@_named_gate("initial_state")
+def initial_state(
+    state: GaussianState | None, modes: Modes, **kwargs: ParameterValue
+) -> GaussianState:
+    """Construct the initial Gaussian state for a circuit.
+
+    If an explicit state was supplied to ``Circuit.run``, this gate leaves it
+    unchanged, allowing a serialized/default initial state to be overridden.
+    """
+    if state is not None:
+        return state
+    kind = cast(str, kwargs.get("kind", "vacuum"))
+    if kind == "vacuum":
+        return GaussianState.vacuum(modes)
+    if kind == "coherent":
+        return GaussianState.coherent(modes, cast(complex, kwargs["alpha"]))
+    if kind == "tmsv":
+        if len(modes) != 2:
+            raise ValueError("tmsv initial state requires exactly two modes.")
+        return GaussianState.tmsv(modes[0], modes[1], cast(float, kwargs["r"]))
+    raise ValueError(f"Unknown Gaussian initial state kind {kind!r}.")
+
+
+for _gate in (
+    initial_state,
     squeeze,
     rotate,
     displace,
@@ -635,7 +657,7 @@ for _operation in (
     loss,
     thermal_loss,
 ):
-    Circuit.register(_operation.name, _operation)
+    Circuit.register(_gate.name, _gate)
 
 
 # ========================================================================
