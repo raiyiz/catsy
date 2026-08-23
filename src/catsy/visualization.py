@@ -20,7 +20,7 @@ from .gaussian import GaussianState
 
 
 def _finalize(fig: plt.Figure, show: bool) -> plt.Figure:
-    fig.tight_layout()
+    fig.set_layout_engine('constrained')
     if show:
         plt.show()
     return fig
