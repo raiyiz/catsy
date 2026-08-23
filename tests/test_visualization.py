@@ -1,17 +1,25 @@
 import matplotlib
 import numpy as np
+import pytest
 
 matplotlib.use("Agg")
 
 from catsy import GaussianState
 from catsy.visualization import (
+    animate_phase_space,
+    plot_covariance_evolution,
     plot_covariance_matrix,
+    plot_diagnostics,
+    plot_evolution,
     plot_phase_space,
+    plot_phase_space_trajectory,
     plot_state_dashboard,
     plot_wigner,
+    plot_wigner_evolution,
 )
 
 
+@pytest.mark.visual
 def test_visualizations_return_figures_without_showing() -> None:
     state = GaussianState.tmsv("a", "b", r=0.4)
 
@@ -26,6 +34,7 @@ def test_visualizations_return_figures_without_showing() -> None:
     assert len(dashboard.axes) == 5
 
 
+@pytest.mark.visual
 def test_phase_space_uses_displacement() -> None:
     state = GaussianState.coherent(("a",), 0.8 + 0.3j)
     figure = plot_phase_space(state, "a")
@@ -35,19 +44,38 @@ def test_phase_space_uses_displacement() -> None:
     np.testing.assert_allclose(offsets[0], state.displacement, atol=1e-12)
 
 
+@pytest.mark.visual
+def test_evolution_visualizations() -> None:
+    states = [
+        GaussianState.coherent(("a",), alpha)
+        for alpha in (0.0 + 0.0j, 0.4 + 0.2j, 0.8 + 0.5j)
+    ]
+    times = [0.0, 0.5, 1.0]
+
+    trajectory = plot_phase_space_trajectory(states, "a", times=times)
+    covariance = plot_covariance_evolution(states, "a", times=times)
+    diagnostics = plot_diagnostics(states, times=times)
+    wigner = plot_wigner_evolution(states, "a", times=times, indices=[0, 2], num_points=30)
+    dashboard = plot_evolution(states, "a", times=times, wigner_indices=[0, 2])
+    animation = animate_phase_space(states, "a", times=times, interval=10)
+
+    assert len(trajectory.axes) == 1
+    assert len(covariance.axes) == 1
+    assert len(diagnostics.axes) == 1
+    assert len(wigner.axes) == 4
+    assert len(dashboard.axes) == 4
+    assert animation.save_count == len(states)
+
+
+@pytest.mark.visual
 def test_visualization_arguments_are_validated() -> None:
     state = GaussianState.vacuum(("a",))
 
-    try:
+    with pytest.raises(ValueError, match="n_sigma"):
         plot_phase_space(state, "a", n_sigma=0)
-    except ValueError as exc:
-        assert "n_sigma" in str(exc)
-    else:
-        raise AssertionError("expected n_sigma validation")
-
-    try:
+    with pytest.raises(ValueError, match="num_points"):
         plot_wigner(state, "a", num_points=1)
-    except ValueError as exc:
-        assert "num_points" in str(exc)
-    else:
-        raise AssertionError("expected num_points validation")
+    with pytest.raises(ValueError, match="same length"):
+        plot_phase_space_trajectory([state], "a", times=[0.0, 1.0])
+    with pytest.raises(ValueError, match="positive"):
+        animate_phase_space([state], "a", interval=0)
