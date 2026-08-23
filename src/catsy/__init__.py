@@ -20,7 +20,8 @@ from .gaussian import (
     thermal_loss,
 )
 from .journal import JournalEntry, SimulationJournal
-from .optics import KerrCavity, MachZehnderInterferometer, Mode
+from .modes import Mode
+from .optics import KerrCavity, MachZehnderInterferometer
 
 __all__ = [
     "Circuit",
