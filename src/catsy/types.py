@@ -7,8 +7,9 @@ from typing import TypedDict
 import numpy as np
 from numpy.typing import NDArray
 
+from .mode import Mode
+
 FloatArray = NDArray[np.float64]
-Mode = str
 Modes = tuple[Mode, ...]
 ParameterValue = int | float | complex | str
 GateParameters = dict[str, ParameterValue]
