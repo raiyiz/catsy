@@ -184,6 +184,7 @@ def plot_phase_space_trajectory(states: Sequence[GaussianState], mode_name: str,
 
 
 def animate_phase_space(states: Sequence[GaussianState], mode_name: str, *, times: Sequence[float] | None = None, n_sigma: float = 2.0, interval: int = 80, repeat: bool = False, ax: plt.Axes | None = None, show: bool = False) -> FuncAnimation:
+    """Animate Gaussian phase-space dynamics with geometry and diagnostics."""
     sequence = _states(states)
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")

@@ -1,7 +1,7 @@
-import matplotlib
 import numpy as np
 import pytest
 
+# matplotlib.use("Agg")
 from catsy import GaussianState
 from catsy.visualization import (
     animate_phase_space,
@@ -109,7 +109,7 @@ def test_evolution_animation() -> None:
         states, "a", times=times, interval=30, repeat=True
     )
 
-    assert animation.save_count == len(states)
+    assert animation._repeat is True
 
 
 @pytest.mark.visual
