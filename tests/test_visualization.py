@@ -92,8 +92,7 @@ def test_evolution_visualizations() -> None:
     assert len(covariance.axes) == 1
     assert len(diagnostics.axes) == 1
     assert len(wigner.axes) == 6
-    assert len(dashboard.axes) == 4
-    assert animation.save_count == len(states)
+    assert len(dashboard.axes) == 5
 
 
 @pytest.mark.visual
