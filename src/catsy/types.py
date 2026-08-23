@@ -8,8 +8,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 FloatArray = NDArray[np.float64]
-Mode = str
-Modes = tuple[Mode, ...]
+ModeName = str
+Modes = tuple[ModeName, ...]
 ParameterValue = int | float | complex | str
 GateParameters = dict[str, ParameterValue]
 JsonObject = dict[str, object]
