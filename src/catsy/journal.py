@@ -43,8 +43,8 @@ from typing import cast
 
 import numpy as np
 
-from .core import Circuit
 from .gaussian import GaussianState
+from .optics import Circuit
 from .types import CircuitData, JsonObject
 
 SCHEMA_VERSION = "2.1.0"

@@ -3,7 +3,8 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catsy.core import DUAN_SEPARABILITY_BOUND, Circuit, Gate, _williamson_decomposition
+from catsy.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
+from catsy.optics import Circuit, Gate
 from catsy.gaussian import (
     GaussianChannel,
     GaussianMeasurements,
@@ -538,18 +539,19 @@ def test_add_gate_rejects_invalid_mode_tuples(modes, match):
 
 
 def test_circuit_rejects_unregistered_mode():
+    # add_gate() is the single enforcement point for mode registration, so
+    # an unregistered mode is rejected immediately -- not deferred to run().
     circuit = Circuit()
     circuit.add_mode("a")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("z",),
-            kwargs={"r": 0.5, "theta": 0.0},
+    with pytest.raises(ValueError, match="not registered on this circuit"):
+        circuit.add_gate(
+            Gate(
+                name="Squeezer",
+                transform=squeeze,
+                modes=("z",),
+                kwargs={"r": 0.5, "theta": 0.0},
+            )
         )
-    )
-    with pytest.raises(ValueError):
-        circuit.run(GaussianState.vacuum(("a",)))
 
 
 def test_circuit_rejects_empty_mode_set():

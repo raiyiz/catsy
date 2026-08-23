@@ -1,6 +1,5 @@
 """Small continuous-variable quantum-optics toolkit."""
 
-from .core import Circuit, Gate
 from .fock import FockGates
 from .gaussian import (
     GaussianChannel,
@@ -20,7 +19,7 @@ from .gaussian import (
     thermal_loss,
 )
 from .journal import JournalEntry, SimulationJournal
-from .optics import KerrCavity, MachZehnderInterferometer, Mode
+from .optics import Circuit, Gate, KerrCavity, MachZehnderInterferometer, Mode
 
 __all__ = [
     "Circuit",

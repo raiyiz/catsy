@@ -45,6 +45,27 @@ circuit.displace("a", alpha=0.2)
 
 The fluent call is therefore equivalent to constructing a Gate explicitly and passing it to `add_gate`. The verb is the transformation/function name; the bound Gate carries the noun-style name.
 
+== Modes are owned, not just named
+A `Circuit`'s modes are registered through `circuit.mode(name)`, which returns a small `Mode` object rather than the plain name:
+
+```python
+@dataclass(frozen=True, eq=False)
+class Mode:
+    name: str
+    owner: Circuit | None = None
+```
+
+The returned `Mode` is *owned* by the circuit that produced it (`owner is circuit`). `circuit.add_mode(name)` is a thin fluent wrapper around `mode()` that discards the handle, for callers who only need the name registered. A `Mode` with `owner=None` is *free*: not tied to any circuit, e.g. for a one-off Gate built without a `Circuit` at all.
+
+Fluent gate-builder methods and `initial_state` accept either a plain, already-registered mode-name string or a `Mode` handle. Passing a `Mode` owned by a *different* circuit -- or a free one -- is rejected immediately, before a `Gate` is even constructed:
+
+```python
+a = circuit_1.mode("a")
+circuit_2.squeeze(a, r=0.5)  # ValueError: belongs to circuit_1, not circuit_2
+```
+
+This is what stops a mode meant for one circuit from silently ending up wired into a different one.
+
 == Serialization uses the Gate name
 Function objects are intentionally kept out of JSON. A serialized gate contains its stable noun-style `name`, target modes, and primitive parameters. For example:
 
@@ -59,14 +80,14 @@ Function objects are intentionally kept out of JSON. A serialized gate contains 
 The registry maps serialized Gate names back to their transform functions when loading a circuit. Execution itself uses the transform already stored in each Gate instance.
 
 == Sequential execution
-The `run` method validates the Gate modes and then applies the bound Gates in order:
+The `run` method applies the bound Gates in order:
 
 ```python
 for gate in self._gates:
     current_state = gate.apply(current_state)
 ```
 
-This gives a linear execution path: `Gate` → `transform` → state. The circuit does not need a separate operation record or execution wrapper.
+This gives a linear execution path: `Gate` → `transform` → state. The circuit does not need a separate operation record or execution wrapper. Mode registration is validated once, in `add_gate` -- not re-checked here.
 
 == State storage and roundtrip guarantee
 Circuits remain persistent through `save` and `load`. Serialization stores only the Gate name, modes, and bound parameters; deserialization reconstructs a concrete Gate with the corresponding transform. A circuit can also contain an `InitialState` Gate. When present, `run()` can construct the initial state from that Gate; an explicit state passed to `run()` overrides it.

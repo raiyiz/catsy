@@ -42,18 +42,28 @@ final.plot_covariance()
 ```
 
 Here `r` is the squeezing strength and `eta` is the power transmissivity of the loss channel.
+
+`add_mode("a")` above is a shorthand for `circuit.mode("a")`, which registers the mode and returns a `Mode` handle owned by that circuit:
+
+```python
+circuit = Circuit()
+a = circuit.mode("a")
+b = circuit.mode("b")
+circuit.squeeze(a, r=0.5).beam_splitter(a, b, eta=0.5)
+```
+
+Building gates from these handles instead of bare strings means a mode meant for one circuit can't accidentally be wired into a different one -- passing a `Mode` owned by another circuit (or a free `Mode(name)` with no owner) raises immediately. Plain mode-name strings still work anywhere a registered mode is expected, as in the quick start above.
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
 | Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L85) |
 | Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L85) |
-| Build a sequence of operations              | [`Circuit`](src/catsy/core.py) |
+| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L91), [`Mode`](src/catsy/optics.py#L59) |
 | Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L515), [`GaussianChannel`](src/catsy/gaussian.py#L452) |
 | Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L653) |
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L85) |
 | Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L780) |
 | Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L291) |
-| Define an optical layout                    | [`Circuit`](src/catsy/core.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
 
@@ -157,9 +167,9 @@ uv run pytest --plot
 | Module                                                                                                       | Contents                                                            |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [`core.py`](src/catsy/core.py)         | conventions, validation, numerical helpers                          |
-| [`gaussian.py`](src/catsy/gaussian.py) | states, operations, channels, circuits, measurements                |
+| [`gaussian.py`](src/catsy/gaussian.py) | states, operations, channels, measurements                          |
 | [`fock.py`](src/catsy/fock.py)         | Fock-space functionality                                             |
-| [`optics.py`](src/catsy/optics.py)     | QuTiP-based cavity/interferometer simulations                       |
+| [`optics.py`](src/catsy/optics.py)     | circuits, modes, QuTiP-based cavity/interferometer simulations       |
 | [`journal.py`](src/catsy/journal.py)   | experiment persistence                                               |
 ## Documentation
 

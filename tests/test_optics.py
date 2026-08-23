@@ -7,7 +7,6 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catsy.core import Circuit, Gate
 from catsy.fock import FockGates
 from catsy.gaussian import (
     GaussianState,
@@ -16,8 +15,11 @@ from catsy.gaussian import (
     squeeze,
 )
 from catsy.optics import (
+    Circuit,
+    Gate,
     KerrCavity,
     MachZehnderInterferometer,
+    Mode,
 )
 
 # Layout assembly and serialization
@@ -32,6 +34,83 @@ def test_beam_splitter_builds_a_two_mode_gate():
     ]
     assert circuit.gates[0].name == "BeamSplitter"
     assert circuit.gates[0].kwargs == {"eta": 0.5}
+
+
+# Mode ownership
+
+
+def test_mode_returns_an_owned_handle():
+    circuit = Circuit(name="Bench")
+    a = circuit.mode("a")
+    assert a.name == "a"
+    assert a.owner is circuit
+    assert circuit.modes == ("a",)
+
+
+def test_mode_rejects_duplicate_name():
+    circuit = Circuit().add_mode("a")
+    with pytest.raises(ValueError, match="already registered"):
+        circuit.mode("a")
+
+
+def test_mode_rejects_empty_name():
+    circuit = Circuit()
+    with pytest.raises(ValueError, match="non-empty string"):
+        circuit.mode("")
+
+
+def test_free_mode_has_no_owner():
+    free = Mode("a")
+    assert free.owner is None
+    assert repr(free) == "Mode('a', free)"
+
+
+def test_mode_uses_identity_equality():
+    first = Mode("a")
+    second = Mode("a")
+    assert first.name == second.name
+    assert first is not second
+    assert first != second
+
+
+def test_owned_mode_can_build_a_gate_on_its_circuit():
+    circuit = Circuit(name="Bench")
+    a = circuit.mode("a")
+    b = circuit.mode("b")
+    circuit.beam_splitter(a, b, eta=0.5)
+    assert circuit.to_dict()["gates"] == [
+        {"gate": "BeamSplitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
+    ]
+
+
+def test_mode_from_another_circuit_is_rejected():
+    other = Circuit(name="Other")
+    foreign = other.mode("a")
+
+    circuit = Circuit(name="Bench").add_mode("a")
+    with pytest.raises(ValueError, match="belongs to circuit 'Other'"):
+        circuit.squeeze(foreign, r=0.5)
+
+
+def test_free_mode_is_rejected_on_a_circuit():
+    free = Mode("a")
+    circuit = Circuit(name="Bench").add_mode("a")
+    with pytest.raises(ValueError, match="free/standalone mode"):
+        circuit.squeeze(free, r=0.5)
+
+
+def test_unregistered_mode_string_is_rejected_by_fluent_builder():
+    circuit = Circuit(name="Bench").add_mode("a")
+    with pytest.raises(ValueError, match="not registered on this circuit"):
+        circuit.squeeze("z", r=0.5)
+
+
+def test_owned_mode_works_with_initial_state():
+    circuit = Circuit(name="Bench")
+    a = circuit.mode("a")
+    circuit.initial_state(a, kind="vacuum")
+    final = circuit.run()
+    assert final.modes == ("a",)
 
 
 def test_run_does_not_rebuild_or_duplicate_circuit_gates():

@@ -19,9 +19,8 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
   [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
-  [#src-link("src/catsy/core.py")], [`Circuit` (generic executable gate sequence).],
   [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
-  [#src-link("src/catsy/optics.py")], [`KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
+  [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 
@@ -30,7 +29,7 @@ There is no separate compatibility-shim or simulation-only module: `FockGates` l
 ```python
 from catsy import (
     GaussianState, GaussianChannel, LossChannels,
-    Circuit, GaussianMeasurements,
+    Circuit, Mode, GaussianMeasurements,
     compute_wigner_analytically, compute_joint_correlation, compute_duan_inseparability,
     FockGates, KerrCavity, MachZehnderInterferometer,
     JournalEntry, SimulationJournal,
@@ -61,11 +60,13 @@ For a single-mode squeezed vacuum state with squeezing strength $r$ and $theta =
 *Declarative, via `Circuit` (Chapter 3):* a `Circuit` describes the ordered gate sequence, and `run` executes it against an explicitly supplied initial state.
 
 ```python
-from catsy import Circuit, GaussianState, loss
+from catsy import Circuit, Gate, GaussianState, loss
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
-circuit = Circuit().add_mode("a").add_mode("b")
-circuit.add_gate(loss, ("a",), eta=0.9)
+circuit = Circuit()
+a = circuit.mode("a")
+circuit.mode("b")
+circuit.add_gate(Gate(name="Noise", transform=loss, modes=(a.name,), kwargs={"eta": 0.9}))
 final = circuit.run(initial)
 ```
 

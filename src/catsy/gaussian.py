@@ -20,7 +20,6 @@ import scipy.linalg
 
 from .core import (
     TOL_PHYSICALITY,
-    Circuit,
     _apply_gaussian_transform,
     _check_non_negative,
     _check_positive_int,
@@ -34,6 +33,7 @@ from .core import (
     _validate_physical_covariance,
     _williamson_decomposition,
 )
+from .optics import Circuit
 from .types import (
     FloatArray,
     GaussianChannelData,

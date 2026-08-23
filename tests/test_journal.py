@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from catsy.core import Circuit, Gate
+from catsy.optics import Circuit, Gate
 from catsy.gaussian import (
     GaussianState,
     beam_splitter,

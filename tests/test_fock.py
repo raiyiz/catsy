@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from catsy.core import Circuit, Gate
+from catsy.optics import Circuit, Gate
 from catsy.fock import FockGates
 from catsy.gaussian import (
     GaussianState,
