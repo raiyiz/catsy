@@ -20,7 +20,7 @@ from .gaussian import (
     thermal_loss,
 )
 from .journal import JournalEntry, SimulationJournal
-from .optics import KerrCavity, MachZehnderInterferometer
+from .optics import KerrCavity, MachZehnderInterferometer, Mode
 
 __all__ = [
     "Circuit",
@@ -33,6 +33,7 @@ __all__ = [
     "KerrCavity",
     "LossChannels",
     "MachZehnderInterferometer",
+    "Mode",
     "SimulationJournal",
     "beam_splitter",
     "compute_duan_inseparability",

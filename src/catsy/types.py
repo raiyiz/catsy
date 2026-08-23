@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
 
-from .mode import Mode
+if TYPE_CHECKING:
+    from .optics import Mode
 
 FloatArray = NDArray[np.float64]
-Modes = tuple[Mode, ...]
+Modes = tuple["Mode", ...]
 ParameterValue = int | float | complex | str
 GateParameters = dict[str, ParameterValue]
 JsonObject = dict[str, object]
