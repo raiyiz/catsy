@@ -49,7 +49,22 @@ def _ellipse_geometry(covariance: np.ndarray, n_sigma: float) -> tuple[float, fl
     return float(widths[0]), float(widths[1]), angle
 
 
-def _add_ellipse(ax: plt.Axes, mean: np.ndarray, covariance: np.ndarray, n_sigma: float, **kwargs: object) -> Ellipse:
+def _ellipse_extents(mean: np.ndarray, covariance: np.ndarray, n_sigma: float) -> tuple[float, float]:
+    """Return conservative x/p extents of an uncertainty ellipse."""
+    width, height, angle = _ellipse_geometry(covariance, n_sigma)
+    theta = np.radians(angle)
+    half_x = 0.5 * np.sqrt((width * np.cos(theta)) ** 2 + (height * np.sin(theta)) ** 2)
+    half_p = 0.5 * np.sqrt((width * np.sin(theta)) ** 2 + (height * np.cos(theta)) ** 2)
+    return float(abs(mean[0]) + half_x), float(abs(mean[1]) + half_p)
+
+
+def _add_ellipse(
+    ax: plt.Axes,
+    mean: np.ndarray,
+    covariance: np.ndarray,
+    n_sigma: float,
+    **kwargs: object,
+) -> Ellipse:
     width, height, angle = _ellipse_geometry(covariance, n_sigma)
     ellipse = Ellipse(
         xy=(float(mean[0]), float(mean[1])),
@@ -62,6 +77,24 @@ def _add_ellipse(ax: plt.Axes, mean: np.ndarray, covariance: np.ndarray, n_sigma
     )
     ax.add_patch(ellipse)
     return ellipse
+
+
+def _set_phase_space_limits(
+    ax: plt.Axes,
+    means: np.ndarray,
+    covariances: Sequence[np.ndarray],
+    n_sigma: float,
+    *,
+    padding: float = 0.18,
+) -> None:
+    x_extent = max(_ellipse_extents(mean, covariance, n_sigma)[0] for mean, covariance in zip(means, covariances))
+    p_extent = max(_ellipse_extents(mean, covariance, n_sigma)[1] for mean, covariance in zip(means, covariances))
+    x_extent = max(x_extent, 1.0)
+    p_extent = max(p_extent, 1.0)
+    extent = max(x_extent, p_extent)
+    extent *= 1.0 + padding
+    ax.set_xlim(-extent, extent)
+    ax.set_ylim(-extent, extent)
 
 
 def plot_covariance_matrix(
@@ -91,7 +124,14 @@ def plot_covariance_matrix(
         for row in range(covariance.shape[0]):
             for col in range(covariance.shape[1]):
                 value = covariance[row, col]
-                ax.text(col, row, f"{value:.2g}", ha="center", va="center", color="white" if abs(value) > threshold else "black")
+                ax.text(
+                    col,
+                    row,
+                    f"{value:.2g}",
+                    ha="center",
+                    va="center",
+                    color="white" if abs(value) > threshold else "black",
+                )
     return _finalize(fig, show)
 
 
@@ -103,7 +143,7 @@ def plot_phase_space(
     n_sigma: float = 2.0,
     show: bool = False,
 ) -> plt.Figure:
-    """Plot displacement, principal covariance axes, and uncertainty ellipse."""
+    """Plot displacement, covariance ellipse, and principal axes."""
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")
     mean, covariance = _mode_geometry(state, mode_name)
@@ -112,6 +152,16 @@ def plot_phase_space(
     else:
         fig = cast(plt.Figure, ax.figure)
     _add_ellipse(ax, mean, covariance, n_sigma, label=f"{n_sigma:g}σ contour")
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    order = np.argsort(eigenvalues)[::-1]
+    for eigenvalue, vector in zip(eigenvalues[order], eigenvectors[:, order].T):
+        length = n_sigma * np.sqrt(max(float(eigenvalue), 0.0))
+        ax.plot(
+            [mean[0] - vector[0] * length, mean[0] + vector[0] * length],
+            [mean[1] - vector[1] * length, mean[1] + vector[1] * length],
+            linewidth=1.0,
+            alpha=0.55,
+        )
     ax.scatter([mean[0]], [mean[1]], s=55, zorder=3, label="mean")
     ax.axhline(0.0, linewidth=0.8, linestyle="--")
     ax.axvline(0.0, linewidth=0.8, linestyle="--")
@@ -119,11 +169,8 @@ def plot_phase_space(
     ax.set_ylabel("p")
     ax.set_title(f"Phase space — mode '{mode_name}'")
     ax.set_aspect("equal", adjustable="box")
+    _set_phase_space_limits(ax, np.asarray([mean]), [covariance], n_sigma)
     ax.legend(frameon=False)
-    width, height, _ = _ellipse_geometry(covariance, n_sigma)
-    radius = max(width, height, 1.0) / 2.0
-    ax.set_xlim(float(mean[0] - radius * 1.25), float(mean[0] + radius * 1.25))
-    ax.set_ylim(float(mean[1] - radius * 1.25), float(mean[1] + radius * 1.25))
     return _finalize(fig, show)
 
 
@@ -137,7 +184,7 @@ def plot_phase_space_trajectory(
     ax: plt.Axes | None = None,
     show: bool = False,
 ) -> plt.Figure:
-    """Plot a Gaussian mode's displacement trajectory and evolving ellipses."""
+    """Plot a displacement trajectory with evolving covariance geometry."""
     sequence = _states(states)
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")
@@ -146,6 +193,7 @@ def plot_phase_space_trajectory(
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
     means = np.array([_mode_geometry(state, mode_name)[0] for state in sequence])
+    covariances = [_mode_geometry(state, mode_name)[1] for state in sequence]
     if ax is None:
         fig, ax = plt.subplots(figsize=(6.2, 5.6))
     else:
@@ -153,16 +201,17 @@ def plot_phase_space_trajectory(
     ax.plot(means[:, 0], means[:, 1], linewidth=2.0, label="trajectory")
     ax.scatter([means[0, 0]], [means[0, 1]], s=45, label="initial", zorder=3)
     ax.scatter([means[-1, 0]], [means[-1, 1]], s=55, marker="*", label="final", zorder=3)
-    indices = range(0, len(sequence), ellipse_every or max(1, len(sequence) // 6))
-    if len(sequence) > 1 and (len(sequence) - 1) not in indices:
-        indices = list(indices) + [len(sequence) - 1]
+    step = ellipse_every or max(1, len(sequence) // 6)
+    indices = list(range(0, len(sequence), step))
+    if indices[-1] != len(sequence) - 1:
+        indices.append(len(sequence) - 1)
     for index in indices:
-        mean, covariance = _mode_geometry(sequence[index], mode_name)
-        _add_ellipse(ax, mean, covariance, n_sigma, alpha=0.45)
+        _add_ellipse(ax, means[index], covariances[index], n_sigma, alpha=0.35)
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("x")
     ax.set_ylabel("p")
     ax.set_title(f"Phase-space evolution — mode '{mode_name}'")
+    _set_phase_space_limits(ax, means, covariances, n_sigma)
     ax.legend(frameon=False)
     if times is not None:
         ax.text(0.02, 0.98, f"t = {times[-1]:g}", transform=ax.transAxes, va="top")
@@ -179,7 +228,14 @@ def animate_phase_space(
     ax: plt.Axes | None = None,
     show: bool = False,
 ) -> FuncAnimation:
-    """Animate a Gaussian mode's phase-space mean and covariance ellipse."""
+    """Animate Gaussian phase-space dynamics with geometry and diagnostics.
+
+    The frame is deliberately fixed for the whole animation.  Each frame shows
+    the current mean, accumulated trajectory, uncertainty ellipse, principal
+    covariance axes, and instantaneous covariance eigenvalues.  The complete
+    trajectory is also drawn faintly in the background so the current state is
+    easy to place in the global dynamics.
+    """
     sequence = _states(states)
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")
@@ -187,39 +243,80 @@ def animate_phase_space(
         raise ValueError("interval must be positive.")
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
+
     means = np.array([_mode_geometry(state, mode_name)[0] for state in sequence])
+    covariances = [_mode_geometry(state, mode_name)[1] for state in sequence]
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6.2, 5.6))
+        fig, ax = plt.subplots(figsize=(7.0, 6.2))
     else:
         fig = cast(plt.Figure, ax.figure)
-    ax.plot(means[:, 0], means[:, 1], linestyle="--", linewidth=0.8, alpha=0.35)
-    point, = ax.plot([], [], marker="o", linestyle="None", markersize=7)
-    trail, = ax.plot([], [], linewidth=2.0)
-    ellipse = Ellipse((0.0, 0.0), 0.0, 0.0, fill=False, linewidth=2.0)
-    ax.add_patch(ellipse)
+
+    # Static context: complete path, initial state, and fixed physical frame.
+    ax.plot(means[:, 0], means[:, 1], linestyle="--", linewidth=0.9, alpha=0.3, label="full trajectory")
+    ax.scatter([means[0, 0]], [means[0, 1]], marker="o", s=45, zorder=4, label="initial")
+    _set_phase_space_limits(ax, means, covariances, n_sigma)
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("x")
     ax.set_ylabel("p")
-    ax.set_title(f"Phase-space evolution — mode '{mode_name}'")
-    span = max(float(np.ptp(means[:, 0])), float(np.ptp(means[:, 1])), 1.0)
-    center = means.mean(axis=0)
-    ax.set_xlim(float(center[0] - 0.65 * span), float(center[0] + 0.65 * span))
-    ax.set_ylim(float(center[1] - 0.65 * span), float(center[1] + 0.65 * span))
-    time_text = ax.text(0.02, 0.98, "", transform=ax.transAxes, va="top")
+    ax.set_title(f"Gaussian phase-space dynamics — mode '{mode_name}'")
+
+    point, = ax.plot([], [], marker="o", linestyle="None", markersize=8, zorder=6, label="current")
+    trail, = ax.plot([], [], linewidth=2.2, zorder=5, label="elapsed trajectory")
+    ellipse = Ellipse((0.0, 0.0), 0.0, 0.0, fill=False, linewidth=2.2, zorder=5)
+    ax.add_patch(ellipse)
+    major_axis, = ax.plot([], [], linewidth=1.3, zorder=5)
+    minor_axis, = ax.plot([], [], linewidth=1.0, linestyle="--", zorder=5)
+    time_text = ax.text(0.03, 0.97, "", transform=ax.transAxes, va="top", fontsize=11)
+    stats_text = ax.text(0.03, 0.03, "", transform=ax.transAxes, va="bottom", fontsize=9)
+    ax.legend(frameon=False, loc="upper right")
 
     def update(frame: int) -> tuple[object, ...]:
         mean, covariance = _mode_geometry(sequence[frame], mode_name)
         width, height, angle = _ellipse_geometry(covariance, n_sigma)
+        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+        order = np.argsort(eigenvalues)[::-1]
+        eigenvalues = np.maximum(eigenvalues[order], 0.0)
+        vectors = eigenvectors[:, order]
+
         point.set_data([mean[0]], [mean[1]])
         trail.set_data(means[: frame + 1, 0], means[: frame + 1, 1])
         ellipse.center = (float(mean[0]), float(mean[1]))
         ellipse.width = width
         ellipse.height = height
         ellipse.angle = angle
-        time_text.set_text("" if times is None else f"t = {times[frame]:g}")
-        return point, trail, ellipse, time_text
 
-    animation = FuncAnimation(fig, update, frames=len(sequence), interval=interval, blit=False)
+        axes = []
+        for index, line in enumerate((major_axis, minor_axis)):
+            vector = vectors[:, index]
+            length = n_sigma * np.sqrt(float(eigenvalues[index]))
+            line.set_data(
+                [mean[0] - vector[0] * length, mean[0] + vector[0] * length],
+                [mean[1] - vector[1] * length, mean[1] + vector[1] * length],
+            )
+            axes.append(line)
+
+        if times is None:
+            time_text.set_text(f"step {frame + 1}/{len(sequence)}")
+        else:
+            time_text.set_text(f"t = {times[frame]:g}")
+        stats_text.set_text(
+            f"σ₁ = {np.sqrt(eigenvalues[0]):.3g}    "
+            f"σ₂ = {np.sqrt(eigenvalues[1]):.3g}    "
+            f"det(V) = {np.linalg.det(covariance):.3g}"
+        )
+        return point, trail, ellipse, major_axis, minor_axis, time_text, stats_text
+
+    animation = FuncAnimation(
+        fig,
+        update,
+        frames=len(sequence),
+        interval=interval,
+        blit=False,
+        repeat=False,
+    )
+    # Initialize explicitly so callers inspecting the returned artists get a
+    # meaningful first frame even before a GUI event loop renders it.
+    update(0)
     if show:
         plt.show()
     return animation
@@ -256,7 +353,8 @@ def plot_covariance_evolution(
 def _symplectic_eigenvalues(covariance: np.ndarray) -> np.ndarray:
     n = covariance.shape[0] // 2
     omega = np.kron(np.eye(n), np.array([[0.0, 1.0], [-1.0, 0.0]]))
-    return np.sort(np.abs(np.linalg.eigvals(1j * omega @ covariance).real))[::2]
+    values = np.linalg.eigvals(1j * omega @ covariance).real
+    return np.sort(np.abs(values))[::2]
 
 
 def plot_diagnostics(
@@ -271,7 +369,9 @@ def plot_diagnostics(
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
     x = np.arange(len(sequence), dtype=float) if times is None else np.asarray(times, dtype=float)
-    purity = np.array([1.0 / (2.0 ** len(s.modes) * np.sqrt(max(np.linalg.det(s.covariance), 0.0))) for s in sequence])
+    purity = np.array(
+        [1.0 / (2.0 ** len(s.modes) * np.sqrt(max(np.linalg.det(s.covariance), np.finfo(float).tiny))) for s in sequence]
+    )
     minimum_nu = np.array([np.min(_symplectic_eigenvalues(s.covariance)) for s in sequence])
     if ax is None:
         fig, ax = plt.subplots(figsize=(7.0, 4.6))
@@ -366,13 +466,15 @@ def plot_evolution(
     selected = list(range(len(sequence))) if wigner_indices is None else list(wigner_indices)
     if not selected:
         raise ValueError("wigner_indices must contain at least one frame.")
+    if any(index < 0 or index >= len(sequence) for index in selected):
+        raise ValueError("wigner_indices contain an out-of-range frame.")
     fig, axes = plt.subplots(2, 2, figsize=(13.0, 9.0))
     plot_phase_space_trajectory(sequence, mode_name, times=times, n_sigma=n_sigma, ax=axes[0, 0])
     plot_covariance_evolution(sequence, mode_name, times=times, ax=axes[0, 1])
     plot_diagnostics(sequence, times=times, ax=axes[1, 1])
     snapshot = selected[-1]
     plot_wigner(sequence[snapshot], mode_name, ax=axes[1, 0])
-    axes[1, 0].set_title("Wigner function — final snapshot")
+    axes[1, 0].set_title("Wigner function — selected snapshot")
     fig.suptitle(f"catsy Gaussian evolution — mode '{mode_name}'", fontsize=14)
     return _finalize(fig, show)
 
