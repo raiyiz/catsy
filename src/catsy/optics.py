@@ -9,13 +9,35 @@ transformations. Reusable Gaussian gate layouts belong on `Circuit` itself
 
 from __future__ import annotations
 
-from typing import TypedDict
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 import qutip as qt
 
 from .core import _check_non_negative, _check_positive_int
 from .types import FloatArray
+
+if TYPE_CHECKING:
+    from .core import Circuit
+
+
+@dataclass(slots=True, eq=False)
+class Mode:
+    """A named runtime optical mode.
+
+    Modes use object identity for equality. A mode may optionally be owned by
+    a :class:`~catsy.core.Circuit`; ownership is assigned by the circuit when
+    it adopts the mode.
+    """
+
+    name: str
+    owner: Circuit | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("Mode name must be a non-empty string.")
+
 
 # ---------------------------------------------------------------------------
 # Physical-system simulations
