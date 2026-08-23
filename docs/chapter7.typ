@@ -6,7 +6,7 @@
 // ==========================================
 = Chapter 7: Non-Gaussian Gates & Physical Simulations
 
-Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require Fock-space structure. These operations consistently live outside `gaussian.py`: #src-link("src/catsy/fock.py") provides primitive photon operations on already-existing QuTiP states, while #src-link("src/catsy/optics.py") implements concrete, time-resolved hardware models (a driven Kerr cavity, a Mach-Zehnder interferometer) alongside the Gaussian-optics `OpticalSetup` layouts -- both describe specific pieces of optical hardware rather than generic phase-space transformations, which is why they share a module.
+Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require Fock-space structure. These operations consistently live outside `gaussian.py`: #src-link("src/catsy/fock.py") provides primitive photon operations on already-existing QuTiP states, while #src-link("src/catsy/optics.py") implements concrete, time-resolved hardware models (a driven Kerr cavity, a Mach-Zehnder interferometer) -- both describe specific pieces of optical hardware rather than generic phase-space transformations, which is why they share a module. Reusable Gaussian gate layouts (Chapter 8) live on `Circuit` itself rather than in this module.
 
 == Primitive photon operations (`FockGates`)
 

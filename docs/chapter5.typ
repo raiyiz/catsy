@@ -140,7 +140,7 @@ def reorder_modes(self, modes: tuple[str, ...] | list[str]) -> GaussianState:
     return GaussianState(modes=requested, displacement=displacement, covariance=covariance)
 ```
 
-`reorder_modes` explicitly changes only the *representation*, not the physical state — useful when two states from different circuits (e.g. before merging two `OpticalSetup` layouts, Chapter 8) need to be brought into a common mode order.
+`reorder_modes` explicitly changes only the *representation*, not the physical state — useful when two states from different circuits (e.g. before merging two `Circuit` layouts, Chapter 8) need to be brought into a common mode order.
 
 ---
 

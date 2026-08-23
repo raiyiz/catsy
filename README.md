@@ -53,7 +53,7 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L85) |
 | Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L780) |
 | Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L291) |
-| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L59) |
+| Define an optical layout                    | [`Circuit`](src/catsy/core.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
 
@@ -90,7 +90,12 @@ circuit.beam_splitter("a", "b", eta=0.5)
 final = circuit.run(initial)
 ```
 
-Circuits can also be serialized and restored.
+Circuits can also be serialized and restored, and rendered as a plain-text schematic:
+
+```python
+circuit.render_schematic()   # -> str
+circuit.draw()                # prints it
+```
 
 ## Fock-space calculations
 
@@ -154,7 +159,7 @@ uv run pytest --plot
 | [`core.py`](src/catsy/core.py)         | conventions, validation, numerical helpers                          |
 | [`gaussian.py`](src/catsy/gaussian.py) | states, operations, channels, circuits, measurements                |
 | [`fock.py`](src/catsy/fock.py)         | Fock-space functionality                                             |
-| [`optics.py`](src/catsy/optics.py)     | optical layouts and QuTiP-based cavity/interferometer simulations   |
+| [`optics.py`](src/catsy/optics.py)     | QuTiP-based cavity/interferometer simulations                       |
 | [`journal.py`](src/catsy/journal.py)   | experiment persistence                                               |
 ## Documentation
 

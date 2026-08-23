@@ -35,10 +35,6 @@ class GateData(TypedDict):
 
 
 class CircuitData(TypedDict):
+    name: str
     modes: list[str]
-    gates: list[GateData]
-
-
-class OpticalSetupData(TypedDict):
-    layout_name: str
     gates: list[GateData]

@@ -21,11 +21,11 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
   [#src-link("src/catsy/core.py")], [`Circuit` (generic executable gate sequence).],
   [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
-  [#src-link("src/catsy/optics.py")], [`OpticalSetup`: reusable bench layouts (Chapter 8); `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7).],
+  [#src-link("src/catsy/optics.py")], [`KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 
-There is no separate compatibility-shim or simulation-only module: `FockGates` lives in `catsy.fock`, and `KerrCavity`/`MachZehnderInterferometer` live alongside `OpticalSetup` in `catsy.optics`, since all three model specific pieces of optical hardware rather than generic phase-space transformations. Imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
+There is no separate compatibility-shim or simulation-only module: `FockGates` lives in `catsy.fock`, and `KerrCavity`/`MachZehnderInterferometer` live in `catsy.optics`, since both model specific pieces of optical hardware rather than generic phase-space transformations. Imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
 
 ```python
 from catsy import (
@@ -33,7 +33,7 @@ from catsy import (
     Circuit, GaussianMeasurements,
     compute_wigner_analytically, compute_joint_correlation, compute_duan_inseparability,
     FockGates, KerrCavity, MachZehnderInterferometer,
-    OpticalSetup, JournalEntry, SimulationJournal,
+    JournalEntry, SimulationJournal,
 )
 ```
 

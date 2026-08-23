@@ -732,6 +732,7 @@ def test_circuit_from_dict_rejects_unknown_gate():
     # executes whatever callable is already attached to the circuit
     # directly, with no name-based registry lookup left in the execution path.
     data = {
+        "name": "Bad",
         "modes": ["a"],
         "gates": [{"gate": "NotARealOp", "modes": ["a"], "kwargs": {}}],
     }

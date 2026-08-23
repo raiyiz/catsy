@@ -59,8 +59,15 @@ class CircuitState(Protocol):
 class Circuit:
     """An ordered sequence of executable gates over named modes."""
 
+    name: str = "Untitled Circuit"
     modes: Modes = field(default_factory=tuple)
     _gates: list[Gate] = field(default_factory=list, init=False)
+
+    @property
+    def gates(self) -> tuple[Gate, ...]:
+        """The circuit's gates, in execution order. Read-only: use
+        :meth:`add_gate` (or a fluent builder method) to append one."""
+        return tuple(self._gates)
 
     @classmethod
     def register(cls, name: str, transform: GateTransform) -> None:
@@ -182,6 +189,7 @@ class Circuit:
 
     def to_dict(self) -> CircuitData:
         return {
+            "name": self.name,
             "modes": list(self.modes),
             "gates": [
                 {"gate": gate.name, "modes": list(gate.modes), "kwargs": gate.kwargs}
@@ -191,7 +199,7 @@ class Circuit:
 
     @classmethod
     def from_dict(cls, data: CircuitData) -> Circuit:
-        circuit = cls(modes=tuple(data["modes"]))
+        circuit = cls(name=data["name"], modes=tuple(data["modes"]))
         for gate_data in data["gates"]:
             name = gate_data["gate"]
             try:
@@ -215,8 +223,97 @@ class Circuit:
     def load(cls, path: str | Path) -> Circuit:
         return cls.from_dict(cast(CircuitData, _json_load(path)))
 
+    # -- Visualization ----------------------------------------------------
+
+    def render_schematic(self, input_states: dict[str, str] | None = None) -> str:
+        """Render the circuit as a plain-text schematic.
+
+        Gates are shown left to right in execution order, one line per mode,
+        in this circuit's mode order (see :attr:`modes`). The rendering is
+        pure and deterministic.
+        """
+        if not self._gates:
+            return (
+                f"┌─── {self.name} ───┐\n"
+                "│   (Empty Circuit)   │\n"
+                "└──────────────────────────┘"
+            )
+
+        ordered_modes = list(self.modes)
+        position = {mode: i for i, mode in enumerate(ordered_modes)}
+        input_states = input_states or {}
+
+        lines = {
+            mode: f"{input_states.get(mode, '|0>'):<9} ──[{mode}]──"
+            for mode in ordered_modes
+        }
+
+        for gate in self._gates:
+            label, block_width = _render_gate_label(gate)
+            involved_modes = sorted(gate.modes, key=position.__getitem__)
+            first_pos = position[involved_modes[0]]
+            last_pos = position[involved_modes[-1]]
+
+            for mode in ordered_modes:
+                pos = position[mode]
+                if mode in involved_modes:
+                    if len(involved_modes) > 1:
+                        if pos == first_pos:
+                            connector = "┬"
+                        elif pos == last_pos:
+                            connector = "┴"
+                        else:
+                            connector = "┼"
+                        cell = f"[{connector}{label.center(block_width - 2)}{connector}]"
+                    else:
+                        cell = f"[{label.center(block_width)}]"
+                    lines[mode] += f"─{cell}─"
+                elif len(involved_modes) > 1 and first_pos < pos < last_pos:
+                    bridge = "│".center(block_width + 2, "─")
+                    lines[mode] += f"─{bridge}─"
+                else:
+                    lines[mode] += "─" * (block_width + 4)
+
+        title_banner = f"─┤ Schematic: {self.name} ├"
+        out = [f"┌{title_banner:─<78}┐"]
+        for mode in ordered_modes:
+            out.append(f"│  {lines[mode]}── OUT  │")
+        out.append("└" + "─" * 78 + "┘")
+        return "\n".join(out)
+
+    def draw(self, input_states: dict[str, str] | None = None) -> None:
+        """Print the schematic to stdout for interactive/notebook use."""
+        print("\n" + self.render_schematic(input_states) + "\n")
+
 
 _GATE_DESERIALIZERS: dict[str, GateTransform] = {}
+
+# Abbreviated labels used by Circuit.render_schematic for each built-in gate.
+# A gate name not listed here (a custom-registered gate) falls back to its
+# first five characters -- see _render_gate_label.
+_GATE_LABEL_ABBREVIATIONS = {
+    "BeamSplitter": "BS",
+    "Noise": "LOSS",
+    "Squeezer": "SQZ",
+    "Rotator": "PHASE",
+    "Displacer": "DISP",
+    "ThermalLoss": "TLOSS",
+    "InitialState": "INIT",
+}
+
+
+def _render_gate_label(gate: Gate) -> tuple[str, int]:
+    """Pick the abbreviated gate type and parameter for one schematic block."""
+    param_str = ""
+    for key, symbol in (("eta", "η"), ("phi", "φ"), ("r", "r"), ("alpha", "α")):
+        if key in gate.kwargs:
+            value = gate.kwargs[key]
+            param_str = f" {symbol}={value:.2f}" if key == "phi" else f" {symbol}={value}"
+            break
+    type_name = _GATE_LABEL_ABBREVIATIONS.get(gate.name, gate.name[:5])
+    label = f" {type_name}{param_str} "
+    return label, max(len(label) + 2, 12)
+
 
 TOL_ZERO_ENTRY = 1e-9
 TOL_TRACE_WARN = 1e-6
