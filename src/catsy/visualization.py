@@ -7,6 +7,8 @@ This makes them useful both in notebooks and in automated documentation/tests.
 
 from __future__ import annotations
 
+from typing import cast
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Ellipse
@@ -38,7 +40,7 @@ def plot_covariance_matrix(
     if ax is None:
         fig, ax = plt.subplots(figsize=(max(5.0, 0.9 * len(state.modes) + 2), 4.8))
     else:
-        fig = ax.figure
+        fig = cast(plt.Figure, ax.figure)
 
     labels = [f"{q}_{mode}" for mode in state.modes for q in ("x", "p")]
     covariance = state.covariance
@@ -93,11 +95,11 @@ def plot_phase_space(
     if ax is None:
         fig, ax = plt.subplots(figsize=(5.6, 5.2))
     else:
-        fig = ax.figure
+        fig = cast(plt.Figure, ax.figure)
 
     widths = 2.0 * n_sigma * np.sqrt(np.maximum(eigenvalues, 0.0))
     ellipse = Ellipse(
-        xy=mean,
+        xy=(float(mean[0]), float(mean[1])),
         width=float(widths[0]),
         height=float(widths[1]),
         angle=angle,
@@ -151,7 +153,7 @@ def plot_wigner(
     if ax is None:
         fig, ax = plt.subplots(figsize=(6.0, 5.2))
     else:
-        fig = ax.figure
+        fig = cast(plt.Figure, ax.figure)
 
     image = ax.pcolormesh(X, P, wigner, shading="auto", cmap="magma")
     ax.contour(X, P, wigner, levels=6, colors="white", linewidths=0.45, alpha=0.65)
