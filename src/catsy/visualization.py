@@ -206,58 +206,19 @@ def animate_phase_space(states: Sequence[GaussianState], mode_name: str, *, time
         fig, ax = plt.subplots(figsize=(7.0, 6.2))
     else:
         fig = cast(plt.Figure, ax.figure)
-<<<<<<< HEAD
     ax.plot(means[:,0], means[:,1], ls="--", lw=0.8, alpha=0.20, label="full trajectory")
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    ax.plot(means[:, 0], means[:, 1], linestyle="--", linewidth=0.8, alpha=0.20, label="full trajectory")
-=======
-    ax.plot(
-        means[:, 0],
-        means[:, 1],
-        linestyle="--",
-        linewidth=0.8,
-        alpha=0.20,
-        label="full trajectory",
-    )
->>>>>>> c8f90ed (fixup! mostly fixed)
     _set_phase_limits(ax, means, covariances, n_sigma)
     _style_phase_axes(ax)
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
-<<<<<<< HEAD
     ax.set_title(f"Gaussian phase-space dynamics — mode {mode_name}", pad=16, fontweight="medium")
     _state_header(ax, sequence[0], mode_name)
     point, = ax.plot([], [], marker="o", ls="None", ms=8, zorder=6, label="current")
     trail, = ax.plot([], [], lw=2.2, zorder=5, label="elapsed trajectory")
     ellipse = Ellipse((0,0), 0, 0, fill=False, lw=2.2, zorder=5)
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    ax.set_title(f"Gaussian phase-space dynamics — mode {mode_name}", pad=16, fontweight="medium")
-
-    point, = ax.plot([], [], marker="o", linestyle="None", markersize=8, zorder=6, label="current")
-    trail, = ax.plot([], [], linewidth=2.2, zorder=5, label="elapsed trajectory")
-    ellipse = Ellipse((0.0, 0.0), 0.0, 0.0, fill=False, linewidth=2.2, zorder=5)
-=======
-    ax.set_title(
-        f"Gaussian phase-space dynamics — mode {mode_name}", pad=16, fontweight="medium"
-    )
-
-    (point,) = ax.plot(
-        [], [], marker="o", linestyle="None", markersize=8, zorder=6, label="current"
-    )
-    (trail,) = ax.plot([], [], linewidth=2.2, zorder=5, label="elapsed trajectory")
-    ellipse = Ellipse((0.0, 0.0), 0.0, 0.0, fill=False, linewidth=2.2, zorder=5)
->>>>>>> c8f90ed (fixup! mostly fixed)
     ax.add_patch(ellipse)
-<<<<<<< HEAD
     major, = ax.plot([], [], lw=1.2, zorder=5)
     minor, = ax.plot([], [], lw=0.9, ls="--", zorder=5)
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    major_axis, = ax.plot([], [], linewidth=1.2, zorder=5)
-    minor_axis, = ax.plot([], [], linewidth=0.9, linestyle="--", zorder=5)
-=======
-    (major_axis,) = ax.plot([], [], linewidth=1.2, zorder=5)
-    (minor_axis,) = ax.plot([], [], linewidth=0.9, linestyle="--", zorder=5)
->>>>>>> c8f90ed (fixup! mostly fixed)
     state_text = ax.text(0.03, 0.97, "", transform=ax.transAxes, va="top", fontsize=9)
     time_text = ax.text(0.03, 0.90, "", transform=ax.transAxes, va="top", fontsize=11)
     stats_text = ax.text(0.03, 0.035, "", transform=ax.transAxes, va="bottom", fontsize=9)
@@ -280,40 +241,9 @@ def animate_phase_space(states: Sequence[GaussianState], mode_name: str, *, time
             line.set_data([mean[0]-vector[0]*length, mean[0]+vector[0]*length],
                           [mean[1]-vector[1]*length, mean[1]+vector[1]*length])
         state_text.set_text(_state_summary(state, mode_name))
-<<<<<<< HEAD
         time_text.set_text(f"t = {times[frame]:g}" if times is not None else f"step {frame+1} / {len(sequence)}")
         stats_text.set_text(f"σ₁ {np.sqrt(values[0]):.3g}   σ₂ {np.sqrt(values[1]):.3g}   det(V) {np.linalg.det(covariance):.3g}")
         return point, trail, ellipse, major, minor, state_text, time_text, stats_text
-||||||| parent of c8f90ed (fixup! mostly fixed)
-        time_text.set_text(
-            f"t = {times[frame]:g}" if times is not None else f"step {frame + 1} / {len(sequence)}"
-        )
-        stats_text.set_text(
-            f"σ₁ {np.sqrt(values[0]):.3g}   σ₂ {np.sqrt(values[1]):.3g}   "
-            f"det(V) {np.linalg.det(covariance):.3g}"
-        )
-        return point, trail, ellipse, major_axis, minor_axis, state_text, time_text, stats_text
-=======
-        time_text.set_text(
-            f"t = {times[frame]:g}"
-            if times is not None
-            else f"step {frame + 1} / {len(sequence)}"
-        )
-        stats_text.set_text(
-            f"σ₁ {np.sqrt(values[0]):.3g}   σ₂ {np.sqrt(values[1]):.3g}   "
-            f"det(V) {np.linalg.det(covariance):.3g}"
-        )
-        return (
-            point,
-            trail,
-            ellipse,
-            major_axis,
-            minor_axis,
-            state_text,
-            time_text,
-            stats_text,
-        )
->>>>>>> c8f90ed (fixup! mostly fixed)
 
     animation = FuncAnimation(
         fig, update, frames=len(sequence), interval=interval, blit=False, repeat=repeat
@@ -328,20 +258,8 @@ def plot_covariance_evolution(states: Sequence[GaussianState], mode_name: str, *
     sequence = _states(states)
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
-<<<<<<< HEAD
     x = np.arange(len(sequence), dtype=float) if times is None else np.asarray(times, dtype=float)
     values = np.array([_mode_geometry(s, mode_name)[1] for s in sequence])
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    x = np.arange(len(sequence), dtype=float) if times is None else np.asarray(times, dtype=float)
-    values = np.array([_mode_geometry(state, mode_name)[1] for state in sequence])
-=======
-    x = (
-        np.arange(len(sequence), dtype=float)
-        if times is None
-        else np.asarray(times, dtype=float)
-    )
-    values = np.array([_mode_geometry(state, mode_name)[1] for state in sequence])
->>>>>>> c8f90ed (fixup! mostly fixed)
     if ax is None:
         fig, ax = plt.subplots(figsize=(7.0, 4.6))
     else:
@@ -371,36 +289,9 @@ def plot_diagnostics(states: Sequence[GaussianState], *, times: Sequence[float] 
     sequence = _states(states)
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
-<<<<<<< HEAD
     x = np.arange(len(sequence), dtype=float) if times is None else np.asarray(times, dtype=float)
     purity = np.array([1.0 / (2.0 ** len(s.modes) * np.sqrt(max(np.linalg.det(s.covariance), np.finfo(float).tiny))) for s in sequence])
     minimum_nu = np.array([np.min(_symplectic_eigenvalues(s.covariance)) for s in sequence])
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    x = np.arange(len(sequence), dtype=float) if times is None else np.asarray(times, dtype=float)
-    purity = np.array(
-        [1.0 / (2.0 ** len(state.modes) * np.sqrt(max(np.linalg.det(state.covariance), np.finfo(float).tiny))) for state in sequence]
-    )
-    minimum_nu = np.array([np.min(_symplectic_eigenvalues(state.covariance)) for state in sequence])
-=======
-    x = (
-        np.arange(len(sequence), dtype=float)
-        if times is None
-        else np.asarray(times, dtype=float)
-    )
-    purity = np.array(
-        [
-            1.0
-            / (
-                2.0 ** len(state.modes)
-                * np.sqrt(max(np.linalg.det(state.covariance), np.finfo(float).tiny))
-            )
-            for state in sequence
-        ]
-    )
-    minimum_nu = np.array(
-        [np.min(_symplectic_eigenvalues(state.covariance)) for state in sequence]
-    )
->>>>>>> c8f90ed (fixup! mostly fixed)
     if ax is None:
         fig, ax = plt.subplots(figsize=(7.0, 4.6))
     else:
@@ -440,21 +331,9 @@ def plot_wigner(state: GaussianState, mode_name: str, *, x_max: float = 4.0, num
         fig, ax = plt.subplots(figsize=(6.0, 5.2))
     else:
         fig = cast(plt.Figure, ax.figure)
-<<<<<<< HEAD
     scale = float(np.max(np.abs(W))) if vmax is None else vmax
     image = ax.pcolormesh(X, P, W, shading="auto", cmap="magma", vmin=vmin, vmax=scale)
     ax.contour(X, P, W, levels=7, colors="white", linewidths=0.45, alpha=0.60)
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    scale = float(np.max(np.abs(wigner))) if vmax is None else vmax
-    image = ax.pcolormesh(X, P, wigner, shading="auto", cmap="magma", vmin=vmin, vmax=scale)
-    ax.contour(X, P, wigner, levels=7, colors="white", linewidths=0.45, alpha=0.60)
-=======
-    scale = float(np.max(np.abs(wigner))) if vmax is None else vmax
-    image = ax.pcolormesh(
-        X, P, wigner, shading="auto", cmap="magma", vmin=vmin, vmax=scale
-    )
-    ax.contour(X, P, wigner, levels=7, colors="white", linewidths=0.45, alpha=0.60)
->>>>>>> c8f90ed (fixup! mostly fixed)
     mean, _ = _mode_geometry(state, mode_name)
     ax.scatter(
         [mean[0]], [mean[1]], marker="+", s=85, linewidths=1.5, color="white", zorder=4
@@ -478,18 +357,7 @@ def plot_wigner_evolution(states: Sequence[GaussianState], mode_name: str, *, ti
         raise ValueError("indices must contain at least one frame.")
     if any(i < 0 or i >= len(sequence) for i in selected):
         raise ValueError("indices contain an out-of-range frame.")
-<<<<<<< HEAD
     grids = [_wigner_grid(sequence[i], mode_name, x_max=x_max, num_points=num_points) for i in selected]
-||||||| parent of c8f90ed (fixup! mostly fixed)
-
-    grids = [_wigner_grid(sequence[index], mode_name, x_max=x_max, num_points=num_points) for index in selected]
-=======
-
-    grids = [
-        _wigner_grid(sequence[index], mode_name, x_max=x_max, num_points=num_points)
-        for index in selected
-    ]
->>>>>>> c8f90ed (fixup! mostly fixed)
     vmax = max(float(np.max(np.abs(grid[2]))) for grid in grids)
     fig, axes = plt.subplots(
         1, len(selected), figsize=(4.6 * len(selected), 4.5), squeeze=False
@@ -498,52 +366,18 @@ def plot_wigner_evolution(states: Sequence[GaussianState], mode_name: str, *, ti
     image = None
     for position, (index, (X, P, W)) in enumerate(zip(selected, grids)):
         ax = axes_flat[position]
-<<<<<<< HEAD
         image = ax.pcolormesh(X, P, W, shading="auto", cmap="magma", vmin=0.0, vmax=vmax)
         ax.contour(X, P, W, levels=7, colors="white", linewidths=0.45, alpha=0.60)
-||||||| parent of c8f90ed (fixup! mostly fixed)
-        image = ax.pcolormesh(X, P, wigner, shading="auto", cmap="magma", vmin=0.0, vmax=vmax)
-        ax.contour(X, P, wigner, levels=7, colors="white", linewidths=0.45, alpha=0.60)
-=======
-        image = ax.pcolormesh(
-            X, P, wigner, shading="auto", cmap="magma", vmin=0.0, vmax=vmax
-        )
-        ax.contour(X, P, wigner, levels=7, colors="white", linewidths=0.45, alpha=0.60)
->>>>>>> c8f90ed (fixup! mostly fixed)
         mean, _ = _mode_geometry(sequence[index], mode_name)
-<<<<<<< HEAD
         ax.scatter([mean[0]], [mean[1]], marker="+", s=75, linewidths=1.4, color="white")
-||||||| parent of c8f90ed (fixup! mostly fixed)
-        ax.scatter([mean[0]], [mean[1]], marker="+", s=75, linewidths=1.4, color="white", zorder=4)
-=======
-        ax.scatter(
-            [mean[0]],
-            [mean[1]],
-            marker="+",
-            s=75,
-            linewidths=1.4,
-            color="white",
-            zorder=4,
-        )
->>>>>>> c8f90ed (fixup! mostly fixed)
         _style_phase_axes(ax)
         ax.set_xlabel(r"$x$")
         ax.set_ylabel(r"$p$")
         label = f"t = {times[index]:g}" if times is not None else f"step {index}"
         ax.set_title(label, pad=12, fontweight="medium")
     assert image is not None
-<<<<<<< HEAD
     fig.colorbar(image, ax=axes_flat.tolist(), fraction=0.018, pad=0.03, label=r"$W(x,p)$")
     fig.suptitle(f"Wigner evolution — mode {mode_name}", y=1.02, fontsize=14)
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    fig.colorbar(image, ax=list(axes_flat), fraction=0.02, pad=0.03, label=r"$W(x,p)$")
-    fig.suptitle(f"Wigner evolution — mode {mode_name}", y=1.02, fontsize=14, fontweight="medium")
-=======
-    fig.colorbar(image, ax=list(axes_flat), fraction=0.02, pad=0.03, label=r"$W(x,p)$")
-    fig.suptitle(
-        f"Wigner evolution — mode {mode_name}", y=1.02, fontsize=14, fontweight="medium"
-    )
->>>>>>> c8f90ed (fixup! mostly fixed)
     return _finalize(fig, show)
 
 
@@ -553,20 +387,8 @@ def plot_evolution(states: Sequence[GaussianState], mode_name: str, *, times: Se
         raise ValueError("n_sigma must be positive.")
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
-<<<<<<< HEAD
     selected = [0, len(sequence)//2, len(sequence)-1] if wigner_indices is None else list(wigner_indices)
     if any(i < 0 or i >= len(sequence) for i in selected):
-||||||| parent of c8f90ed (fixup! mostly fixed)
-    selected = [0, len(sequence) // 2, len(sequence) - 1] if wigner_indices is None else list(wigner_indices)
-    if any(index < 0 or index >= len(sequence) for index in selected):
-=======
-    selected = (
-        [0, len(sequence) // 2, len(sequence) - 1]
-        if wigner_indices is None
-        else list(wigner_indices)
-    )
-    if any(index < 0 or index >= len(sequence) for index in selected):
->>>>>>> c8f90ed (fixup! mostly fixed)
         raise ValueError("wigner_indices contain an out-of-range frame.")
     fig = plt.figure(figsize=(13.5, 9.5), constrained_layout=True)
     grid = fig.add_gridspec(2, 2, height_ratios=(1.15, 0.85), hspace=0.12, wspace=0.16)
@@ -574,17 +396,7 @@ def plot_evolution(states: Sequence[GaussianState], mode_name: str, *, times: Se
     ax_cov = fig.add_subplot(grid[0, 1])
     ax_wig = fig.add_subplot(grid[1, 0])
     ax_diag = fig.add_subplot(grid[1, 1])
-<<<<<<< HEAD
     plot_phase_space_trajectory(sequence, mode_name, times=times, n_sigma=n_sigma, ax=ax_phase)
-||||||| parent of c8f90ed (fixup! mostly fixed)
-
-    plot_phase_space_trajectory(sequence, mode_name, times=times, n_sigma=n_sigma, ax=ax_phase)
-=======
-
-    plot_phase_space_trajectory(
-        sequence, mode_name, times=times, n_sigma=n_sigma, ax=ax_phase
-    )
->>>>>>> c8f90ed (fixup! mostly fixed)
     plot_covariance_evolution(sequence, mode_name, times=times, ax=ax_cov)
     snapshot = selected[-1]
     plot_wigner(sequence[snapshot], mode_name, ax=ax_wig)
