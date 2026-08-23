@@ -3,10 +3,13 @@ import json
 import numpy as np
 import pytest
 
+from catsy.core import Circuit, Gate
 from catsy.gaussian import (
-    GaussianCircuit,
+    GaussianState,
+    beam_splitter,
     compute_duan_inseparability,
     compute_joint_correlation,
+    squeeze,
 )
 from catsy.journal import JournalEntry, SimulationJournal
 
@@ -20,12 +23,32 @@ def test_log_run_can_record_a_run_without_a_circuit():
 
 
 def test_log_run_with_inline_circuit_embeds_full_definition():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.8, theta=0.0)
-    circuit.squeeze(mode="b", r=0.8, theta=np.pi / 2)
-    circuit.beam_splitter(mode_a="a", mode_b="b", eta=0.5)
-    final_state = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.8, "theta": 0.0},
+        )
+    )
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.8, "theta": np.pi / 2},
+        )
+    )
+    circuit.add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    )
+    final_state = circuit.run(GaussianState.vacuum(("a", "b")))
 
     P, X_a, X_b, _, _ = compute_joint_correlation(final_state, "a", "b", quadrature="x")
 
@@ -55,7 +78,7 @@ def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
     entry = JournalEntry(title="Payload shapes")
     run = entry.log_run(
         "run",
-        circuit=GaussianCircuit(),
+        circuit=Circuit(),
         arrays={
             "raw": np.array([1.0, 2.0]),
             "annotated": {
@@ -81,7 +104,7 @@ def test_log_run_accepts_raw_array_or_annotated_dict_payloads():
 def test_log_run_rejects_array_dict_payload_missing_data_key():
     entry = JournalEntry(title="Bad payload")
     with pytest.raises(ValueError):
-        entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": {"unit": "V"}})
+        entry.log_run("run", circuit=Circuit(), arrays={"x": {"unit": "V"}})
 
 
 def test_get_array_raises_for_unknown_key():
@@ -92,7 +115,7 @@ def test_get_array_raises_for_unknown_key():
 
 def test_get_final_state_raises_when_run_has_none_logged():
     entry = JournalEntry(title="No final state")
-    run = entry.log_run("run", circuit=GaussianCircuit())
+    run = entry.log_run("run", circuit=Circuit())
     with pytest.raises(ValueError):
         entry.get_final_state(run)
 
@@ -118,9 +141,7 @@ def test_to_dict_matches_schema_and_excludes_array_data():
         title="Schema Test",
         metadata={"purpose": "regression", "temperature": 4.2},
     )
-    entry.log_run(
-        "run", circuit=GaussianCircuit(), metrics={"purity": 1.0}, arrays={"x": [1, 2]}
-    )
+    entry.log_run("run", circuit=Circuit(), metrics={"purity": 1.0}, arrays={"x": [1, 2]})
 
     serialized = entry.to_dict()
     assert serialized["schema_version"] == "2.1.0"
@@ -136,7 +157,7 @@ def test_to_dict_matches_schema_and_excludes_array_data():
 
 def test_save_writes_only_json_when_entry_has_no_array_data(tmp_path):
     entry = JournalEntry(title="No arrays")
-    entry.log_run("run", circuit=GaussianCircuit(), metrics={"purity": 1.0})
+    entry.log_run("run", circuit=Circuit(), metrics={"purity": 1.0})
 
     saved_path = entry.save(tmp_path)
 
@@ -147,7 +168,7 @@ def test_save_writes_only_json_when_entry_has_no_array_data(tmp_path):
 
 def test_save_writes_a_companion_npz_when_arrays_are_logged(tmp_path):
     entry = JournalEntry(title="Has arrays")
-    entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": [1.0, 2.0, 3.0]})
+    entry.log_run("run", circuit=Circuit(), arrays={"x": [1.0, 2.0, 3.0]})
 
     saved_path = entry.save(tmp_path)
 
@@ -160,7 +181,7 @@ def test_save_writes_a_companion_npz_when_arrays_are_logged(tmp_path):
 def test_save_creates_missing_directories(tmp_path):
     deep_dir = tmp_path / "deep" / "nested" / "sub" / "folder"
     entry = JournalEntry(title="Deep Path Test")
-    entry.log_run("run", circuit=GaussianCircuit())
+    entry.log_run("run", circuit=Circuit())
 
     saved_path = entry.save(deep_dir)
 
@@ -172,13 +193,13 @@ def test_save_and_load_roundtrip_preserves_runs_and_arrays(tmp_path):
     entry = JournalEntry(title="E2E Integration Test", tags=["e2e"])
     entry.log_run(
         "Sweep Point A",
-        circuit=GaussianCircuit(),
+        circuit=Circuit(),
         metrics={"fidelity": 0.95},
         arrays={"quadratures": {"data": [1.2, 3.4], "unit": "Squeezing Level"}},
     )
     entry.log_run(
         "Sweep Point B",
-        circuit=GaussianCircuit(),
+        circuit=Circuit(),
         metrics={"fidelity": 0.88},
         arrays={"quadratures": {"data": [5.6, 7.8], "unit": "Squeezing Level"}},
     )
@@ -202,11 +223,11 @@ def test_resaving_after_reload_preserves_previously_logged_arrays(tmp_path):
     """Loading an entry back and logging a *new* run shouldn't lose the
     arrays that were already on disk from before the reload."""
     entry = JournalEntry(title="Grows over time")
-    entry.log_run("First run", circuit=GaussianCircuit(), arrays={"x": [1.0, 2.0]})
+    entry.log_run("First run", circuit=Circuit(), arrays={"x": [1.0, 2.0]})
     saved_path = entry.save(tmp_path)
 
     reloaded = JournalEntry.load(saved_path)
-    reloaded.log_run("Second run", circuit=GaussianCircuit(), arrays={"y": [3.0, 4.0]})
+    reloaded.log_run("Second run", circuit=Circuit(), arrays={"y": [3.0, 4.0]})
     reloaded.save(tmp_path)
 
     fully_reloaded = JournalEntry.load(saved_path)
@@ -224,7 +245,7 @@ def test_close_releases_the_companion_npz_handle(tmp_path):
     # analysis scripts that load many entries in a loop would leak open file
     # descriptors.
     entry = JournalEntry(title="Handle Lifecycle")
-    entry.log_run("Run", circuit=GaussianCircuit(), arrays={"x": [1.0, 2.0]})
+    entry.log_run("Run", circuit=Circuit(), arrays={"x": [1.0, 2.0]})
     saved_path = entry.save(tmp_path)
 
     reloaded = JournalEntry.load(saved_path)
@@ -269,7 +290,7 @@ def test_new_entry_accepts_custom_metadata(tmp_path):
 def test_load_entry_resolves_the_id_to_its_saved_file(tmp_path):
     journal = SimulationJournal(tmp_path / "runs")
     entry = journal.new_entry(title="Findable entry")
-    entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": [1.0]})
+    entry.log_run("run", circuit=Circuit(), arrays={"x": [1.0]})
     entry.save(journal.storage_path)
 
     reloaded = journal.load_entry(entry.entry_id)
@@ -284,12 +305,12 @@ def test_fetch_history_summary_orders_entries_most_recent_first(tmp_path):
 
     older = journal.new_entry(title="Older run")
     older.timestamp = "2024-01-01T00:00:00"
-    older.log_run("run", circuit=GaussianCircuit())
+    older.log_run("run", circuit=Circuit())
     older.save(journal.storage_path)
 
     newer = journal.new_entry(title="Newer run")
     newer.timestamp = "2024-06-01T00:00:00"
-    newer.log_run("run", circuit=GaussianCircuit())
+    newer.log_run("run", circuit=Circuit())
     newer.save(journal.storage_path)
 
     summaries = journal.fetch_history_summary()
@@ -327,7 +348,7 @@ def test_find_filters_by_tag_and_title(tmp_path):
 def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monkeypatch):
     journal = SimulationJournal(tmp_path / "runs")
     entry = journal.new_entry(title="Has a big array")
-    entry.log_run("run", circuit=GaussianCircuit(), arrays={"x": np.zeros(1000)})
+    entry.log_run("run", circuit=Circuit(), arrays={"x": np.zeros(1000)})
     entry.save(journal.storage_path)
 
     original_np_load = np.load
@@ -348,12 +369,32 @@ def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monke
 
 
 def test_journal_records_a_full_circuit_experiment(tmp_path):
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.8, theta=0.0)
-    circuit.squeeze(mode="b", r=0.8, theta=np.pi / 2)
-    circuit.beam_splitter(mode_a="a", mode_b="b", eta=0.5)
-    result = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.8, "theta": 0.0},
+        )
+    )
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.8, "theta": np.pi / 2},
+        )
+    )
+    circuit.add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    )
+    result = circuit.run(GaussianState.vacuum(("a", "b")))
     duan_score = compute_duan_inseparability(result, "a", "b")
 
     journal = SimulationJournal(tmp_path / "journal_store")

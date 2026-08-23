@@ -2,8 +2,15 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from catsy.fock import FockOperations
-from catsy.gaussian import GaussianCircuit, GaussianState, LossChannels
+from catsy.core import Circuit, Gate
+from catsy.fock import FockGates
+from catsy.gaussian import (
+    GaussianState,
+    LossChannels,
+    beam_splitter,
+    squeeze,
+    thermal_loss,
+)
 
 # Gaussian -> Fock bridge
 
@@ -40,14 +47,37 @@ def test_cv_channel_to_fock_purity_drops_with_loss():
 
 
 def test_qo_epr_purity_drops_below_one_after_loss():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.6, theta=0.0).squeeze(
-        mode="b", r=0.6, theta=np.pi / 2
-    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5).thermal_loss(
-        mode="b", eta=0.7, n_thermal=0.3
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.6, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.6, "theta": np.pi / 2},
+        )
+    ).add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    ).add_gate(
+        Gate(
+            name="ThermalLoss",
+            transform=thermal_loss,
+            modes=("b",),
+            kwargs={"eta": 0.7, "n_thermal": 0.3},
+        )
     )
-    final_cv_state = circuit.compile_and_run()
+    final_cv_state = circuit.run(GaussianState.vacuum(("a", "b")))
     rho_qutip = final_cv_state.to_qutip(N_cutoff=15)
 
     purity = (rho_qutip * rho_qutip).tr().real
@@ -58,13 +88,19 @@ def test_qo_epr_purity_drops_below_one_after_loss():
 
 
 def test_photon_subtraction_state_and_rho_entry_points_agree():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a")
-    circuit.squeeze(mode="a", r=0.55)
-    gaussian_squeezed = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.55, "theta": 0.0},
+        )
+    )
+    gaussian_squeezed = circuit.run(GaussianState.vacuum(("a",)))
 
     rho = gaussian_squeezed.to_qutip(N_cutoff=25)
-    via_rho = FockOperations.photon_subtraction(rho, mode_idx=0, N_cutoff=25)
+    via_rho = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=25)
 
     # The Fock API takes the QuTiP representation directly. The operation is
     # heralded, so its output should remain a normalized density matrix.
@@ -75,22 +111,22 @@ def test_photon_subtraction_zero_probability_raises():
     N_cutoff = 5
     vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     with pytest.raises(ValueError):
-        FockOperations.photon_subtraction(vacuum, mode_idx=0, N_cutoff=N_cutoff)
+        FockGates.photon_subtraction(vacuum, mode_idx=0, N_cutoff=N_cutoff)
 
 
-def test_fock_operations_reject_incompatible_cutoff_and_mode():
+def test_fock_gates_reject_incompatible_cutoff_and_mode():
     rho = qt.ket2dm(qt.fock(8, 0))
 
     with pytest.raises(ValueError, match="N_cutoff"):
-        FockOperations.photon_subtraction(rho, N_cutoff=10)
+        FockGates.photon_subtraction(rho, N_cutoff=10)
 
     with pytest.raises(ValueError, match="mode_idx"):
-        FockOperations.photon_subtraction(rho, mode_idx=1, N_cutoff=8)
+        FockGates.photon_subtraction(rho, mode_idx=1, N_cutoff=8)
 
 
-def test_fock_operations_are_the_single_implementation_for_photon_ops():
-    assert FockOperations.photon_subtraction.__module__ == "catsy.fock"
-    assert FockOperations.photon_addition.__module__ == "catsy.fock"
+def test_fock_gates_are_the_single_implementation_for_photon_ops():
+    assert FockGates.photon_subtraction.__module__ == "catsy.fock"
+    assert FockGates.photon_addition.__module__ == "catsy.fock"
 
 
 def test_photon_addition_on_vacuum_gives_exact_single_photon_fock_state():
@@ -101,13 +137,13 @@ def test_photon_addition_on_vacuum_gives_exact_single_photon_fock_state():
     # so this pins down correctness rather than just "didn't crash".
     N_cutoff = 10
     vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
-    result = FockOperations.photon_addition(vacuum, mode_idx=0, N_cutoff=N_cutoff)
+    result = FockGates.photon_addition(vacuum, mode_idx=0, N_cutoff=N_cutoff)
     expected = qt.ket2dm(qt.fock(N_cutoff, 1))
     assert result.tr() == pytest.approx(1.0, abs=1e-10)
     assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-10)
 
 
-def test_photon_operations_act_only_on_the_selected_mode():
+def test_photon_gates_act_only_on_the_selected_mode():
     # _mode_operator's multi-mode embedding branch (n_modes > 1) is only
     # exercised by an operation targeting one mode of a multi-mode state --
     # every other fock.py test here uses a single-mode state. Addition on
@@ -116,21 +152,17 @@ def test_photon_operations_act_only_on_the_selected_mode():
     two_mode_vacuum = qt.tensor(
         qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 0))
     )
-    result = FockOperations.photon_addition(
-        two_mode_vacuum, mode_idx=1, N_cutoff=N_cutoff
-    )
+    result = FockGates.photon_addition(two_mode_vacuum, mode_idx=1, N_cutoff=N_cutoff)
     expected = qt.tensor(qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 1)))
     assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-10)
 
 
-def test_fock_operations_reject_non_qobj_and_non_operator_input():
+def test_fock_gates_reject_non_qobj_and_non_operator_input():
     N_cutoff = 5
     with pytest.raises(TypeError, match="Qobj"):
-        FockOperations.photon_subtraction(np.eye(N_cutoff), mode_idx=0, N_cutoff=N_cutoff)
+        FockGates.photon_subtraction(np.eye(N_cutoff), mode_idx=0, N_cutoff=N_cutoff)
     with pytest.raises(ValueError, match="operator"):
-        FockOperations.photon_subtraction(
-            qt.fock(N_cutoff, 0), mode_idx=0, N_cutoff=N_cutoff
-        )
+        FockGates.photon_subtraction(qt.fock(N_cutoff, 0), mode_idx=0, N_cutoff=N_cutoff)
 
 
 # Visual diagnostics
@@ -140,9 +172,16 @@ def test_fock_operations_reject_non_qobj_and_non_operator_input():
 def test_native_qutip_wigner_plot_demo():
     import matplotlib.pyplot as plt
 
-    state = GaussianCircuit().add_mode("a")
-    state.squeeze(mode="a", r=0.6, theta=0.0)
-    cv_state = state.compile_and_run()
+    state = Circuit().add_mode("a")
+    state.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.6, "theta": 0.0},
+        )
+    )
+    cv_state = state.run(GaussianState.vacuum(("a",)))
     rho = cv_state.to_qutip(N_cutoff=15)
 
     xvec = np.linspace(-5, 5, 150)

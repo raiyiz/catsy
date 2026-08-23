@@ -18,21 +18,22 @@ This closing chapter summarizes the previous nine chapters into a practical over
   stroke: 0.5pt + gray.lighten(40%),
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
-  [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianCircuit`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
-  [#src-link("src/catsy/fock.py")], [`FockOperations`: photon addition/subtraction on QuTiP states (Chapter 7).],
-  [#src-link("src/catsy/optics.py")], [`OpticalSetup`/`OpticalComponent`: reusable bench layouts (Chapter 8); `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7).],
+  [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/core.py")], [`Circuit` (generic executable gate sequence).],
+  [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
+  [#src-link("src/catsy/optics.py")], [`KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 
-There is no separate compatibility-shim or simulation-only module: `FockOperations` lives in `catsy.fock`, and `KerrCavity`/`MachZehnderInterferometer` live alongside `OpticalSetup` in `catsy.optics`, since all three model specific pieces of optical hardware rather than generic phase-space transformations. Imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
+There is no separate compatibility-shim or simulation-only module: `FockGates` lives in `catsy.fock`, and `KerrCavity`/`MachZehnderInterferometer` live in `catsy.optics`, since both model specific pieces of optical hardware rather than generic phase-space transformations. Imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
 
 ```python
 from catsy import (
     GaussianState, GaussianChannel, LossChannels,
-    GaussianCircuit, GaussianMeasurements,
+    Circuit, GaussianMeasurements,
     compute_wigner_analytically, compute_joint_correlation, compute_duan_inseparability,
-    FockOperations, KerrCavity, MachZehnderInterferometer,
-    OpticalSetup, JournalEntry, SimulationJournal,
+    FockGates, KerrCavity, MachZehnderInterferometer,
+    JournalEntry, SimulationJournal,
 )
 ```
 
@@ -57,19 +58,15 @@ For a single-mode squeezed vacuum state with squeezing strength $r$ and $theta =
 
 == Two typical workflows
 
-*Declarative, via `GaussianCircuit` (Chapter 3):* a `GaussianCircuit` describes the gate sequence, and `compile_and_run` executes it against an initial state (default: vacuum).
+*Declarative, via `Circuit` (Chapter 3):* a `Circuit` describes the ordered gate sequence, and `run` executes it against an explicitly supplied initial state.
 
 ```python
-from catsy import GaussianCircuit, GaussianState
+from catsy import Circuit, GaussianState, loss
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
-circuit = (
-    GaussianCircuit()
-    .add_mode("a")
-    .add_mode("b")
-    .loss("a", eta=0.9)
-)
-final = circuit.compile_and_run(initial_state=initial)
+circuit = Circuit().add_mode("a").add_mode("b")
+circuit.add_gate(loss, ("a",), eta=0.9)
+final = circuit.run(initial)
 ```
 
 *Direct, gate by gate (Chapters 2 and 5):* for exploratory use, where every intermediate state should be inspected.
@@ -82,7 +79,7 @@ state = state.squeeze("a", r=0.5)
 state = state.displace("a", alpha=0.4 + 0.2j)
 ```
 
-Both paths produce identical `GaussianState` objects and can be freely mixed: a directly constructed state can be fed as `initial_state` into `compile_and_run` (as in the first example), and a compiled final state can subsequently be processed further with `GaussianState` methods directly.
+Both paths produce identical `GaussianState` objects and can be freely mixed: a directly constructed state can be fed as `initial_state` into `run` (as in the first example), and a compiled final state can subsequently be processed further with `GaussianState` methods directly.
 
 == Test suite
 

@@ -7,7 +7,7 @@ import qutip as qt
 from .core import TOL_PHYSICALITY, _check_positive_int
 
 
-class FockOperations:
+class FockGates:
     """Primitive photon operations acting directly on QuTiP states.
 
     The Fock layer deliberately operates on QuTiP objects.  Conversion from a
@@ -78,11 +78,9 @@ class FockOperations:
         ``rho`` must already be represented in the QuTiP Fock basis.  For a
         Gaussian state, call ``state.to_qutip(N_cutoff=...)`` first.
         """
-        n_modes = FockOperations._validate_state(rho, N_cutoff, mode_idx)
-        a_op = FockOperations._mode_operator(
-            qt.destroy(N_cutoff), n_modes, mode_idx, N_cutoff
-        )
-        return FockOperations._apply_and_renormalize(rho, a_op, "photon_subtraction")
+        n_modes = FockGates._validate_state(rho, N_cutoff, mode_idx)
+        a_op = FockGates._mode_operator(qt.destroy(N_cutoff), n_modes, mode_idx, N_cutoff)
+        return FockGates._apply_and_renormalize(rho, a_op, "photon_subtraction")
 
     @staticmethod
     def photon_addition(
@@ -95,8 +93,8 @@ class FockOperations:
         ``rho`` must already be represented in the QuTiP Fock basis.  For a
         Gaussian state, call ``state.to_qutip(N_cutoff=...)`` first.
         """
-        n_modes = FockOperations._validate_state(rho, N_cutoff, mode_idx)
-        adag_op = FockOperations._mode_operator(
+        n_modes = FockGates._validate_state(rho, N_cutoff, mode_idx)
+        adag_op = FockGates._mode_operator(
             qt.create(N_cutoff), n_modes, mode_idx, N_cutoff
         )
-        return FockOperations._apply_and_renormalize(rho, adag_op, "photon_addition")
+        return FockGates._apply_and_renormalize(rho, adag_op, "photon_addition")

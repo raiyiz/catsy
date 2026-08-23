@@ -23,18 +23,21 @@ The default branch publishes the latest interactive HTML coverage report through
 ## Quick start
 
 ```python
-from catsy import GaussianCircuit, GaussianState
+from catsy import Circuit, GaussianState, Gate, loss
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
 
-circuit = (
-    GaussianCircuit()
-    .add_mode("a")
-    .add_mode("b")
-    .loss("a", eta=0.9)
+noise = Gate(
+    name="Noise",
+    transform=loss,
+    modes=("a",),
+    kwargs={"eta": 0.9},
 )
 
-final = circuit.compile_and_run(initial_state=initial)
+circuit = Circuit().add_mode("a").add_mode("b")
+circuit.add_gate(noise)
+
+final = circuit.run(initial)
 final.plot_covariance()
 ```
 
@@ -42,16 +45,16 @@ Here `r` is the squeezing strength and `eta` is the power transmissivity of the 
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L86) |
-| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L86) |
-| Build a sequence of operations              | [`GaussianCircuit`](src/catsy/gaussian.py#L641) |
-| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L516), [`GaussianChannel`](src/catsy/gaussian.py#L453) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L805) |
-| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L86) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L932) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L292) |
-| Define an optical layout                    | [`OpticalSetup`](src/catsy/optics.py#L168) |
-| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L354) |
+| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L85) |
+| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L85) |
+| Build a sequence of operations              | [`Circuit`](src/catsy/core.py) |
+| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L515), [`GaussianChannel`](src/catsy/gaussian.py#L452) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L653) |
+| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L85) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L780) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L291) |
+| Define an optical layout                    | [`Circuit`](src/catsy/core.py) |
+| Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
 
 States are represented in phase space by their first moments and covariance matrix. Common operations include:
@@ -75,28 +78,24 @@ state = state.displace(
 ```
 ## Circuits
 
-For a sequence of operations that you want to keep as a reusable experiment, `GaussianCircuit` provides an explicit representation:
+For a sequence of operations that you want to keep as a reusable experiment, `Circuit` provides an executable sequence independent of the Gaussian state implementation:
 
 ```python
-from catsy import GaussianCircuit, GaussianState
-import numpy as np
+from catsy import Circuit, GaussianState
 
 initial = GaussianState.vacuum(("a", "b"))
-
-circuit = (
-    GaussianCircuit()
-    .add_mode("a")
-    .add_mode("b")
-    .squeeze("a", r=0.7)
-    .squeeze("b", r=0.7, theta=np.pi / 2)
-    .beam_splitter("a", "b", eta=0.5)
-    .loss("a", eta=0.9)
-)
-
-final = circuit.compile_and_run(initial_state=initial)
+circuit = Circuit().add_mode("a").add_mode("b")
+circuit.squeeze("a", r=0.7, theta=0.0)
+circuit.beam_splitter("a", "b", eta=0.5)
+final = circuit.run(initial)
 ```
 
-Circuits can also be serialized and restored.
+Circuits can also be serialized and restored, and rendered as a plain-text schematic:
+
+```python
+circuit.render_schematic()   # -> str
+circuit.draw()                # prints it
+```
 
 ## Fock-space calculations
 
@@ -160,7 +159,7 @@ uv run pytest --plot
 | [`core.py`](src/catsy/core.py)         | conventions, validation, numerical helpers                          |
 | [`gaussian.py`](src/catsy/gaussian.py) | states, operations, channels, circuits, measurements                |
 | [`fock.py`](src/catsy/fock.py)         | Fock-space functionality                                             |
-| [`optics.py`](src/catsy/optics.py)     | optical layouts and QuTiP-based cavity/interferometer simulations   |
+| [`optics.py`](src/catsy/optics.py)     | QuTiP-based cavity/interferometer simulations                       |
 | [`journal.py`](src/catsy/journal.py)   | experiment persistence                                               |
 ## Documentation
 

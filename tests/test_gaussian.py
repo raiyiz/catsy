@@ -3,18 +3,23 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catsy.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
+from catsy.core import DUAN_SEPARABILITY_BOUND, Circuit, Gate, _williamson_decomposition
 from catsy.gaussian import (
     GaussianChannel,
-    GaussianCircuit,
     GaussianMeasurements,
     GaussianState,
     LossChannels,
+    beam_splitter,
     compute_duan_inseparability,
     compute_joint_correlation,
     compute_wigner_analytically,
+    displace,
+    loss,
     plot_joint_correlation,
     plot_wigner,
+    rotate,
+    squeeze,
+    thermal_loss,
 )
 
 # Analytic primitive checks
@@ -92,6 +97,27 @@ def test_beam_splitter_has_expected_coherent_amplitude_map(eta):
 
 
 # States and operations
+
+
+def test_gate_instances_use_the_explicit_gate_contract():
+    gates = (
+        Gate("Squeezer", squeeze, ("a",), {"r": 0.5}),
+        Gate("Rotator", rotate, ("a",), {"phi": 0.2}),
+        Gate("Displacer", displace, ("a",), {"alpha": 0.3 + 0.1j}),
+        Gate("BeamSplitter", beam_splitter, ("a", "b"), {"eta": 0.5}),
+        Gate("Noise", loss, ("a",), {"eta": 0.9}),
+        Gate("ThermalLoss", thermal_loss, ("a",), {"eta": 0.9, "n_thermal": 0.2}),
+    )
+    assert [gate.name for gate in gates] == [
+        "Squeezer",
+        "Rotator",
+        "Displacer",
+        "BeamSplitter",
+        "Noise",
+        "ThermalLoss",
+    ]
+    assert all(callable(gate.transform) for gate in gates)
+    assert all(gate.modes for gate in gates)
 
 
 def test_vacuum_is_shot_noise_limited(two_mode_vacuum):
@@ -201,21 +227,35 @@ def test_circuit_displace_matches_manual_displacement():
         GaussianState.vacuum(("a",)).squeeze("a", r=0.3).displace("a", alpha=0.5 - 0.2j)
     )
 
-    circuit = GaussianCircuit().add_mode("a")
-    circuit.squeeze(mode="a", r=0.3).displace(mode="a", alpha=0.5 - 0.2j)
-    compiled = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.3, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Displacer",
+            transform=displace,
+            modes=("a",),
+            kwargs={"x": np.sqrt(2.0) * 0.5, "p": np.sqrt(2.0) * -0.2},
+        )
+    )
+    compiled = circuit.run(GaussianState.vacuum(("a",)))
 
     np.testing.assert_allclose(compiled.displacement, manual.displacement, atol=1e-10)
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 
 
-def test_circuit_add_mode_with_alpha_seeds_coherent_starting_state():
-    circuit = GaussianCircuit().add_mode("c", alpha=1.0 + 1.0j)
-    compiled = circuit.compile_and_run()
+def test_circuit_runs_against_explicit_initial_state():
+    circuit = Circuit().add_mode("c")
+    compiled = circuit.run(GaussianState.coherent(("c",), 1.0 + 1.0j))
     expected = GaussianState.coherent(("c",), 1.0 + 1.0j)
     np.testing.assert_allclose(compiled.displacement, expected.displacement)
 
-    overridden = circuit.compile_and_run(initial_state=GaussianState.vacuum(("c",)))
+    overridden = circuit.run(GaussianState.vacuum(("c",)))
     np.testing.assert_allclose(overridden.displacement, np.zeros(2))
 
 
@@ -255,8 +295,8 @@ def test_state_reorder_modes_rejects_wrong_mode_set(two_mode_vacuum):
 def test_circuit_canonicalizes_initial_state_mode_order():
     initial = GaussianState.coherent(("b", "a"), alphas=[0.0 + 1.0j, 1.0 + 0.0j])
 
-    circuit = GaussianCircuit().add_mode("a").add_mode("b")
-    result = circuit.compile_and_run(initial_state=initial)
+    circuit = Circuit().add_mode("a").add_mode("b")
+    result = circuit.run(initial)
     assert result.modes == ("a", "b")
 
     expected = GaussianState.coherent(("a", "b"), alphas=[1.0 + 0.0j, 0.0 + 1.0j])
@@ -415,7 +455,7 @@ def test_channel_dimension_validation(kwargs, match):
         GaussianChannel(target_modes=("a",), **kwargs)
 
 
-def test_circuit_matches_manual_operation_chain():
+def test_circuit_matches_manual_gate_chain():
     manual = (
         GaussianState.vacuum(("a", "b"))
         .squeeze("a", r=0.6, theta=0.0)
@@ -424,14 +464,37 @@ def test_circuit_matches_manual_operation_chain():
     )
     manual = LossChannels.thermal_loss(mode="b", eta=0.7, n_thermal=0.3).apply(manual)
 
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.6, theta=0.0).squeeze(
-        mode="b", r=0.6, theta=np.pi / 2
-    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5).thermal_loss(
-        mode="b", eta=0.7, n_thermal=0.3
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.6, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.6, "theta": np.pi / 2},
+        )
+    ).add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    ).add_gate(
+        Gate(
+            name="ThermalLoss",
+            transform=thermal_loss,
+            modes=("b",),
+            kwargs={"eta": 0.7, "n_thermal": 0.3},
+        )
     )
-    compiled = circuit.compile_and_run()
+    compiled = circuit.run(GaussianState.vacuum(("a", "b")))
 
     np.testing.assert_allclose(compiled.displacement, manual.displacement, atol=1e-10)
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
@@ -440,13 +503,15 @@ def test_circuit_matches_manual_operation_chain():
 def test_circuit_executes_the_callable_directly():
     calls = []
 
-    def my_operation(state, modes, **kwargs):
+    def my_gate(state, modes, **kwargs):
         calls.append((modes, kwargs))
         return state.rotate(modes[0], phi=kwargs["phi"])
 
-    circuit = GaussianCircuit().add_mode("a")
-    circuit.add_operation(my_operation, ("a",), phi=0.25)
-    result = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(name="MyGate", transform=my_gate, modes=("a",), kwargs={"phi": 0.25})
+    )
+    result = circuit.run(GaussianState.vacuum(("a",)))
 
     assert calls == [(("a",), {"phi": 0.25})]
     expected = GaussianState.vacuum(("a",)).rotate("a", phi=0.25)
@@ -462,60 +527,130 @@ def test_circuit_executes_the_callable_directly():
         (("a", "a"), "cannot target the same mode more than once"),
     ],
 )
-def test_add_operation_rejects_invalid_mode_tuples(modes, match):
-    # add_operation takes the modes tuple directly from the caller now (no
-    # intermediate CircuitOperation to normalize it first), so it owns this
-    # validation itself rather than delegating it -- previously untested.
-    def my_operation(state, modes, **kwargs):
+def test_add_gate_rejects_invalid_mode_tuples(modes, match):
+    # Gate owns its target modes, so Circuit validates the bound Gate here.
+    def my_gate(state, modes, **kwargs):
         return state
 
-    circuit = GaussianCircuit().add_mode("a")
+    circuit = Circuit().add_mode("a")
     with pytest.raises(ValueError, match=match):
-        circuit.add_operation(my_operation, modes)
+        circuit.add_gate(Gate(name="MyGate", transform=my_gate, modes=modes, kwargs={}))
 
 
 def test_circuit_rejects_unregistered_mode():
-    circuit = GaussianCircuit()
+    circuit = Circuit()
     circuit.add_mode("a")
-    circuit.squeeze(mode="z", r=0.5)
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("z",),
+            kwargs={"r": 0.5, "theta": 0.0},
+        )
+    )
     with pytest.raises(ValueError):
-        circuit.compile_and_run()
+        circuit.run(GaussianState.vacuum(("a",)))
 
 
 def test_circuit_rejects_empty_mode_set():
     with pytest.raises(ValueError):
-        GaussianCircuit().compile_and_run()
+        Circuit().run(GaussianState.vacuum(()))
 
 
 def test_circuit_rejects_duplicate_mode_registration():
-    circuit = GaussianCircuit().add_mode("a")
+    circuit = Circuit().add_mode("a")
     with pytest.raises(ValueError, match="already registered"):
         circuit.add_mode("a")
 
 
-def test_circuit_serializes_operation_function_name():
-    circuit = GaussianCircuit().add_mode("a")
-    circuit.squeeze(mode="a", r=0.4)
+def test_gate_instances_have_noun_names_and_transform_verbs():
+    squeezer = Gate("Squeezer", squeeze, ("a",), {"r": 0.5})
+    splitter = Gate("BeamSplitter", beam_splitter, ("a", "b"), {"eta": 0.5})
 
-    assert circuit.to_dict()["operations"] == [
-        {"name": "squeeze", "modes": ["a"], "kwargs": {"r": 0.4, "theta": 0.0}}
+    assert squeezer.name == "Squeezer"
+    assert squeezer.transform is squeeze
+    assert splitter.name == "BeamSplitter"
+    assert splitter.transform is beam_splitter
+
+
+def test_gate_applies_its_bound_transform():
+    gate = Gate("Squeezer", squeeze, ("a",), {"r": 0.5, "theta": 0.0})
+    state = GaussianState.vacuum(("a",))
+
+    result = gate.apply(state)
+    expected = state.squeeze("a", r=0.5, theta=0.0)
+
+    np.testing.assert_allclose(result.displacement, expected.displacement)
+    np.testing.assert_allclose(result.covariance, expected.covariance)
+
+
+def test_registered_gates_are_available_as_circuit_methods():
+    circuit = Circuit().add_mode("a").squeeze("a", r=0.4).displace("a", alpha=0.2 - 0.4j)
+
+    assert circuit.to_dict()["gates"] == [
+        {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4}},
+        {"gate": "Displacer", "modes": ["a"], "kwargs": {"alpha": 0.2 - 0.4j}},
     ]
 
 
-def test_circuit_register_is_only_for_custom_operation_deserialization():
-    def my_operation(state, modes, **kwargs):
+def test_circuit_gate_methods_build_without_executing():
+    circuit = Circuit().add_mode("a").squeeze("a", r=0.4, theta=0.0)
+    assert circuit.modes == ("a",)
+    assert circuit.run(GaussianState.vacuum(("a",))).modes == ("a",)
+
+
+def test_initial_state_gate_constructs_state():
+    circuit = (
+        Circuit().add_mode("a").initial_state("a", kind="coherent", alpha=0.7 + 0.2j)
+    )
+    result = circuit.run()
+    expected = GaussianState.coherent(("a",), 0.7 + 0.2j)
+    np.testing.assert_allclose(result.displacement, expected.displacement)
+    np.testing.assert_allclose(result.covariance, expected.covariance)
+
+
+def test_initial_state_gate_can_be_overridden_by_explicit_state():
+    circuit = Circuit().add_mode("a").initial_state("a", kind="coherent", alpha=2.0)
+    result = circuit.run(GaussianState.vacuum(("a",)))
+    np.testing.assert_allclose(result.displacement, np.zeros(2))
+
+
+def test_circuit_serializes_gate_name():
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.4, "theta": 0.0},
+        )
+    )
+
+    assert circuit.to_dict()["gates"] == [
+        {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4, "theta": 0.0}}
+    ]
+
+
+def test_circuit_register_is_only_for_custom_gate_deserialization():
+    def my_gate(state, modes, **kwargs):
         return state
 
-    GaussianCircuit.register("my_operation", my_operation)
-    try:
-        circuit = GaussianCircuit().add_mode("a")
-        circuit.add_operation(my_operation, ("a",), foo=1)
-        restored = GaussianCircuit.from_dict(circuit.to_dict())
-        assert restored.to_dict() == circuit.to_dict()
-    finally:
-        from catsy.gaussian import _OPERATION_DESERIALIZERS
+    Circuit.register("MyGate", my_gate)
 
-        del _OPERATION_DESERIALIZERS["my_operation"]
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(name="MyGate", transform=my_gate, modes=("a",), kwargs={"foo": 1})
+    )
+    restored = Circuit.from_dict(circuit.to_dict())
+    assert restored.to_dict() == circuit.to_dict()
+
+
+def test_circuit_register_requires_matching_gate_name():
+    def my_gate(state, modes, **kwargs):
+        return state
+
+    with pytest.raises(ValueError, match="non-empty"):
+        Circuit.register("", my_gate)
 
 
 def test_gaussian_state_roundtrips_through_dict():
@@ -538,46 +673,71 @@ def test_gaussian_state_roundtrips_through_file(tmp_path):
 
 
 def test_circuit_roundtrips_through_file(tmp_path):
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.6).squeeze(
-        mode="b", r=0.6, theta=np.pi / 2
-    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5)
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.6, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.6, "theta": np.pi / 2},
+        )
+    ).add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    )
     path = tmp_path / "circuit.json"
     circuit.save(path)
-    restored = GaussianCircuit.load(path)
-    original_result = circuit.compile_and_run()
-    restored_result = restored.compile_and_run()
+    restored = Circuit.load(path)
+    original_result = circuit.run(GaussianState.vacuum(("a", "b")))
+    restored_result = restored.run(GaussianState.vacuum(("a", "b")))
     np.testing.assert_allclose(restored_result.covariance, original_result.covariance)
 
 
-def test_circuit_roundtrips_seeded_coherent_alpha_through_file(tmp_path):
-    circuit = GaussianCircuit()
-    circuit.add_mode("a", alpha=0.5 + 1.3j).add_mode("b")
-    circuit.displace(mode="b", x=0.2, p=-0.4)
+def test_circuit_roundtrips_with_explicit_initial_state(tmp_path):
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Displacer",
+            transform=displace,
+            modes=("b",),
+            kwargs={"x": 0.2, "p": -0.4},
+        )
+    )
     path = tmp_path / "circuit.json"
     circuit.save(path)
-    restored = GaussianCircuit.load(path)
-    original_result = circuit.compile_and_run()
-    restored_result = restored.compile_and_run()
+    restored = Circuit.load(path)
+    initial = GaussianState.coherent(("a", "b"), [0.5 + 1.3j, 0.0])
+    original_result = circuit.run(initial)
+    restored_result = restored.run(initial)
     np.testing.assert_allclose(restored_result.displacement, original_result.displacement)
 
 
-def test_circuit_from_dict_rejects_unknown_operation():
+def test_circuit_from_dict_rejects_unknown_gate():
     # A hand-edited or corrupted saved circuit (or one produced by a newer
-    # catsy version using an operation function this one doesn't have
+    # custom Gate version this one doesn't have
     # registered for deserialization) must fail at load time with a clear
     # KeyError. Unlike on the pre-compactification API, this is now the
-    # *only* place an unknown operation name can be rejected: compile_and_run
+    # *only* place an unknown gate name can be rejected: Circuit.from_dict
     # executes whatever callable is already attached to the circuit
     # directly, with no name-based registry lookup left in the execution path.
     data = {
+        "name": "Bad",
         "modes": ["a"],
-        "initial_alphas": {},
-        "operations": [{"name": "NotARealOp", "modes": ["a"], "kwargs": {}}],
+        "gates": [{"gate": "NotARealOp", "modes": ["a"], "kwargs": {}}],
     }
     with pytest.raises(KeyError, match="NotARealOp"):
-        GaussianCircuit.from_dict(data)
+        Circuit.from_dict(data)
 
 
 @pytest.mark.parametrize(
@@ -589,23 +749,44 @@ def test_circuit_from_dict_rejects_unknown_operation():
     ],
 )
 def test_circuit_displace_rejects_invalid_argument_combinations(kwargs, match):
-    # The GaussianCircuit builder counterpart to
+    # The Circuit builder counterpart to
     # test_displacement_rejects_invalid_argument_combinations above: it has
-    # its own copy of the same alpha/(x, p) validation (CircuitOperation
+    # its own copy of the same alpha/(x, p) validation
     # stores plain (x, p) floats rather than a GaussianState-style call), so
     # it needs its own coverage rather than relying on the state-level test.
-    circuit = GaussianCircuit().add_mode("a")
-    with pytest.raises(ValueError, match=match):
-        circuit.displace(mode="a", **kwargs)
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(name="Displacer", transform=displace, modes=("a",), kwargs={**kwargs})
+    )
+    with pytest.raises((ValueError, KeyError), match=match):
+        circuit.run(GaussianState.vacuum(("a",)))
 
 
 def test_homodyne_measurement_collapses_tmsv_correlation():
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=1.0).squeeze(
-        mode="b", r=1.0, theta=np.pi / 2
-    ).beam_splitter(mode_a="a", mode_b="b", eta=0.5)
-    state = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 1.0, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 1.0, "theta": np.pi / 2},
+        )
+    ).add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
+    )
+    state = circuit.run(GaussianState.vacuum(("a", "b")))
     val, collapsed = GaussianMeasurements.homodyne_measurement(
         state, measured_mode="a", phi=0.0, outcome=2.5
     )
@@ -725,10 +906,16 @@ def test_heterodyne_rejects_nonfinite_effective_covariance():
 
 
 def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
-    circuit = GaussianCircuit()
-    circuit.add_mode("a")
-    circuit.squeeze(mode="a", r=1.1, theta=30.0)
-    test_state = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 1.1, "theta": 30.0},
+        )
+    )
+    test_state = circuit.run(GaussianState.vacuum(("a",)))
     test_state.displacement[0] = 2.0
     test_state.displacement[1] = 3.0
 
@@ -743,12 +930,30 @@ def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
 
 
 def test_joint_correlation_computes_valid_grid(plot_enabled):
-    circuit = GaussianCircuit()
-    circuit.add_mode("a").add_mode("b")
-    circuit.squeeze(mode="a", r=0.6).squeeze(mode="b", r=0.6, theta=np.pi).beam_splitter(
-        mode_a="a", mode_b="b", eta=0.5
+    circuit = Circuit().add_mode("a").add_mode("b")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.6, "theta": 0.0},
+        )
+    ).add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("b",),
+            kwargs={"r": 0.6, "theta": np.pi},
+        )
+    ).add_gate(
+        Gate(
+            name="BeamSplitter",
+            transform=beam_splitter,
+            modes=("a", "b"),
+            kwargs={"eta": 0.5},
+        )
     )
-    cv_state = circuit.compile_and_run()
+    cv_state = circuit.run(GaussianState.vacuum(("a", "b")))
     P, X_a, X_b, mode_a, mode_b = compute_joint_correlation(cv_state, "a", "b")
     assert P.shape == (150, 150)
     assert np.all(P >= 0)
@@ -908,9 +1113,16 @@ def test_phase_rotation_preserves_photon_number_and_purity():
 def test_circuit_rotate_matches_manual_rotation():
     manual = GaussianState.vacuum(("a",)).squeeze("a", r=0.5).rotate("a", phi=0.4)
 
-    circuit = GaussianCircuit().add_mode("a")
-    circuit.squeeze(mode="a", r=0.5).rotate(mode="a", phi=0.4)
-    compiled = circuit.compile_and_run()
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 0.5, "theta": 0.0},
+        )
+    ).add_gate(Gate(name="Rotator", transform=rotate, modes=("a",), kwargs={"phi": 0.4}))
+    compiled = circuit.run(GaussianState.vacuum(("a",)))
 
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 

@@ -3,50 +3,73 @@
 // ==========================================
 // CHAPTER 3
 // ==========================================
-= Chapter 3: Compiler Architecture & Extensible Gate Registry
+= Chapter 3: Circuit Architecture & Gate Serialization
 
-The `GaussianCircuit` class acts as the imperative sequencing layer of the toolkit. At the physics level, the circuit is a finite composition of Gaussian channels and unitaries; the resulting mathematical evolution remains within the Gaussian formalism described by #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)]. Its software design strictly separates the definition of the algorithmic gate sequence from the mathematical execution layer (*execution engine*). This keeps the system fully extensible without needing to modify the compiler core itself.
+The `Circuit` class is the generic imperative sequencing layer of the toolkit. It stores an ordered sequence of fully bound `Gate` instances over named modes. A `Gate` contains the stable noun-style gate name, its executable `transform`, the target `modes`, and the bound `kwargs`.
 
-== Callable operations and direct execution
-The circuit stores the executable operation itself rather than an intermediate `CircuitOperation` record. A Gaussian operation is a callable satisfying the `GaussianOperation` protocol:
+== Gate instances and direct execution
+The central abstraction is deliberately small:
 
 ```python
-class GaussianOperation(Protocol):
-    def __call__(
-        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
-    ) -> GaussianState: ...
+@dataclass(frozen=True)
+class Gate:
+    name: str
+    transform: GateTransform
+    modes: tuple[str, ...]
+    kwargs: dict[str, object]
+
+    def apply(self, state):
+        return self.transform(state, self.modes, **self.kwargs)
 ```
 
-The built-in operations are plain functions such as `squeeze`, `rotate`, `displace`, `beam_splitter`, `loss`, and `thermal_loss`. Higher-level domain objects can therefore attach a callable directly to a `GaussianCircuit`. There is no runtime string-to-function dispatch step.
+The mathematical transformations remain ordinary verb-named functions such as `squeeze`, `rotate`, `displace`, `beam_splitter`, `loss`, and `thermal_loss`. A concrete Gate instance binds one such transform to its noun-style identity and parameters:
 
-== Serialization uses the function name
-Function objects are intentionally kept out of JSON. When a circuit is serialized, each operation stores only the callable's bare Python `__name__`, together with its target modes and primitive parameters. For example:
+```python
+squeezer = Gate(
+    name="Squeezer",
+    transform=squeeze,
+    modes=("a",),
+    kwargs={"r": 0.5},
+)
+```
+
+The same Gate can be applied directly with `squeezer.apply(state)` or attached to a circuit with `circuit.add_gate(squeezer)`. Construction and attachment never execute the transformation.
+
+== Fluent circuit construction
+Registered transforms are also exposed as fluent Circuit methods. These methods construct the same kind of Gate instance and append it to the circuit:
+
+```python
+circuit.squeeze("a", r=0.5)
+circuit.displace("a", alpha=0.2)
+```
+
+The fluent call is therefore equivalent to constructing a Gate explicitly and passing it to `add_gate`. The verb is the transformation/function name; the bound Gate carries the noun-style name.
+
+== Serialization uses the Gate name
+Function objects are intentionally kept out of JSON. A serialized gate contains its stable noun-style `name`, target modes, and primitive parameters. For example:
 
 ```json
 {
-  "name": "beam_splitter",
+  "gate": "BeamSplitter",
   "modes": ["a", "b"],
   "kwargs": {"eta": 0.5}
 }
 ```
 
-The small deserialization mapping is used only when loading JSON; execution never consults it. This preserves the direct callable contract at runtime while keeping the file format simple. Custom callables can be registered for deserialization with `GaussianCircuit.register`; the circuit still executes the callable object that was attached to it.
+The registry maps serialized Gate names back to their transform functions when loading a circuit. Execution itself uses the transform already stored in each Gate instance.
 
-== Compilation and sequential execution
-The `compile_and_run` method resolves the initial state, validates that every operation targets a registered mode, and then invokes the stored callable directly:
+== Sequential execution
+The `run` method validates the Gate modes and then applies the bound Gates in order:
 
 ```python
-for idx, (op, modes, kwargs) in enumerate(self._operations):
-    for mode in modes:
-        if mode not in self.modes:
-            raise ValueError(...)
-    current_state = op(current_state, modes, **kwargs)
+for gate in self._gates:
+    current_state = gate.apply(current_state)
 ```
 
-This makes the execution path linear: callable operation -> `GaussianCircuit` -> `GaussianState`. The circuit does not need to understand the domain-specific origin of an operation.
+This gives a linear execution path: `Gate` → `transform` → state. The circuit does not need a separate operation record or execution wrapper.
 
 == State storage and roundtrip guarantee
-Circuits remain persistent through `save` and `load`. The runtime callable is replaced in the JSON representation by its bare function name, and the loader resolves that name back to a callable before attaching it to the reconstructed circuit. The per-mode initial amplitudes set via `add_mode(..., alpha=...)` round-trip alongside the operation list.
+Circuits remain persistent through `save` and `load`. Serialization stores only the Gate name, modes, and bound parameters; deserialization reconstructs a concrete Gate with the corresponding transform. A circuit can also contain an `InitialState` Gate. When present, `run()` can construct the initial state from that Gate; an explicit state passed to `run()` overrides it.
 
 
 === Literature

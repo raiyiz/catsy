@@ -1,18 +1,318 @@
-"""Shared numerical helpers and conventions for the CV phase-space layer."""
+"""Shared numerical helpers, conventions, and the generic executable circuit."""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import numpy as np
 import scipy.linalg
 
-from .types import FloatArray
+from .types import CircuitData, FloatArray, GateParameters, Modes, ParameterValue
 
 if TYPE_CHECKING:
     from .gaussian import GaussianState
+
+
+class GateTransform(Protocol):
+    """Callable contract for a state transformation.
+
+    Concrete transforms (``squeeze``, ``rotate``, ...) require a real
+    ``GaussianState``. The one exception is ``InitialState``, whose own
+    signature accepts ``GaussianState | None`` -- a function that accepts a
+    wider input type than this protocol requires still satisfies it.
+    """
+
+    def __call__(
+        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
+    ) -> GaussianState: ...
+
+
+@dataclass(frozen=True)
+class Gate:
+    """One fully bound transformation over named modes."""
+
+    name: str
+    transform: GateTransform
+    modes: Modes
+    kwargs: GateParameters
+
+    def apply(self, state: Any | None) -> GaussianState:
+        # `state` is None only when this is (or precedes) an InitialState
+        # gate; Circuit.run() enforces that invariant before calling apply()
+        # on any other gate, so the cast reflects an already-checked fact
+        # rather than papering over an unchecked one.
+        return self.transform(cast("GaussianState", state), self.modes, **self.kwargs)
+
+
+class CircuitState(Protocol):
+    """Minimal state interface required by :class:`Circuit`."""
+
+    modes: Modes
+
+    def reorder_modes(self, modes: Modes) -> Any: ...
+
+
+@dataclass
+class Circuit:
+    """An ordered sequence of executable gates over named modes."""
+
+    name: str = "Untitled Circuit"
+    modes: Modes = field(default_factory=tuple)
+    _gates: list[Gate] = field(default_factory=list, init=False)
+
+    @property
+    def gates(self) -> tuple[Gate, ...]:
+        """The circuit's gates, in execution order. Read-only: use
+        :meth:`add_gate` (or a fluent builder method) to append one."""
+        return tuple(self._gates)
+
+    @classmethod
+    def register(cls, name: str, transform: GateTransform) -> None:
+        """Register a gate name and its transformation for construction/loading."""
+        if not name.strip():
+            raise ValueError("Gate name must be a non-empty string.")
+        _GATE_DESERIALIZERS[name] = transform
+
+    def __getattr__(self, name: str) -> Any:
+        """Expose registered gates as fluent circuit-building methods.
+
+        A resolved method appends the gate to this circuit; it never executes
+        the gate against a state. This keeps the convenience API identical to
+        ``add_gate`` while allowing ``circuit.squeeze(...)`` style DSLs.
+        """
+        transform = next(
+            (
+                candidate
+                for candidate in _GATE_DESERIALIZERS.values()
+                if getattr(candidate, "__name__", "") == name
+            ),
+            None,
+        )
+        if transform is None:
+            raise AttributeError(name)
+        gate_name = next(
+            registered_name
+            for registered_name, candidate in _GATE_DESERIALIZERS.items()
+            if candidate is transform
+        )
+
+        def apply(*modes: str, **kwargs: ParameterValue) -> Circuit:
+            return self.add_gate(
+                Gate(
+                    name=gate_name,
+                    transform=transform,
+                    modes=tuple(modes),
+                    kwargs=dict(kwargs),
+                )
+            )
+
+        return apply
+
+    def add_mode(self, mode_name: str) -> Circuit:
+        if mode_name in self.modes:
+            raise ValueError(f"Mode '{mode_name}' is already registered in this circuit.")
+        self.modes = (*self.modes, mode_name)
+        return self
+
+    def add_gate(self, gate: Gate) -> Circuit:
+        normalized_modes = tuple(gate.modes)
+        if not normalized_modes:
+            raise ValueError("A circuit gate must target at least one mode.")
+        if any(
+            not isinstance(mode, str) or not mode.strip() for mode in normalized_modes
+        ):
+            raise ValueError("All circuit gate modes must be non-empty strings.")
+        if len(set(normalized_modes)) != len(normalized_modes):
+            raise ValueError(
+                f"{gate.name} cannot target the same mode more than once: {normalized_modes!r}."
+            )
+        self._gates.append(gate)
+        return self
+
+    def initial_state(
+        self, *modes: str, kind: str = "vacuum", **kwargs: ParameterValue
+    ) -> Circuit:
+        """Append the registered ``initial_state`` gate to the circuit."""
+        try:
+            transform = _GATE_DESERIALIZERS["InitialState"]
+        except KeyError as exc:
+            raise RuntimeError("No InitialState gate has been registered.") from exc
+        return self.add_gate(
+            Gate(
+                name="InitialState",
+                transform=transform,
+                modes=tuple(modes),
+                kwargs={"kind": kind, **kwargs},
+            )
+        )
+
+    def run(self, initial_state: GaussianState | None = None) -> Any:
+        """Run the gate chain, optionally constructing the state from a first gate.
+
+        If ``initial_state`` is given, it is reordered to match this
+        circuit's mode order and used as-is. If it is omitted, the circuit's
+        own ``InitialState`` gate (added via :meth:`initial_state`) must be
+        the first gate and is responsible for constructing the state; every
+        other gate requires a state to already exist.
+        """
+        if not self.modes:
+            raise ValueError("Circuit has no registered modes.")
+
+        current_state: Any = None
+        if initial_state is not None:
+            if set(initial_state.modes) != set(self.modes):
+                raise ValueError("Initial state's modes don't match the circuit's modes.")
+            current_state = initial_state.reorder_modes(self.modes)
+
+        for idx, gate in enumerate(self._gates):
+            for mode in gate.modes:
+                if mode not in self.modes:
+                    raise ValueError(
+                        f"Gate #{idx} ({gate.name}): mode '{mode}' is not registered in this circuit."
+                    )
+            if current_state is None and gate.name != "InitialState":
+                raise ValueError(
+                    f"Gate #{idx} ({gate.name}) cannot run before an initial_state gate."
+                )
+            current_state = gate.apply(current_state)
+
+        if current_state is None:
+            raise ValueError(
+                "Circuit has to be initialized with a state: pass initial_state to "
+                "run(), or add an InitialState gate via Circuit.initial_state(...)."
+            )
+
+        return current_state
+
+    def to_dict(self) -> CircuitData:
+        return {
+            "name": self.name,
+            "modes": list(self.modes),
+            "gates": [
+                {"gate": gate.name, "modes": list(gate.modes), "kwargs": gate.kwargs}
+                for gate in self._gates
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: CircuitData) -> Circuit:
+        circuit = cls(name=data["name"], modes=tuple(data["modes"]))
+        for gate_data in data["gates"]:
+            name = gate_data["gate"]
+            try:
+                transform = _GATE_DESERIALIZERS[name]
+            except KeyError as exc:
+                raise KeyError(f"Unknown gate '{name}' in serialized circuit.") from exc
+            circuit.add_gate(
+                Gate(
+                    name=name,
+                    transform=transform,
+                    modes=tuple(gate_data["modes"]),
+                    kwargs=dict(gate_data["kwargs"]),
+                )
+            )
+        return circuit
+
+    def save(self, path: str | Path) -> None:
+        _json_save(self.to_dict(), path)
+
+    @classmethod
+    def load(cls, path: str | Path) -> Circuit:
+        return cls.from_dict(cast(CircuitData, _json_load(path)))
+
+    # -- Visualization ----------------------------------------------------
+
+    def render_schematic(self, input_states: dict[str, str] | None = None) -> str:
+        """Render the circuit as a plain-text schematic.
+
+        Gates are shown left to right in execution order, one line per mode,
+        in this circuit's mode order (see :attr:`modes`). The rendering is
+        pure and deterministic.
+        """
+        if not self._gates:
+            return (
+                f"┌─── {self.name} ───┐\n"
+                "│   (Empty Circuit)   │\n"
+                "└──────────────────────────┘"
+            )
+
+        ordered_modes = list(self.modes)
+        position = {mode: i for i, mode in enumerate(ordered_modes)}
+        input_states = input_states or {}
+
+        lines = {
+            mode: f"{input_states.get(mode, '|0>'):<9} ──[{mode}]──"
+            for mode in ordered_modes
+        }
+
+        for gate in self._gates:
+            label, block_width = _render_gate_label(gate)
+            involved_modes = sorted(gate.modes, key=position.__getitem__)
+            first_pos = position[involved_modes[0]]
+            last_pos = position[involved_modes[-1]]
+
+            for mode in ordered_modes:
+                pos = position[mode]
+                if mode in involved_modes:
+                    if len(involved_modes) > 1:
+                        if pos == first_pos:
+                            connector = "┬"
+                        elif pos == last_pos:
+                            connector = "┴"
+                        else:
+                            connector = "┼"
+                        cell = f"[{connector}{label.center(block_width - 2)}{connector}]"
+                    else:
+                        cell = f"[{label.center(block_width)}]"
+                    lines[mode] += f"─{cell}─"
+                elif len(involved_modes) > 1 and first_pos < pos < last_pos:
+                    bridge = "│".center(block_width + 2, "─")
+                    lines[mode] += f"─{bridge}─"
+                else:
+                    lines[mode] += "─" * (block_width + 4)
+
+        title_banner = f"─┤ Schematic: {self.name} ├"
+        out = [f"┌{title_banner:─<78}┐"]
+        for mode in ordered_modes:
+            out.append(f"│  {lines[mode]}── OUT  │")
+        out.append("└" + "─" * 78 + "┘")
+        return "\n".join(out)
+
+    def draw(self, input_states: dict[str, str] | None = None) -> None:
+        """Print the schematic to stdout for interactive/notebook use."""
+        print("\n" + self.render_schematic(input_states) + "\n")
+
+
+_GATE_DESERIALIZERS: dict[str, GateTransform] = {}
+
+# Abbreviated labels used by Circuit.render_schematic for each built-in gate.
+# A gate name not listed here (a custom-registered gate) falls back to its
+# first five characters -- see _render_gate_label.
+_GATE_LABEL_ABBREVIATIONS = {
+    "BeamSplitter": "BS",
+    "Noise": "LOSS",
+    "Squeezer": "SQZ",
+    "Rotator": "PHASE",
+    "Displacer": "DISP",
+    "ThermalLoss": "TLOSS",
+    "InitialState": "INIT",
+}
+
+
+def _render_gate_label(gate: Gate) -> tuple[str, int]:
+    """Pick the abbreviated gate type and parameter for one schematic block."""
+    param_str = ""
+    for key, symbol in (("eta", "η"), ("phi", "φ"), ("r", "r"), ("alpha", "α")):
+        if key in gate.kwargs:
+            value = gate.kwargs[key]
+            param_str = f" {symbol}={value:.2f}" if key == "phi" else f" {symbol}={value}"
+            break
+    type_name = _GATE_LABEL_ABBREVIATIONS.get(gate.name, gate.name[:5])
+    label = f" {type_name}{param_str} "
+    return label, max(len(label) + 2, 12)
 
 
 TOL_ZERO_ENTRY = 1e-9
