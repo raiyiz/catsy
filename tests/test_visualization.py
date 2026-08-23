@@ -81,13 +81,11 @@ def test_phase_space_evolution() -> None:
     )
 
     ax = figure.axes[0]
-    ax.set_title("Phase-space trajectory")
-    ax.set_xlabel("x")
-    ax.set_ylabel("p")
-    ax.legend(frameon=False, loc="best")
-
     assert len(ax.lines) >= 1
     assert len(ax.patches) >= 1
+    assert ax.get_xlabel() == "x quadrature"
+    assert ax.get_ylabel() == "p quadrature"
+    assert ax.get_title() == "Phase-space evolution"
 
 
 @pytest.mark.visual
@@ -95,26 +93,16 @@ def test_wigner_and_covariance_evolution() -> None:
     states, times = _evolution()
 
     covariance = plot_covariance_evolution(states, "a", times=times)
-    covariance.axes[0].set_title("Covariance evolution")
-    covariance.axes[0].set_xlabel("Time")
-    covariance.axes[0].set_ylabel("Covariance")
-    covariance.axes[0].legend(frameon=False, loc="best")
-
     wigner = plot_wigner_evolution(
         states, "a", times=times, indices=[0, 6, 12], num_points=30
     )
-    for index, ax in enumerate(wigner.axes[::2]):
-        ax.set_title(f"t = {times[[0, 6, 12][index]]:.1f}")
-
     diagnostics = plot_diagnostics(states, times=times)
-    diagnostics.axes[0].set_title("State diagnostics")
-    diagnostics.axes[0].set_xlabel("Time")
-    diagnostics.axes[0].set_ylabel("Value")
-    diagnostics.axes[0].legend(frameon=False, loc="best")
 
-    assert len(covariance.axes) == 1
-    assert len(wigner.axes) == 6
-    assert len(diagnostics.axes) == 1
+    assert covariance.axes[0].get_xlabel() == "time"
+    assert covariance.axes[0].get_title() == "Covariance evolution"
+    assert len(wigner.axes) == 3
+    assert all("t =" in ax.get_title() for ax in wigner.axes)
+    assert diagnostics.axes[0].get_title() == "State diagnostics"
 
 
 @pytest.mark.visual
@@ -133,9 +121,10 @@ def test_evolution_dashboard() -> None:
     dashboard = plot_evolution(
         states, "a", times=times, wigner_indices=[0, 6, 12]
     )
-    dashboard.suptitle("Gaussian-state evolution", fontsize=14)
 
     assert len(dashboard.axes) == 5
+    assert dashboard._suptitle is not None
+    assert "mode a" in dashboard._suptitle.get_text()
 
 
 @pytest.mark.visual
