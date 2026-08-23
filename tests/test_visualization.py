@@ -19,6 +19,24 @@ from catsy.visualization import (
 )
 
 
+def _evolution() -> tuple[list[GaussianState], np.ndarray]:
+    state = (
+        GaussianState.vacuum(("a",))
+        .squeeze("a", r=1.0, theta=0.2)
+        .displace("a", 1.5 + 0.4j)
+    )
+    states = []
+    for step in range(13):
+        fraction = step / 12
+        states.append(
+            state
+            .rotate("a", 2.8 * fraction)
+            .loss("a", eta=1.0 - 0.55 * fraction)
+            .displace("a", 0.35 * np.exp(1j * 2.0 * fraction))
+        )
+    return states, np.linspace(0.0, 3.0, len(states))
+
+
 @pytest.mark.visual
 def test_visualizations_return_figures_without_showing() -> None:
     state = (
@@ -56,42 +74,65 @@ def test_phase_space_uses_displacement() -> None:
 
 
 @pytest.mark.visual
-def test_evolution_visualizations() -> None:
-    # A deliberately nontrivial Gaussian evolution: a strongly squeezed,
-    # displaced state rotates while progressively coupling to vacuum loss.
-    state = (
-        GaussianState.vacuum(("a",))
-        .squeeze("a", r=1.0, theta=0.2)
-        .displace("a", 1.5 + 0.4j)
-    )
-    states = []
-    for step in range(13):
-        fraction = step / 12
-        states.append(
-            state
-            .rotate("a", 2.8 * fraction)
-            .loss("a", eta=1.0 - 0.55 * fraction)
-            .displace("a", 0.35 * np.exp(1j * 2.0 * fraction))
-        )
-    times = np.linspace(0.0, 3.0, len(states))
-
-    trajectory = plot_phase_space_trajectory(
+def test_phase_space_evolution() -> None:
+    states, times = _evolution()
+    figure = plot_phase_space_trajectory(
         states, "a", times=times, ellipse_every=2, n_sigma=2.0
     )
+
+    ax = figure.axes[0]
+    ax.set_title("Phase-space trajectory")
+    ax.set_xlabel("x")
+    ax.set_ylabel("p")
+    ax.legend(frameon=False, loc="best")
+
+    assert len(ax.lines) >= 1
+    assert len(ax.patches) >= 1
+
+
+@pytest.mark.visual
+def test_wigner_and_covariance_evolution() -> None:
+    states, times = _evolution()
+
     covariance = plot_covariance_evolution(states, "a", times=times)
-    diagnostics = plot_diagnostics(states, times=times)
+    covariance.axes[0].set_title("Covariance evolution")
+    covariance.axes[0].set_xlabel("Time")
+    covariance.axes[0].set_ylabel("Covariance")
+    covariance.axes[0].legend(frameon=False, loc="best")
+
     wigner = plot_wigner_evolution(
         states, "a", times=times, indices=[0, 6, 12], num_points=30
     )
+    for index, ax in enumerate(wigner.axes[::2]):
+        ax.set_title(f"t = {times[[0, 6, 12][index]]:.1f}")
+
+    diagnostics = plot_diagnostics(states, times=times)
+    diagnostics.axes[0].set_title("State diagnostics")
+    diagnostics.axes[0].set_xlabel("Time")
+    diagnostics.axes[0].set_ylabel("Value")
+    diagnostics.axes[0].legend(frameon=False, loc="best")
+
+    assert len(covariance.axes) == 1
+    assert len(wigner.axes) == 6
+    assert len(diagnostics.axes) == 1
+
+
+@pytest.mark.visual
+def test_evolution_animation() -> None:
+    states, times = _evolution()
+    animation = animate_phase_space(states, "a", times=times, interval=30)
+
+    assert animation.save_count == len(states)
+
+
+@pytest.mark.visual
+def test_evolution_dashboard() -> None:
+    states, times = _evolution()
     dashboard = plot_evolution(
         states, "a", times=times, wigner_indices=[0, 6, 12]
     )
-    animation = animate_phase_space(states, "a", times=times, interval=10)
+    dashboard.suptitle("Gaussian-state evolution", fontsize=14)
 
-    assert len(trajectory.axes) == 1
-    assert len(covariance.axes) == 1
-    assert len(diagnostics.axes) == 1
-    assert len(wigner.axes) == 6
     assert len(dashboard.axes) == 5
 
 
