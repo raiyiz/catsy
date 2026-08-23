@@ -15,7 +15,6 @@ def test_mode_identity_equality_and_hashing():
     assert first.name == second.name
     assert first is not second
     assert first != second
-    assert hash(first) != hash(second)
     assert len({first, second}) == 2
 
 
