@@ -16,13 +16,13 @@ JsonObject = dict[str, object]
 
 
 class GaussianStateData(TypedDict):
-    modes: list[str]
+    modes: list[ModeName]
     displacement: list[float]
     covariance: list[list[float]]
 
 
 class GaussianChannelData(TypedDict):
-    target_modes: list[str]
+    target_modes: list[ModeName]
     X: list[list[float]]
     Y: list[list[float]]
     d0: list[float]
@@ -30,11 +30,11 @@ class GaussianChannelData(TypedDict):
 
 class GateData(TypedDict):
     gate: str
-    modes: list[str]
+    modes: list[ModeName]
     kwargs: GateParameters
 
 
 class CircuitData(TypedDict):
     name: str
-    modes: list[str]
+    modes: list[ModeName]
     gates: list[GateData]
