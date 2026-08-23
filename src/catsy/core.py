@@ -181,3 +181,36 @@ def _williamson_decomposition(
     if np.min(eigvals) <= 0:
         raise ValueError("covariance must be positive definite")
     A = (eigvecs * np.sqrt(eigvals)) @ eigvecs.T
+
+    M = A @ Omega @ A
+    T, O = scipy.linalg.schur(M, output="real")
+
+    nus: list[float] = []
+    for i in range(0, dim, 2):
+        block = T[i : i + 2, i : i + 2]
+        offdiag = 0.5 * (block[0, 1] - block[1, 0])
+        nu = abs(offdiag)
+        if nu <= tol:
+            raise ValueError(
+                "covariance has a numerically singular symplectic eigenvalue"
+            )
+
+        # Normalize the Schur block to +nu * [[0,1],[-1,0]].
+        if offdiag < 0:
+            O[:, i : i + 2] = O[:, i : i + 2] @ np.diag([1.0, -1.0])
+        nus.append(nu)
+
+    D_diag = np.repeat(nus, 2)
+    D = np.diag(D_diag)
+    S = A @ O @ np.diag(1.0 / np.sqrt(D_diag))
+
+    symplectic_residual = np.max(np.abs(S @ Omega @ S.T - Omega))
+    covariance_residual = np.max(np.abs(S @ D @ S.T - covariance))
+    if symplectic_residual > 1e-8 or covariance_residual > 1e-8:
+        raise RuntimeError(
+            "Williamson decomposition residual too large: "
+            f"symplectic={symplectic_residual:.3e}, "
+            f"covariance={covariance_residual:.3e}."
+        )
+
+    return np.asarray(nus, dtype=float), S, D
