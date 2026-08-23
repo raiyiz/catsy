@@ -23,7 +23,7 @@ def test_visualizations_return_figures_without_showing() -> None:
     assert len(covariance.axes) == 2
     assert len(phase_space.axes) == 1
     assert len(wigner.axes) == 2
-    assert len(dashboard.axes) == 4
+    assert len(dashboard.axes) == 5
 
 
 def test_phase_space_uses_displacement() -> None:
