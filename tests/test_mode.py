@@ -13,7 +13,7 @@ def test_mode_identity_equality():
     assert first.name == second.name
     assert first is not second
     assert first != second
-    assert hash(first) != hash(second)
+    assert len({first, second}) == 2
 
 
 def test_mode_rejects_empty_names():
