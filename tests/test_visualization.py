@@ -120,7 +120,9 @@ def test_wigner_and_covariance_evolution() -> None:
 @pytest.mark.visual
 def test_evolution_animation() -> None:
     states, times = _evolution()
-    animation = animate_phase_space(states, "a", times=times, interval=30)
+    animation = animate_phase_space(
+        states, "a", times=times, interval=30, repeat=True
+    )
 
     assert animation.save_count == len(states)
 
