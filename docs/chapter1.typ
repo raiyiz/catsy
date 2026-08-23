@@ -14,8 +14,8 @@ for a broader treatment.
 (2005)] are background references for the conventions used here.
 
 == Symplectic conventions
-For a system of $n$ optical modes we define the vector of Hermitian quadrature operators as:
-$$r = vec(q_1, p_1, q_2, p_2, dots.v, q_n, p_n)$$
+For a system of $n$ optical modes we define\
+the vector of Hermitian quadrature operators as: $r = vec(q_1, p_1, q_2, p_2, dots.v, q_n, p_n)$
 
 The operators satisfy the canonical commutation relations (CCR), expressed symplectically as:
 $[r_i, r_j] = i Omega_(i j)$
@@ -83,6 +83,6 @@ Dimensions are strictly enforced to be $2n$. A malformed input immediately raise
 In addition to the dimensional checks shown above, the implementation rejects
 non-finite displacement or covariance values, requires the covariance matrix to
 be symmetric, and verifies the Robertson-Schrödinger uncertainty relation
-$V + i/2 Omega succeq 0$.
+$V + i/2 Omega succ.eq 0$.
 
 The physical-covariance validation and symplectic helpers are implemented in `catsy.core`, while `GaussianState` and the Gaussian-state operations are implemented in `catsy.gaussian`.
