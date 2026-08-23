@@ -18,6 +18,9 @@ import qutip as qt
 from .core import _check_non_negative, _check_positive_int
 from .types import FloatArray
 
+if TYPE_CHECKING:
+    from .core import Circuit
+
 
 @dataclass(slots=True, eq=False)
 class Mode:
@@ -34,10 +37,6 @@ class Mode:
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("Mode name must be a non-empty string.")
-
-
-if TYPE_CHECKING:
-    from .core import Circuit
 
 
 # ---------------------------------------------------------------------------
