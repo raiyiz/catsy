@@ -212,7 +212,9 @@ class Circuit:
             raise ValueError(
                 f"{gate.name} cannot target the same mode more than once: {normalized_modes!r}."
             )
-        unknown_modes = [mode for mode in normalized_modes if mode not in self._mode_registry]
+        unknown_modes = [
+            mode for mode in normalized_modes if mode not in self._mode_registry
+        ]
         if unknown_modes:
             raise ValueError(
                 f"{gate.name} targets mode(s) {unknown_modes!r} not registered on "

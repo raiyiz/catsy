@@ -26,8 +26,7 @@ def _evolution() -> tuple[list[GaussianState], np.ndarray]:
     for step in range(13):
         fraction = step / 12
         states.append(
-            state
-            .rotate("a", 2.8 * fraction)
+            state.rotate("a", 2.8 * fraction)
             .loss("a", eta=1.0 - 0.55 * fraction)
             .displace("a", 0.35 * np.exp(1j * 2.0 * fraction))
         )
@@ -82,7 +81,7 @@ def test_phase_space_evolution() -> None:
     assert len(ax.patches) >= 1
     assert ax.get_xlabel() == "$x$ quadrature"
     assert ax.get_ylabel() == "$p$ quadrature"
-    assert "Phase-space evolution" in ax.get_title() 
+    assert "Phase-space evolution" in ax.get_title()
 
 
 @pytest.mark.visual
@@ -96,7 +95,7 @@ def test_wigner_and_covariance_evolution() -> None:
     diagnostics = plot_diagnostics(states, times=times)
 
     assert covariance.axes[0].get_xlabel() == "time"
-    assert  "Covariance evolution" in covariance.axes[0].get_title()
+    assert "Covariance evolution" in covariance.axes[0].get_title()
     assert len(wigner.axes) == 4
     assert diagnostics.axes[0].get_title() == "State diagnostics"
 
@@ -104,9 +103,7 @@ def test_wigner_and_covariance_evolution() -> None:
 @pytest.mark.visual
 def test_evolution_animation() -> None:
     states, times = _evolution()
-    animation = animate_phase_space(
-        states, "a", times=times, interval=30, repeat=True
-    )
+    animation = animate_phase_space(states, "a", times=times, interval=30, repeat=True)
 
     assert animation._repeat is True
 
@@ -114,9 +111,7 @@ def test_evolution_animation() -> None:
 @pytest.mark.visual
 def test_evolution_dashboard() -> None:
     states, times = _evolution()
-    dashboard = plot_evolution(
-        states, "a", times=times, wigner_indices=[0, 6, 12]
-    )
+    dashboard = plot_evolution(states, "a", times=times, wigner_indices=[0, 6, 12])
 
     assert len(dashboard.axes) == 5
     assert dashboard._suptitle is not None
