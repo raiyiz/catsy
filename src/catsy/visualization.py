@@ -7,11 +7,9 @@ This makes them useful both in notebooks and in automated documentation/tests.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
 import numpy as np
+from matplotlib.patches import Ellipse
 
 from .gaussian import GaussianState
 
