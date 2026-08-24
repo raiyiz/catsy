@@ -3,6 +3,7 @@
 import os
 
 import matplotlib
+import matplotlib.pyplot as plt
 import pytest
 
 if os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true":
@@ -44,4 +45,28 @@ def two_mode_vacuum():
 
 @pytest.fixture
 def plot_enabled(request):
-    return request.config.getoption("--plot")
+    """Whether visual tests are enabled by the ``--plot`` option."""
+    return bool(request.config.getoption("--plot"))
+
+
+@pytest.fixture
+def show_plots(plot_enabled):
+    """Whether visual figures should be displayed interactively."""
+    in_ci = os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true"
+    return plot_enabled and not in_ci
+
+
+@pytest.fixture(autouse=True)
+def manage_visual_figures(request, show_plots):
+    """Display and close figures created by visual tests."""
+    is_visual = request.node.get_closest_marker("visual") is not None
+    if not is_visual:
+        yield
+        return
+
+    yield
+
+    if show_plots:
+        plt.show(block=False)
+        plt.pause(0.1)
+    plt.close("all")
