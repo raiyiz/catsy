@@ -4,7 +4,6 @@ import qutip as qt
 from matplotlib import pyplot as plt
 
 from catsy.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
-from catsy.optics import Circuit, Gate
 from catsy.gaussian import (
     GaussianChannel,
     GaussianMeasurements,
@@ -22,6 +21,7 @@ from catsy.gaussian import (
     squeeze,
     thermal_loss,
 )
+from catsy.optics import Circuit, Gate
 
 # Analytic primitive checks
 
@@ -1075,7 +1075,7 @@ def test_tmsv_entanglement_survives_but_weakens_under_loss():
     assert witness_heavy_loss > DUAN_SEPARABILITY_BOUND
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_tmsv_entanglement_visualization_demo():
     r = 1.0
     tmsv = GaussianState.tmsv("a", "b", r=r)
