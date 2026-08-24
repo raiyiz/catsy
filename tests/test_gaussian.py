@@ -939,7 +939,7 @@ def test_heterodyne_rejects_nonfinite_effective_covariance():
         GaussianMeasurements.heterodyne_measurement(state, measured_mode="a")
 
 
-def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
+def _squeezed_displaced_wigner_inputs() -> GaussianState:
     circuit = Circuit().add_mode("a")
     circuit.add_gate(
         Gate(
@@ -952,18 +952,33 @@ def test_wigner_analytical_matches_gaussian_normalization(plot_enabled):
     test_state = circuit.run(GaussianState.vacuum(("a",)))
     test_state.displacement[0] = 2.0
     test_state.displacement[1] = 3.0
+    return test_state
 
-    W, X, P, M = compute_wigner_analytically(
+
+def test_wigner_analytical_matches_gaussian_normalization():
+    test_state = _squeezed_displaced_wigner_inputs()
+
+    W, _X, _P, _M = compute_wigner_analytically(
         test_state, mode_name="a", x_max=8.0, num_points=200
     )
     dx = (2 * 8.0) / 199
     integral = W.sum() * dx * dx
     assert integral == pytest.approx(1.0, rel=1e-2)
-    if plot_enabled:
-        plot_wigner(W, X, P, M)
 
 
-def test_joint_correlation_computes_valid_grid(plot_enabled):
+@pytest.mark.visualize
+def test_wigner_analytical_visualization_demo():
+    # Visual counterpart to test_wigner_analytical_matches_gaussian_normalization
+    # above -- numeric normalization is checked there unconditionally; this is
+    # only the plot, gated behind --plot like the rest of the suite.
+    test_state = _squeezed_displaced_wigner_inputs()
+    W, X, P, M = compute_wigner_analytically(
+        test_state, mode_name="a", x_max=8.0, num_points=200
+    )
+    plot_wigner(W, X, P, M)
+
+
+def _correlated_two_mode_state() -> GaussianState:
     circuit = Circuit().add_mode("a").add_mode("b")
     circuit.add_gate(
         Gate(
@@ -987,12 +1002,24 @@ def test_joint_correlation_computes_valid_grid(plot_enabled):
             kwargs={"eta": 0.5},
         )
     )
-    cv_state = circuit.run(GaussianState.vacuum(("a", "b")))
-    P, X_a, X_b, mode_a, mode_b = compute_joint_correlation(cv_state, "a", "b")
+    return circuit.run(GaussianState.vacuum(("a", "b")))
+
+
+def test_joint_correlation_computes_valid_grid():
+    cv_state = _correlated_two_mode_state()
+    P, _X_a, _X_b, _mode_a, _mode_b = compute_joint_correlation(cv_state, "a", "b")
     assert P.shape == (150, 150)
     assert np.all(P >= 0)
-    if plot_enabled:
-        plot_joint_correlation(P, X_a, X_b, mode_a, mode_b)
+
+
+@pytest.mark.visualize
+def test_joint_correlation_visualization_demo():
+    # Visual counterpart to test_joint_correlation_computes_valid_grid above --
+    # grid validity is checked there unconditionally; this is only the plot,
+    # gated behind --plot like the rest of the suite.
+    cv_state = _correlated_two_mode_state()
+    P, X_a, X_b, mode_a, mode_b = compute_joint_correlation(cv_state, "a", "b")
+    plot_joint_correlation(P, X_a, X_b, mode_a, mode_b)
 
 
 def test_joint_correlation_rejects_invalid_quadrature():
