@@ -118,9 +118,7 @@ class TestEvolutionVisualizations:
     @pytest.mark.visual
     def test_evolution_dashboard(self) -> None:
         states, times = _evolution()
-        dashboard = plot_evolution(
-            states, "a", times=times, wigner_indices=[0, 6, 12]
-        )
+        dashboard = plot_evolution(states, "a", times=times, wigner_indices=[0, 6, 12])
 
         assert len(dashboard.axes) == 5
         assert dashboard._suptitle is not None
