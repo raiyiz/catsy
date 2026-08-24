@@ -24,12 +24,20 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "visualize: test that exercises interactive visualizations"
     )
+    config.addinivalue_line(
+        "markers", "visual: deprecated compatibility alias for visualize"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if "visual" in item.keywords:
+            item.add_marker("visualize")
+
     if config.getoption("--plot"):
         return
-    skip_visualize = pytest.mark.skip(reason="visual test; rerun with --plot")
+
+    skip_visualize = pytest.mark.skip(reason="visualization test; rerun with --plot")
     for item in items:
         if "visualize" in item.keywords:
             item.add_marker(skip_visualize)
@@ -60,7 +68,7 @@ def show_plots(plot_enabled):
 
 @pytest.fixture(autouse=True)
 def manage_visual_figures(request, show_plots):
-    """Show visual figures at the end of each visual test, then close them."""
+    """Show visualization figures at the end of each visualization test, then close them."""
     is_visualize = request.node.get_closest_marker("visualize") is not None
     if not is_visualize:
         yield
