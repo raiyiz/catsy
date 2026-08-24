@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 import scipy.linalg
@@ -401,22 +400,6 @@ class GaussianState:
             rho = D_op * rho * D_op.dag()
 
         return rho
-
-    # -- Plotting -------------------------------------------------------
-
-    def plot_covariance(self) -> None:
-        """Visualize correlations between all registered modes."""
-        ticks = []
-        for m in self.modes:
-            ticks.extend([f"q_{m}", f"p_{m}"])
-
-        plt.figure(figsize=(6, 5))
-        im = plt.imshow(self.covariance, cmap="coolwarm", vmin=-1, vmax=1)
-        plt.colorbar(im, label="Variance / covariance")
-        plt.xticks(range(len(ticks)), ticks)
-        plt.yticks(range(len(ticks)), ticks)
-        plt.title("Multi-mode covariance matrix V")
-        plt.show()
 
     # -- Serialization ----------------------------------------------------
 
@@ -806,20 +789,6 @@ def compute_wigner_analytically(
     return W, X, P, mode_name
 
 
-def plot_wigner(W: np.ndarray, X: np.ndarray, P: np.ndarray, mode_name: str) -> None:
-    plt.figure(figsize=(6, 5))
-    span = max(np.max(W), np.abs(np.min(W)))
-    contour = plt.contourf(X, P, W, 100, cmap="RdBu_r", vmin=-span, vmax=span)
-    plt.colorbar(contour, label="Wigner probability density")
-    plt.axhline(0, color="black", lw=0.5, ls="--")
-    plt.axvline(0, color="black", lw=0.5, ls="--")
-    plt.title(f"Wigner function for mode '{mode_name}'")
-    plt.xlabel("x (position / in-phase quadrature)")
-    plt.ylabel("p (momentum / quadrature phase)")
-    plt.axis("equal")
-    plt.show()
-
-
 def compute_joint_correlation(
     state: GaussianState,
     mode_a: str,
@@ -865,24 +834,6 @@ def compute_joint_correlation(
     )
     P = (1.0 / (2.0 * np.pi * np.sqrt(det_V))) * np.exp(-0.5 * exponent)
     return P, X_a, X_b, mode_a, mode_b
-
-
-def plot_joint_correlation(
-    P: np.ndarray,
-    X_a: np.ndarray,
-    X_b: np.ndarray,
-    mode_a: str,
-    mode_b: str,
-    quadrature: str = "x",
-) -> None:
-    plt.figure(figsize=(6, 5))
-    plt.contourf(X_a, X_b, P, 100, cmap="viridis")
-    plt.colorbar(label="Probability density")
-    plt.title(f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}")
-    plt.xlabel(f"{quadrature}_{mode_a}")
-    plt.ylabel(f"{quadrature}_{mode_b}")
-    plt.axis("equal")
-    plt.show()
 
 
 def compute_duan_inseparability(state: GaussianState, mode_a: str, mode_b: str) -> float:

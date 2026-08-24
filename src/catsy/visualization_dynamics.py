@@ -7,9 +7,9 @@ from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
-from matplotlib.cm import ScalarMappable
 from matplotlib.figure import Figure
 
 from .gaussian import GaussianState
@@ -18,8 +18,8 @@ from .visualization import (
     _mode_geometry,
     _set_phase_limits,
     _state_header,
-    _style_phase_axes,
     _states,
+    _style_phase_axes,
 )
 
 
@@ -67,7 +67,9 @@ def plot_phase_space_trajectory_timecoded(
         fig = ax.figure
 
     if len(sequence) > 1:
-        segments = [(start, end) for start, end in zip(means[:-1], means[1:], strict=True)]
+        segments = [
+            (start, end) for start, end in zip(means[:-1], means[1:], strict=True)
+        ]
         norm = Normalize(vmin=float(time_values[0]), vmax=float(time_values[-1]))
         line_collection = LineCollection(
             segments, cmap="viridis", norm=norm, linewidth=2.4

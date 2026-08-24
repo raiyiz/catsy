@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from catsy.optics import Circuit, Gate
 from catsy.gaussian import GaussianState, beam_splitter, loss, squeeze
+from catsy.optics import Circuit, Gate
 from catsy.visualization import plot_covariance_matrix
 
 
@@ -83,7 +83,9 @@ def test_repr_reports_modes_and_purity():
 
 
 @pytest.mark.visualize
-def test_plot_covariance_renders_without_error(assert_no_empty_axes, assert_layout_can_render):
+def test_plot_covariance_renders_without_error(
+    assert_no_empty_axes, assert_layout_can_render
+):
     state = (
         GaussianState.vacuum(("a", "b"))
         .squeeze("a", r=0.7)

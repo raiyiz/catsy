@@ -3,7 +3,6 @@ import json
 import numpy as np
 import pytest
 
-from catsy.optics import Circuit, Gate
 from catsy.gaussian import (
     GaussianState,
     beam_splitter,
@@ -12,6 +11,7 @@ from catsy.gaussian import (
     squeeze,
 )
 from catsy.journal import JournalEntry, SimulationJournal
+from catsy.optics import Circuit, Gate
 
 
 def test_log_run_can_record_a_run_without_a_circuit():
