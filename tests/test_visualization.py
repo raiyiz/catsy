@@ -167,7 +167,9 @@ class TestEvolutionVisualizations:
     @pytest.mark.visualize
     def test_evolution_animation_is_loopable_and_renderable(self) -> None:
         states, times = _evolution()
-        animation = animate_phase_space(states, "a", times=times, interval=30, repeat=True)
+        animation = animate_phase_space(
+            states, "a", times=times, interval=30, repeat=True
+        )
         assert animation._repeat is True
         animation._draw_next_frame(0, blit=False)
         animation._draw_next_frame(len(states) - 1, blit=False)
@@ -208,7 +210,7 @@ class TestVisualizationValidation:
         with pytest.raises(ValueError, match="same length"):
             plot_phase_space_trajectory([state], "a", times=[0.0, 1.0])
         with pytest.raises(ValueError, match="positive"):
-            animate_phase_space(state, "a", interval=0)
+            animate_phase_space([state], "a", interval=0)
         with pytest.raises(ValueError, match="at least one"):
             plot_phase_space_trajectory([], "a")
         with pytest.raises(ValueError, match="same mode ordering"):
