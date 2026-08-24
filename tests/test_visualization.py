@@ -8,6 +8,7 @@ from catsy.visualization import (
     plot_covariance_matrix,
     plot_diagnostics,
     plot_evolution,
+    plot_mode_correlation_map,
     plot_phase_space,
     plot_phase_space_trajectory,
     plot_state_dashboard,
@@ -75,13 +76,15 @@ class TestStateVisualizations:
             plot_covariance_matrix(state),
             plot_phase_space(state, "a"),
             plot_wigner(state, "a", num_points=50),
+            plot_mode_correlation_map(state),
             plot_state_dashboard(state, mode="b"),
         ]
 
         assert len(figures[0].axes) == 2
         assert len(figures[1].axes) == 1
         assert len(figures[2].axes) == 2
-        assert len(figures[3].axes) == 5
+        assert len(figures[3].axes) == 2
+        assert len(figures[4].axes) == 7
         for figure in figures:
             _assert_no_empty_axes(figure)
             _assert_layout_can_render(figure)
@@ -106,6 +109,24 @@ class TestStateVisualizations:
         np.testing.assert_allclose(ellipse.angle, expected_angle)
         np.testing.assert_allclose(ax.collections[0].get_offsets()[0], mean)
         assert np.isclose(ax.get_aspect(), 1.0)
+
+    @pytest.mark.visualize
+    def test_mode_correlation_map_matches_normalized_covariance(self) -> None:
+        state = GaussianState.tmsv("a", "b", r=0.9)
+        figure = plot_mode_correlation_map(state)
+        ax = figure.axes[0]
+        actual = np.asarray(ax.images[0].get_array())
+        covariance = state.covariance
+        expected = covariance / np.sqrt(np.outer(np.diag(covariance), np.diag(covariance)))
+
+        np.testing.assert_allclose(actual, expected, atol=1e-12)
+        np.testing.assert_allclose(np.diag(actual), 1.0, atol=1e-12)
+        assert actual[0, 2] > 0.0
+        assert actual[1, 3] < 0.0
+        assert len(ax.lines) == 2
+        assert ax.get_title() == "Mode correlation map"
+        assert ax.get_xticklabels()[0].get_text().startswith("x")
+        _assert_layout_can_render(figure)
 
     @pytest.mark.visualize
     def test_wigner_and_covariance_are_structurally_well_formed(self) -> None:
@@ -155,7 +176,6 @@ class TestEvolutionVisualizations:
         assert len(wigner_axes) == 3
         assert len(wigner.axes) == 4
         assert all("t =" in ax.get_title() for ax in wigner_axes)
-
         assert diagnostics.axes[0].get_title() == "State diagnostics"
 
         for left, right in zip(wigner_axes, wigner_axes[1:]):
@@ -194,7 +214,7 @@ class TestEvolutionVisualizations:
         dashboard = plot_state_dashboard(_complex_state(), mode="b")
         assert dashboard._suptitle is not None
         assert "a, b" in dashboard._suptitle.get_text()
-        assert len(dashboard.axes) == 5
+        assert len(dashboard.axes) == 7
         _assert_layout_can_render(dashboard)
 
 
