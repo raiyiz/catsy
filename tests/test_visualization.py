@@ -194,7 +194,10 @@ class TestEvolutionVisualizations:
         assert animation._repeat is True
         animation._draw_next_frame(0, blit=False)
         animation._draw_next_frame(len(states) - 1, blit=False)
-        animation.save(tmp_path / "phase_space.gif", writer="pillow", fps=30)
+        output = tmp_path / "phase_space.gif"
+        animation.save(output, writer="pillow", fps=30)
+        assert output.exists()
+        assert output.stat().st_size > 0
 
     @pytest.mark.visualize
     def test_evolution_dashboard_has_no_empty_panels(self) -> None:
