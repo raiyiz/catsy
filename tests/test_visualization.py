@@ -50,28 +50,13 @@ def _evolution() -> tuple[list[GaussianState], np.ndarray]:
     return states, np.linspace(0.0, 4.0, len(states))
 
 
-def _assert_no_empty_axes(figure) -> None:
-    """Every non-colorbar axis should contain at least one drawable artist."""
-    for ax in figure.axes:
-        if getattr(ax, "_colorbar", None) is not None:
-            continue
-        assert ax.lines or ax.patches or ax.collections or ax.images or ax.texts
-
-
-def _assert_layout_can_render(figure) -> None:
-    """Exercise the actual Matplotlib layout engine used by CI/savefig."""
-    figure.canvas.draw()
-    for ax in figure.axes:
-        bbox = ax.get_window_extent()
-        assert bbox.width > 0
-        assert bbox.height > 0
-
-
 class TestStateVisualizations:
     """Static views of representative Gaussian states."""
 
     @pytest.mark.visualize
-    def test_static_visualizations(self) -> None:
+    def test_static_visualizations(
+        self, assert_no_empty_axes, assert_layout_can_render
+    ) -> None:
         state = _complex_state()
         figures = [
             plot_covariance_matrix(state),
@@ -87,8 +72,8 @@ class TestStateVisualizations:
         assert len(figures[3].axes) == 2
         assert len(figures[4].axes) == 7
         for figure in figures:
-            _assert_no_empty_axes(figure)
-            _assert_layout_can_render(figure)
+            assert_no_empty_axes(figure)
+            assert_layout_can_render(figure)
 
     @pytest.mark.visualize
     def test_phase_space_geometry_is_consistent(self) -> None:
@@ -112,7 +97,9 @@ class TestStateVisualizations:
         assert np.isclose(ax.get_aspect(), 1.0)
 
     @pytest.mark.visualize
-    def test_mode_correlation_map_matches_normalized_covariance(self) -> None:
+    def test_mode_correlation_map_matches_normalized_covariance(
+        self, assert_layout_can_render
+    ) -> None:
         state = GaussianState.tmsv("a", "b", r=0.9)
         figure = plot_mode_correlation_map(state)
         ax = figure.axes[0]
@@ -127,10 +114,12 @@ class TestStateVisualizations:
         assert len(ax.lines) == 2
         assert ax.get_title() == "Mode correlation map"
         assert ax.get_xticklabels()[0].get_text().startswith("x")
-        _assert_layout_can_render(figure)
+        assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_wigner_and_covariance_are_structurally_well_formed(self) -> None:
+    def test_wigner_and_covariance_are_structurally_well_formed(
+        self, assert_layout_can_render
+    ) -> None:
         state = _complex_state()
         covariance = plot_covariance_matrix(state)
         wigner = plot_wigner(state, "a", num_points=60)
@@ -139,15 +128,17 @@ class TestStateVisualizations:
         assert wigner.axes[0].collections
         assert wigner.axes[0].get_xlabel() == "$x$ quadrature"
         assert wigner.axes[0].get_ylabel() == "$p$ quadrature"
-        _assert_layout_can_render(covariance)
-        _assert_layout_can_render(wigner)
+        assert_layout_can_render(covariance)
+        assert_layout_can_render(wigner)
 
 
 class TestEvolutionVisualizations:
     """Time-dependent views of nontrivial Gaussian dynamics."""
 
     @pytest.mark.visualize
-    def test_phase_space_evolution_has_shared_geometry(self) -> None:
+    def test_phase_space_evolution_has_shared_geometry(
+        self, assert_no_empty_axes, assert_layout_can_render
+    ) -> None:
         states, times = _evolution()
         figure = plot_phase_space_trajectory(
             states, "a", times=times, ellipse_every=2, n_sigma=2.0
@@ -159,11 +150,13 @@ class TestEvolutionVisualizations:
         assert ax.get_ylabel() == "$p$ quadrature"
         assert "Phase-space evolution" in ax.get_title()
         np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
-        _assert_no_empty_axes(figure)
-        _assert_layout_can_render(figure)
+        assert_no_empty_axes(figure)
+        assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_wigner_covariance_and_diagnostics_evolution(self) -> None:
+    def test_wigner_covariance_and_diagnostics_evolution(
+        self, assert_no_empty_axes, assert_layout_can_render
+    ) -> None:
         states, times = _evolution()
         covariance = plot_covariance_evolution(states, "a", times=times)
         wigner = plot_wigner_evolution(
@@ -183,8 +176,8 @@ class TestEvolutionVisualizations:
             np.testing.assert_allclose(left.get_xlim(), right.get_xlim())
             np.testing.assert_allclose(left.get_ylim(), right.get_ylim())
         for figure in (covariance, wigner, diagnostics):
-            _assert_no_empty_axes(figure)
-            _assert_layout_can_render(figure)
+            assert_no_empty_axes(figure)
+            assert_layout_can_render(figure)
 
     @pytest.mark.visualize
     def test_evolution_animation_is_loopable_and_renderable(self, tmp_path) -> None:
@@ -201,7 +194,9 @@ class TestEvolutionVisualizations:
         assert output.stat().st_size > 0
 
     @pytest.mark.visualize
-    def test_evolution_dashboard_has_no_empty_panels(self) -> None:
+    def test_evolution_dashboard_has_no_empty_panels(
+        self, assert_no_empty_axes, assert_layout_can_render
+    ) -> None:
         states, times = _evolution()
         dashboard = plot_evolution(
             states, "a", times=times, wigner_indices=[0, 8, 16]
@@ -210,19 +205,23 @@ class TestEvolutionVisualizations:
         assert len(dashboard.axes) >= 4
         assert dashboard._suptitle is not None
         assert "mode a" in dashboard._suptitle.get_text()
-        _assert_no_empty_axes(dashboard)
-        _assert_layout_can_render(dashboard)
+        assert_no_empty_axes(dashboard)
+        assert_layout_can_render(dashboard)
 
     @pytest.mark.visualize
-    def test_multimode_state_dashboard_has_expected_structure(self) -> None:
+    def test_multimode_state_dashboard_has_expected_structure(
+        self, assert_layout_can_render
+    ) -> None:
         dashboard = plot_state_dashboard(_complex_state(), mode="b")
         assert dashboard._suptitle is not None
         assert "a, b" in dashboard._suptitle.get_text()
         assert len(dashboard.axes) == 7
-        _assert_layout_can_render(dashboard)
+        assert_layout_can_render(dashboard)
 
     @pytest.mark.visualize
-    def test_timecoded_phase_space_has_continuous_time_structure(self) -> None:
+    def test_timecoded_phase_space_has_continuous_time_structure(
+        self, assert_layout_can_render
+    ) -> None:
         states = [
             GaussianState.coherent(("a",), 0.2),
             GaussianState.coherent(("a",), 0.8 + 0.4j),
@@ -230,12 +229,8 @@ class TestEvolutionVisualizations:
             GaussianState.coherent(("a",), 0.3 + 1.1j),
         ]
         times = [0.0, 0.5, 1.5, 3.0]
-
         figure = plot_phase_space_trajectory_timecoded(
-            states,
-            "a",
-            times=times,
-            ellipse_every=2,
+            states, "a", times=times, ellipse_every=2
         )
 
         assert figure._suptitle is None
@@ -246,10 +241,12 @@ class TestEvolutionVisualizations:
         assert len(ax.patches) >= 2
         assert "Time-coded phase-space evolution" in ax.get_title()
         np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
-        _assert_layout_can_render(figure)
+        assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_timecoded_phase_space_accepts_implicit_steps(self) -> None:
+    def test_timecoded_phase_space_accepts_implicit_steps(
+        self, assert_layout_can_render
+    ) -> None:
         states = [
             GaussianState.vacuum(("a",)),
             GaussianState.vacuum(("a",)).displace("a", alpha=0.7),
@@ -258,7 +255,7 @@ class TestEvolutionVisualizations:
         ax = figure.axes[0]
         assert "mode a" in ax.texts[-1].get_text()
         assert figure.axes[1].get_ylabel() == "step"
-        _assert_layout_can_render(figure)
+        assert_layout_can_render(figure)
 
     def test_timecoded_phase_space_rejects_invalid_times(self) -> None:
         state = GaussianState.vacuum(("a",))
