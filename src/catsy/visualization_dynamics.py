@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
+from matplotlib.figure import Figure
 
 from .gaussian import GaussianState
 from .visualization import (
@@ -59,15 +61,17 @@ def plot_phase_space_trajectory_timecoded(
     covariances = [_mode_geometry(state, mode_name)[1] for state in sequence]
 
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6.8, 6.1), constrained_layout=True)
+        figure, ax = plt.subplots(figsize=(6.8, 6.1), constrained_layout=True)
+        fig = cast(Figure, figure)
     else:
         fig = ax.figure
 
     if len(sequence) > 1:
-        points = means.reshape(-1, 1, 2)
-        segments = np.concatenate((points[:-1], points[1:]), axis=1)
+        segments = [(start, end) for start, end in zip(means[:-1], means[1:], strict=True)]
         norm = Normalize(vmin=float(time_values[0]), vmax=float(time_values[-1]))
-        line_collection = LineCollection(segments, cmap="viridis", norm=norm, linewidth=2.4)
+        line_collection = LineCollection(
+            segments, cmap="viridis", norm=norm, linewidth=2.4
+        )
         line_collection.set_array(time_values[:-1])
         ax.add_collection(line_collection)
         sm = ScalarMappable(norm=norm, cmap=line_collection.cmap)
