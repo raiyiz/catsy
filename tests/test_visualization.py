@@ -260,6 +260,7 @@ class TestEvolutionVisualizations:
         assert figure.axes[1].get_ylabel() == "step"
         _assert_layout_can_render(figure)
 
+    @pytest.mark.visualize
     def test_timecoded_phase_space_rejects_invalid_times(self) -> None:
         state = GaussianState.vacuum(("a",))
         with pytest.raises(ValueError, match="same length"):
