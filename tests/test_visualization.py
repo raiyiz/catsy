@@ -68,7 +68,7 @@ def _assert_layout_can_render(figure) -> None:
 class TestStateVisualizations:
     """Static views of representative Gaussian states."""
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_static_visualizations(self) -> None:
         state = _complex_state()
         figures = [
@@ -86,7 +86,7 @@ class TestStateVisualizations:
             _assert_no_empty_axes(figure)
             _assert_layout_can_render(figure)
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_phase_space_geometry_is_consistent(self) -> None:
         state = _complex_state()
         figure = plot_phase_space(state, "a")
@@ -107,7 +107,7 @@ class TestStateVisualizations:
         np.testing.assert_allclose(ax.collections[0].get_offsets()[0], mean)
         assert np.isclose(ax.get_aspect(), 1.0)
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_wigner_and_covariance_are_structurally_well_formed(self) -> None:
         state = _complex_state()
         covariance = plot_covariance_matrix(state)
@@ -124,7 +124,7 @@ class TestStateVisualizations:
 class TestEvolutionVisualizations:
     """Time-dependent views of nontrivial Gaussian dynamics."""
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_phase_space_evolution_has_shared_geometry(self) -> None:
         states, times = _evolution()
         figure = plot_phase_space_trajectory(
@@ -140,7 +140,7 @@ class TestEvolutionVisualizations:
         _assert_no_empty_axes(figure)
         _assert_layout_can_render(figure)
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_wigner_covariance_and_diagnostics_evolution(self) -> None:
         states, times = _evolution()
         covariance = plot_covariance_evolution(states, "a", times=times)
@@ -151,11 +151,12 @@ class TestEvolutionVisualizations:
 
         assert covariance.axes[0].get_xlabel() == "time"
         assert "Covariance evolution" in covariance.axes[0].get_title()
+        wigner_axes = [ax for ax in wigner.axes if ax.get_title().startswith("t =")]
+        assert len(wigner_axes) == 3
         assert len(wigner.axes) == 4
-        assert all("t =" in ax.get_title() for ax in wigner.axes[:3])
+        assert all("t =" in ax.get_title() for ax in wigner_axes)
         assert diagnostics.axes[0].get_title() == "State diagnostics"
 
-        wigner_axes = wigner.axes[:3]
         for left, right in zip(wigner_axes, wigner_axes[1:], strict=True):
             np.testing.assert_allclose(left.get_xlim(), right.get_xlim())
             np.testing.assert_allclose(left.get_ylim(), right.get_ylim())
@@ -163,17 +164,15 @@ class TestEvolutionVisualizations:
             _assert_no_empty_axes(figure)
             _assert_layout_can_render(figure)
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_evolution_animation_is_loopable_and_renderable(self) -> None:
         states, times = _evolution()
-        animation = animate_phase_space(
-            states, "a", times=times, interval=30, repeat=True
-        )
+        animation = animate_phase_space(states, "a", times=times, interval=30, repeat=True)
         assert animation._repeat is True
         animation._draw_next_frame(0, blit=False)
         animation._draw_next_frame(len(states) - 1, blit=False)
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_evolution_dashboard_has_no_empty_panels(self) -> None:
         states, times = _evolution()
         dashboard = plot_evolution(
@@ -186,7 +185,7 @@ class TestEvolutionVisualizations:
         _assert_no_empty_axes(dashboard)
         _assert_layout_can_render(dashboard)
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_multimode_state_dashboard_has_expected_structure(self) -> None:
         dashboard = plot_state_dashboard(_complex_state(), mode="b")
         assert dashboard._suptitle is not None
@@ -198,7 +197,7 @@ class TestEvolutionVisualizations:
 class TestVisualizationValidation:
     """Argument and input validation for visualization helpers."""
 
-    @pytest.mark.visual
+    @pytest.mark.visualize
     def test_visualization_arguments_are_validated(self) -> None:
         state = GaussianState.vacuum(("a",))
 
@@ -209,7 +208,7 @@ class TestVisualizationValidation:
         with pytest.raises(ValueError, match="same length"):
             plot_phase_space_trajectory([state], "a", times=[0.0, 1.0])
         with pytest.raises(ValueError, match="positive"):
-            animate_phase_space([state], "a", interval=0)
+            animate_phase_space(state, "a", interval=0)
         with pytest.raises(ValueError, match="at least one"):
             plot_phase_space_trajectory([], "a")
         with pytest.raises(ValueError, match="same mode ordering"):
