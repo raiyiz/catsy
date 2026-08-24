@@ -63,8 +63,10 @@ def manage_visual_figures(request, monkeypatch):
         yield
         return
 
+    original_show = plt.show
+
     def suppress_show(*args, **kwargs):
-        """Prevent test code or library helpers from owning display policy."""
+        """Keep display policy in this fixture rather than individual tests."""
         return None
 
     monkeypatch.setattr(plt, "show", suppress_show)
@@ -72,12 +74,7 @@ def manage_visual_figures(request, monkeypatch):
     yield
 
     if request.config.getoption("--plot") and not IN_CI and plt.get_fignums():
-        plt.show = suppress_show
-        # Call the original backend-level show through Matplotlib's FigureManager
-        # API so test/library calls to pyplot.show() remain centrally controlled.
-        managers = [manager for manager in plt._pylab_helpers.Gcf.get_all_managers()]
-        for manager in managers:
-            manager.show()
+        original_show(block=False)
         plt.pause(PLOT_PAUSE_SECONDS)
 
     plt.close("all")
