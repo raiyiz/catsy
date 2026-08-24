@@ -14,10 +14,6 @@ stages:
   image: ghcr.io/astral-sh/uv:python3.13-bookworm
   variables:
     UV_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/uv"
-    # matplotlib auto-detects a headless backend in this environment anyway
-    # (no DISPLAY), but pinning it explicitly means `pytest --plot` below
-    # doesn't depend on that auto-detection continuing to work on whatever
-    # runner image this job happens to execute on.
     MPLBACKEND: "Agg"
   cache:
     key:
@@ -30,8 +26,6 @@ stages:
 pytest:
   extends: .uv-job
   stage: test
-  # Skip the whole test job when a change only touches docs/CI files that
-  # can't affect it -- keeps unrelated MRs (README, typst sources) fast.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -44,18 +38,12 @@ pytest:
   script:
     - uv sync --group dev --locked
     - mkdir -p coverage
-    # --plot runs the @pytest.mark.visual tests too (skipped by default).
-    # Several of them exercise real, non-plotting code paths (e.g.
-    # OpticalSetup.inline_squeezer) that would otherwise never show up in
-    # the coverage report at all, just because the only test that calls
-    # them also happens to end with a plt.show(). matplotlib is headless
-    # here (see MPLBACKEND above), so plt.show() is a no-op, not a block.
+    # --plot runs the @pytest.mark.visualize tests too. matplotlib is
+    # headless here (see MPLBACKEND above), so visualization tests render
+    # without opening interactive windows.
     - uv run pytest --plot --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
     when: always
-    # Gives every pipeline -- not just the default branch -- a direct link
-    # to its own HTML coverage report in the job/MR view, independent of
-    # whether GitLab Pages is deploying correctly.
     expose_as: "HTML coverage report"
     reports:
       junit: pytest-results.xml
@@ -71,7 +59,6 @@ pytest:
 ruff:
   extends: .uv-job
   stage: test
-  # Same change-based skip as the pytest job above.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -96,8 +83,6 @@ ruff:
 mypy:
   extends: .uv-job
   stage: test
-  # Same stage as pytest/ruff: mypy doesn't depend on either of their
-  # results, so running it as a separate later stage only added latency.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -142,14 +127,6 @@ docs-links:
   script:
     - python3 scripts/check_doc_links.py
 
-# Compiles the architectural-specs PDF from docs/book.typ. Manual/on-demand
-# only (press "Run" in the pipeline view or MR widget) -- it doesn't gate
-# merges and shouldn't run on every push. `expose_as` surfaces a direct link
-# to the built PDF on the MR widget once it has been triggered; see the
-# README for a standing link to the latest build on the default branch.
-# `repo-url`/`commit-sha` are passed through so the PDF's source-code links
-# (docs/links.typ) point at the exact commit this build was compiled from,
-# rather than going stale as the default branch moves on.
 typst:
   stage: docs
   image:
@@ -168,13 +145,6 @@ typst:
       - architectural_specs.pdf
     expire_in: 30 days
 
-# Publish the latest default-branch HTML coverage report via GitLab Pages.
-# The pytest job already generates coverage/html/; this job republishes that
-# directory at the project Pages URL. The job is deliberately named `pages`
-# and uses the classic `public/` artifact convention (rather than the
-# `pages: publish:` keyword under a custom job name, which needs GitLab
-# >=17.6 and no-ops silently on older instances) so this works regardless
-# of the GitLab version this pipeline runs on.
 pages:
   stage: deploy
   needs:
