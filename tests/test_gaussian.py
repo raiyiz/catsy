@@ -1004,9 +1004,11 @@ def test_joint_correlation_visualization_demo():
     # gated behind --plot like the rest of the suite.
     cv_state = _correlated_two_mode_state()
     plot_joint_correlation(
+        compute_joint_correlation(
             cv_state,
             "a",
             "b",
+        )
     )
 
 
