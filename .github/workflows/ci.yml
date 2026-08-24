@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, circuits]
+    branches: [main, circuits, pappel]
   pull_request:
 
 jobs:
