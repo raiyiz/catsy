@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from catsy.optics import Circuit, Gate
 from catsy.fock import FockGates
 from catsy.gaussian import (
     GaussianState,
@@ -11,6 +10,7 @@ from catsy.gaussian import (
     squeeze,
     thermal_loss,
 )
+from catsy.optics import Circuit, Gate
 
 # Gaussian -> Fock bridge
 
@@ -168,7 +168,7 @@ def test_fock_gates_reject_non_qobj_and_non_operator_input():
 # Visual diagnostics
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_native_qutip_wigner_plot_demo():
     import matplotlib.pyplot as plt
 

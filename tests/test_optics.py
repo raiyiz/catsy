@@ -318,7 +318,7 @@ def test_draw_prints_the_rendered_schematic(capsys):
     assert captured.out.strip() == circuit.render_schematic().strip()
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_visual_schematic_draw():
     # Schema one
     mzi = Circuit(name="MZI Interferometer Node").add_mode("line_1").add_mode("line_2")
@@ -421,7 +421,7 @@ def test_mzi_scan_rejects_invalid_theta_list(theta_list, match):
 # Cavity and interferometer visual diagnostics
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_laser_pulse_cavity_plot_demo():
     import matplotlib.pyplot as plt
 
@@ -446,7 +446,7 @@ def test_laser_pulse_cavity_plot_demo():
     plt.show()
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_full_cavity_multipanel_plot_demo():
     import matplotlib.pyplot as plt
 
@@ -611,7 +611,7 @@ def test_lossy_kerr_cat_feeds_directly_into_mzi_scan():
     assert all(np.isfinite(result["parity1"]))
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
     # A single pipeline through three modules: a driven Kerr cavity
     # (optics.py) generates a cat state; cavity photon loss decoheres it
@@ -674,7 +674,7 @@ def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
 # Kerr and cat-state simulations
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_kerr_cat_state_generation(plot_enabled):
     # A driven, weakly-damped Kerr cavity: a fast pulse loads the cavity with
     # a coherent state, then the Kerr nonlinearity shears it into a cat
@@ -727,7 +727,7 @@ def test_kerr_cat_state_generation(plot_enabled):
         plt.show()
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_cat_state_single_shot_through_mzi():
     # Single-phase companion to test_decoherence_mzi_parity_visibility_drops_with_loss
     # below: a loss-free MZI at one fixed theta, kept mainly to inspect the
@@ -785,7 +785,7 @@ def test_cat_state_single_shot_through_mzi():
     plt.show()
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_cat_mzi_phase_scan_fringes():
     # Loss-free (kappa=0) phase scan of a cat state through the MZI -- the
     # clean-case counterpart plotted alongside the noisy one in
