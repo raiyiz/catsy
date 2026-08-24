@@ -1,5 +1,3 @@
-import io
-
 import numpy as np
 import pytest
 
@@ -157,6 +155,7 @@ class TestEvolutionVisualizations:
         assert len(wigner_axes) == 3
         assert len(wigner.axes) == 4
         assert all("t =" in ax.get_title() for ax in wigner_axes)
+
         assert diagnostics.axes[0].get_title() == "State diagnostics"
 
         for left, right in zip(wigner_axes, wigner_axes[1:]):
@@ -167,7 +166,7 @@ class TestEvolutionVisualizations:
             _assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_evolution_animation_is_loopable_and_renderable(self) -> None:
+    def test_evolution_animation_is_loopable_and_renderable(self, tmp_path) -> None:
         states, times = _evolution()
         animation = animate_phase_space(
             states, "a", times=times, interval=30, repeat=True
@@ -175,7 +174,7 @@ class TestEvolutionVisualizations:
         assert animation._repeat is True
         animation._draw_next_frame(0, blit=False)
         animation._draw_next_frame(len(states) - 1, blit=False)
-        animation.save(io.BytesIO(), writer="pillow", fps=30)
+        animation.save(tmp_path / "phase_space.gif", writer="pillow", fps=30)
 
     @pytest.mark.visualize
     def test_evolution_dashboard_has_no_empty_panels(self) -> None:
