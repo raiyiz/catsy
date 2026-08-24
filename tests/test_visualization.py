@@ -107,6 +107,10 @@ def test_evolution_animation() -> None:
         states, "a", times=times, interval=30, repeat=True, show=True
     )
 
+    # In a real interactive backend this keeps the GUI event loop alive long
+    # enough to observe the animation. In headless CI, show() returns directly;
+    # initializing the first frame prevents Matplotlib's deletion warning.
+    animation._init_draw()
     assert animation._repeat is True
 
 
