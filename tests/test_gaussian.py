@@ -601,20 +601,52 @@ def test_circuit_gate_methods_build_without_executing():
     assert circuit.run(GaussianState.vacuum(("a",))).modes == ("a",)
 
 
-def test_initial_state_gate_constructs_state():
-    circuit = (
-        Circuit().add_mode("a").initial_state("a", kind="coherent", alpha=0.7 + 0.2j)
-    )
+@pytest.mark.parametrize(
+    ("kind", "modes", "kwargs", "expected"),
+    [
+        ("vacuum", ("a",), {}, lambda: GaussianState.vacuum(("a",))),
+        (
+            "coherent",
+            ("a",),
+            {"alpha": 0.7 + 0.2j},
+            lambda: GaussianState.coherent(("a",), 0.7 + 0.2j),
+        ),
+        (
+            "tmsv",
+            ("a", "b"),
+            {"r": 0.6},
+            lambda: GaussianState.tmsv("a", "b", 0.6),
+        ),
+    ],
+)
+def test_initial_state_gate_constructs_state(kind, modes, kwargs, expected):
+    circuit = Circuit()
+    for mode in modes:
+        circuit.add_mode(mode)
+    circuit.initial_state(*modes, kind=kind, **kwargs)
+
     result = circuit.run()
-    expected = GaussianState.coherent(("a",), 0.7 + 0.2j)
-    np.testing.assert_allclose(result.displacement, expected.displacement)
-    np.testing.assert_allclose(result.covariance, expected.covariance)
+    expected_state = expected()
+    np.testing.assert_allclose(result.displacement, expected_state.displacement)
+    np.testing.assert_allclose(result.covariance, expected_state.covariance)
 
 
 def test_initial_state_gate_can_be_overridden_by_explicit_state():
     circuit = Circuit().add_mode("a").initial_state("a", kind="coherent", alpha=2.0)
     result = circuit.run(GaussianState.vacuum(("a",)))
     np.testing.assert_allclose(result.displacement, np.zeros(2))
+
+
+def test_initial_state_tmsv_requires_exactly_two_modes():
+    circuit = Circuit().add_mode("a").initial_state("a", kind="tmsv", r=0.5)
+    with pytest.raises(ValueError, match="exactly two modes"):
+        circuit.run()
+
+
+def test_initial_state_rejects_unknown_kind():
+    circuit = Circuit().add_mode("a").initial_state("a", kind="squeezed")
+    with pytest.raises(ValueError, match="Unknown Gaussian initial state kind"):
+        circuit.run()
 
 
 def test_circuit_serializes_gate_name():

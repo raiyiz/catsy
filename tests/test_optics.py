@@ -124,6 +124,24 @@ def test_run_does_not_rebuild_or_duplicate_circuit_gates():
     assert len(circuit.to_dict()["gates"]) == 1
 
 
+def test_run_rejects_a_gate_before_any_initial_state():
+    circuit = Circuit(name="Bench").add_mode("a").rotate("a", phi=0.25)
+    with pytest.raises(ValueError, match="cannot run before an initial_state gate"):
+        circuit.run()
+
+
+def test_run_requires_a_state_from_somewhere():
+    circuit = Circuit(name="Bench").add_mode("a")
+    with pytest.raises(ValueError, match="has to be initialized with a state"):
+        circuit.run()
+
+
+def test_unregistered_gate_name_raises_attribute_error():
+    circuit = Circuit(name="Bench").add_mode("a")
+    with pytest.raises(AttributeError):
+        circuit.not_a_registered_gate("a")
+
+
 def test_circuit_roundtrips_through_file(tmp_path):
     circuit = Circuit(name="MZI Node").add_mode("line_1").add_mode("line_2")
     circuit.beam_splitter("line_1", "line_2", eta=0.5)
@@ -282,6 +300,14 @@ def test_render_schematic_bridges_modes_a_multi_mode_gate_skips_over():
     lines = schematic.splitlines()
     b_line = next(line for line in lines if "[b]" in line)
     assert "│" in b_line
+
+
+def test_render_schematic_labels_initial_state_with_no_parameter_suffix():
+    # InitialState carries no eta/phi/r/alpha kwarg for kind="vacuum", so this
+    # exercises the label branch where none of the known parameter keys match.
+    circuit = Circuit(name="Bench").add_mode("a").initial_state("a", kind="vacuum")
+    schematic = circuit.render_schematic()
+    assert "INIT" in schematic
 
 
 def test_draw_prints_the_rendered_schematic(capsys):

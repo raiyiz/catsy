@@ -1,4 +1,3 @@
-import matplotlib
 import numpy as np
 import pytest
 
@@ -140,3 +139,7 @@ class TestVisualizationValidation:
             plot_phase_space_trajectory([state], "a", times=[0.0, 1.0])
         with pytest.raises(ValueError, match="positive"):
             animate_phase_space([state], "a", interval=0)
+        with pytest.raises(ValueError, match="at least one"):
+            plot_phase_space_trajectory([], "a")
+        with pytest.raises(ValueError, match="same mode ordering"):
+            plot_phase_space_trajectory([state, GaussianState.vacuum(("a", "b"))], "a")

@@ -117,8 +117,14 @@ def _add_ellipse(
 def _set_phase_limits(
     ax: plt.Axes, means: np.ndarray, covariances: Sequence[np.ndarray], n_sigma: float
 ) -> None:
-    x = max(_ellipse_extents(m, c, n_sigma)[0] for m, c in zip(means, covariances))
-    p = max(_ellipse_extents(m, c, n_sigma)[1] for m, c in zip(means, covariances))
+    x = max(
+        _ellipse_extents(m, c, n_sigma)[0]
+        for m, c in zip(means, covariances, strict=True)
+    )
+    p = max(
+        _ellipse_extents(m, c, n_sigma)[1]
+        for m, c in zip(means, covariances, strict=True)
+    )
     extent = max(x, p, 1.0) * 1.18
     ax.set_xlim(-extent, extent)
     ax.set_ylim(-extent, extent)
@@ -189,7 +195,7 @@ def plot_phase_space(
     _add_ellipse(ax, mean, covariance, n_sigma, alpha=0.55, label=rf"{n_sigma:g}$\sigma$")
     values, vectors = np.linalg.eigh(covariance)
     order = np.argsort(values)[::-1]
-    for value, vector in zip(values[order], vectors[:, order].T):
+    for value, vector in zip(values[order], vectors[:, order].T, strict=True):
         length = n_sigma * np.sqrt(max(float(value), 0.0))
         ax.plot(
             [mean[0] - vector[0] * length, mean[0] + vector[0] * length],
@@ -309,7 +315,7 @@ def animate_phase_space(
         trail.set_data(means[: frame + 1, 0], means[: frame + 1, 1])
         ellipse.center = (float(mean[0]), float(mean[1]))
         ellipse.width, ellipse.height, ellipse.angle = width, height, angle
-        for line, value, vector in zip((major, minor), values, vectors.T):
+        for line, value, vector in zip((major, minor), values, vectors.T, strict=True):
             length = n_sigma * np.sqrt(float(value))
             line.set_data(
                 [mean[0] - vector[0] * length, mean[0] + vector[0] * length],
@@ -502,7 +508,7 @@ def plot_wigner_evolution(
     )
     axes_flat = axes[0]
     image = None
-    for position, (index, (X, P, W)) in enumerate(zip(selected, grids)):
+    for position, (index, (X, P, W)) in enumerate(zip(selected, grids, strict=True)):
         ax = axes_flat[position]
         image = ax.pcolormesh(X, P, W, shading="auto", cmap="magma", vmin=0.0, vmax=vmax)
         ax.contour(X, P, W, levels=7, colors="white", linewidths=0.45, alpha=0.60)
