@@ -15,15 +15,30 @@ from catsy.gaussian import (
     compute_wigner_analytically,
     displace,
     loss,
-    plot_joint_correlation,
-    plot_wigner,
     rotate,
     squeeze,
     thermal_loss,
 )
 from catsy.optics import Circuit, Gate
+from catsy.visualization import plot_joint_correlation
 
 # Analytic primitive checks
+
+
+def wigner_test_state() -> GaussianState:
+    circuit = Circuit().add_mode("a")
+    circuit.add_gate(
+        Gate(
+            name="Squeezer",
+            transform=squeeze,
+            modes=("a",),
+            kwargs={"r": 1.1, "theta": 30.0},
+        )
+    )
+    test_state = circuit.run(GaussianState.vacuum(("a",)))
+    test_state.displacement[0] = 2.0
+    test_state.displacement[1] = 3.0
+    return test_state
 
 
 @pytest.mark.parametrize("r", [0.0, 0.25, 0.8, 1.2])
@@ -939,43 +954,13 @@ def test_heterodyne_rejects_nonfinite_effective_covariance():
         GaussianMeasurements.heterodyne_measurement(state, measured_mode="a")
 
 
-def _squeezed_displaced_wigner_inputs() -> GaussianState:
-    circuit = Circuit().add_mode("a")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 1.1, "theta": 30.0},
-        )
-    )
-    test_state = circuit.run(GaussianState.vacuum(("a",)))
-    test_state.displacement[0] = 2.0
-    test_state.displacement[1] = 3.0
-    return test_state
-
-
 def test_wigner_analytical_matches_gaussian_normalization():
-    test_state = _squeezed_displaced_wigner_inputs()
-
     W, _X, _P, _M = compute_wigner_analytically(
-        test_state, mode_name="a", x_max=8.0, num_points=200
+        wigner_test_state(), mode_name="a", x_max=8.0, num_points=200
     )
     dx = (2 * 8.0) / 199
     integral = W.sum() * dx * dx
     assert integral == pytest.approx(1.0, rel=1e-2)
-
-
-@pytest.mark.visualize
-def test_wigner_analytical_visualization_demo():
-    # Visual counterpart to test_wigner_analytical_matches_gaussian_normalization
-    # above -- numeric normalization is checked there unconditionally; this is
-    # only the plot, gated behind --plot like the rest of the suite.
-    test_state = _squeezed_displaced_wigner_inputs()
-    W, X, P, M = compute_wigner_analytically(
-        test_state, mode_name="a", x_max=8.0, num_points=200
-    )
-    plot_wigner(W, X, P, M)
 
 
 def _correlated_two_mode_state() -> GaussianState:
@@ -1018,8 +1003,13 @@ def test_joint_correlation_visualization_demo():
     # grid validity is checked there unconditionally; this is only the plot,
     # gated behind --plot like the rest of the suite.
     cv_state = _correlated_two_mode_state()
-    P, X_a, X_b, mode_a, mode_b = compute_joint_correlation(cv_state, "a", "b")
-    plot_joint_correlation(P, X_a, X_b, mode_a, mode_b)
+    plot_joint_correlation(
+        compute_joint_correlation(
+            cv_state,
+            "a",
+            "b",
+        )
+    )
 
 
 def test_joint_correlation_rejects_invalid_quadrature():

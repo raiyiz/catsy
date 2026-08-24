@@ -14,13 +14,7 @@ from catsy.gaussian import (
     compute_duan_inseparability,
     squeeze,
 )
-from catsy.optics import (
-    Circuit,
-    Gate,
-    KerrCavity,
-    MachZehnderInterferometer,
-    Mode,
-)
+from catsy.optics import Circuit, Gate, KerrCavity, MachZehnderInterferometer, Mode
 
 # Layout assembly and serialization
 

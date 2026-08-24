@@ -16,7 +16,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.artist import Artist
 from matplotlib.patches import Ellipse
 
-from .gaussian import GaussianState
+from .gaussian import GaussianState, compute_joint_correlation
 
 
 def _finalize(fig: plt.Figure, show: bool) -> plt.Figure:
@@ -37,7 +37,9 @@ def _states(states: Sequence[GaussianState]) -> tuple[GaussianState, ...]:
 
 def _mode_geometry(state: GaussianState, mode_name: str) -> tuple[np.ndarray, np.ndarray]:
     idx = state.get_mode_index(mode_name)
-    return state.displacement[idx : idx + 2], state.covariance[idx : idx + 2, idx : idx + 2]
+    return state.displacement[idx : idx + 2], state.covariance[
+        idx : idx + 2, idx : idx + 2
+    ]
 
 
 def _state_summary(state: GaussianState, mode_name: str | None = None) -> str:
@@ -47,7 +49,9 @@ def _state_summary(state: GaussianState, mode_name: str | None = None) -> str:
     return f"mode {mode_name}   ·   d = ({mean[0]:.2f}, {mean[1]:.2f})"
 
 
-def _state_header(ax: plt.Axes, state: GaussianState, mode_name: str | None = None) -> None:
+def _state_header(
+    ax: plt.Axes, state: GaussianState, mode_name: str | None = None
+) -> None:
     ax.text(
         0.02,
         0.98,
@@ -66,7 +70,9 @@ def _state_header(ax: plt.Axes, state: GaussianState, mode_name: str | None = No
     )
 
 
-def _ellipse_geometry(covariance: np.ndarray, n_sigma: float) -> tuple[float, float, float]:
+def _ellipse_geometry(
+    covariance: np.ndarray, n_sigma: float
+) -> tuple[float, float, float]:
     values, vectors = np.linalg.eigh(covariance)
     order = np.argsort(values)[::-1]
     values = np.maximum(values[order], 0.0)
@@ -76,7 +82,9 @@ def _ellipse_geometry(covariance: np.ndarray, n_sigma: float) -> tuple[float, fl
     return float(widths[0]), float(widths[1]), angle
 
 
-def _ellipse_extents(mean: np.ndarray, covariance: np.ndarray, n_sigma: float) -> tuple[float, float]:
+def _ellipse_extents(
+    mean: np.ndarray, covariance: np.ndarray, n_sigma: float
+) -> tuple[float, float]:
     width, height, angle = _ellipse_geometry(covariance, n_sigma)
     theta = np.radians(angle)
     hx = 0.5 * np.sqrt((width * np.cos(theta)) ** 2 + (height * np.sin(theta)) ** 2)
@@ -84,7 +92,13 @@ def _ellipse_extents(mean: np.ndarray, covariance: np.ndarray, n_sigma: float) -
     return float(abs(mean[0]) + hx), float(abs(mean[1]) + hp)
 
 
-def _add_ellipse(ax: plt.Axes, mean: np.ndarray, covariance: np.ndarray, n_sigma: float, **kwargs: object) -> Ellipse:
+def _add_ellipse(
+    ax: plt.Axes,
+    mean: np.ndarray,
+    covariance: np.ndarray,
+    n_sigma: float,
+    **kwargs: object,
+) -> Ellipse:
     width, height, angle = _ellipse_geometry(covariance, n_sigma)
     ellipse = Ellipse(
         (float(mean[0]), float(mean[1])),
@@ -99,9 +113,17 @@ def _add_ellipse(ax: plt.Axes, mean: np.ndarray, covariance: np.ndarray, n_sigma
     return ellipse
 
 
-def _set_phase_limits(ax: plt.Axes, means: np.ndarray, covariances: Sequence[np.ndarray], n_sigma: float) -> None:
-    x = max(_ellipse_extents(m, c, n_sigma)[0] for m, c in zip(means, covariances, strict=True))
-    p = max(_ellipse_extents(m, c, n_sigma)[1] for m, c in zip(means, covariances, strict=True))
+def _set_phase_limits(
+    ax: plt.Axes, means: np.ndarray, covariances: Sequence[np.ndarray], n_sigma: float
+) -> None:
+    x = max(
+        _ellipse_extents(m, c, n_sigma)[0]
+        for m, c in zip(means, covariances, strict=True)
+    )
+    p = max(
+        _ellipse_extents(m, c, n_sigma)[1]
+        for m, c in zip(means, covariances, strict=True)
+    )
     extent = max(x, p, 1.0) * 1.18
     ax.set_xlim(-extent, extent)
     ax.set_ylim(-extent, extent)
@@ -123,7 +145,9 @@ def _quadrature_correlation(covariance: np.ndarray) -> np.ndarray:
     variances = np.diag(covariance)
     scale = np.sqrt(np.outer(variances, variances))
     with np.errstate(divide="ignore", invalid="ignore"):
-        correlation = np.divide(covariance, scale, out=np.zeros_like(covariance), where=scale > 0)
+        correlation = np.divide(
+            covariance, scale, out=np.zeros_like(covariance), where=scale > 0
+        )
     np.fill_diagonal(correlation, 1.0)
     return correlation
 
@@ -136,7 +160,9 @@ def plot_covariance_matrix(
     show: bool = False,
 ) -> plt.Figure:
     if ax is None:
-        fig, ax = plt.subplots(figsize=(max(5.0, 0.9 * len(state.modes) + 2), 5.2), constrained_layout=True)
+        fig, ax = plt.subplots(
+            figsize=(max(5.0, 0.9 * len(state.modes) + 2), 5.2), constrained_layout=True
+        )
     else:
         fig = cast(plt.Figure, ax.figure)
     labels = _quadrature_labels(state)
@@ -176,7 +202,9 @@ def plot_mode_correlation_map(
 ) -> plt.Figure:
     """Plot normalized quadrature correlations with explicit mode boundaries."""
     if ax is None:
-        fig, ax = plt.subplots(figsize=(max(5.0, 0.9 * len(state.modes) + 2), 5.2), constrained_layout=True)
+        fig, ax = plt.subplots(
+            figsize=(max(5.0, 0.9 * len(state.modes) + 2), 5.2), constrained_layout=True
+        )
     else:
         fig = cast(plt.Figure, ax.figure)
 
@@ -316,12 +344,16 @@ def animate_phase_space(
         fig, ax = plt.subplots(figsize=(7.0, 6.2), constrained_layout=True)
     else:
         fig = cast(plt.Figure, ax.figure)
-    ax.plot(means[:, 0], means[:, 1], ls="--", lw=0.8, alpha=0.20, label="full trajectory")
+    ax.plot(
+        means[:, 0], means[:, 1], ls="--", lw=0.8, alpha=0.20, label="full trajectory"
+    )
     _set_phase_limits(ax, means, covariances, n_sigma)
     _style_phase_axes(ax)
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
-    ax.set_title(f"Gaussian phase-space dynamics — mode {mode_name}", pad=16, fontweight="medium")
+    ax.set_title(
+        f"Gaussian phase-space dynamics — mode {mode_name}", pad=16, fontweight="medium"
+    )
     (point,) = ax.plot([], [], marker="o", ls="None", ms=8, zorder=6, label="current")
     (trail,) = ax.plot([], [], lw=2.2, zorder=5, label="elapsed trajectory")
     ellipse = Ellipse((0, 0), 0, 0, fill=False, lw=2.2, zorder=5)
@@ -353,7 +385,9 @@ def animate_phase_space(
             )
         state_text.set_text(_state_summary(state, mode_name))
         time_text.set_text(
-            f"t = {times[frame]:g}" if times is not None else f"step {frame + 1} / {len(sequence)}"
+            f"t = {times[frame]:g}"
+            if times is not None
+            else f"step {frame + 1} / {len(sequence)}"
         )
         stats_text.set_text(
             f"σ₁ {np.sqrt(values[0]):.3g}   σ₂ {np.sqrt(values[1]):.3g}   det(V) {np.linalg.det(covariance):.3g}"
@@ -385,7 +419,11 @@ def plot_covariance_evolution(
     sequence = _states(states)
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
-    x = np.arange(len(sequence), dtype=float) if times is None else np.asarray(times, dtype=float)
+    x = (
+        np.arange(len(sequence), dtype=float)
+        if times is None
+        else np.asarray(times, dtype=float)
+    )
     values = np.array([_mode_geometry(s, mode_name)[1] for s in sequence])
     if ax is None:
         fig, ax = plt.subplots(figsize=(7.0, 4.6), constrained_layout=True)
@@ -422,7 +460,11 @@ def plot_diagnostics(
     sequence = _states(states)
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
-    x = np.arange(len(sequence), dtype=float) if times is None else np.asarray(times, dtype=float)
+    x = (
+        np.arange(len(sequence), dtype=float)
+        if times is None
+        else np.asarray(times, dtype=float)
+    )
     purity = np.array(
         [
             1.0
@@ -433,7 +475,9 @@ def plot_diagnostics(
             for s in sequence
         ]
     )
-    minimum_nu = np.array([np.min(_symplectic_eigenvalues(s.covariance)) for s in sequence])
+    minimum_nu = np.array(
+        [np.min(_symplectic_eigenvalues(s.covariance)) for s in sequence]
+    )
     if ax is None:
         fig, ax = plt.subplots(figsize=(7.0, 4.6), constrained_layout=True)
     else:
@@ -494,7 +538,9 @@ def plot_wigner(
     image = ax.pcolormesh(X, P, W, shading="auto", cmap="magma", vmin=vmin, vmax=scale)
     ax.contour(X, P, W, levels=7, colors="white", linewidths=0.45, alpha=0.60)
     mean, _ = _mode_geometry(state, mode_name)
-    ax.scatter([mean[0]], [mean[1]], marker="+", s=85, linewidths=1.5, color="white", zorder=4)
+    ax.scatter(
+        [mean[0]], [mean[1]], marker="+", s=85, linewidths=1.5, color="white", zorder=4
+    )
     _style_phase_axes(ax)
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
@@ -568,7 +614,11 @@ def plot_evolution(
         raise ValueError("n_sigma must be positive.")
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
-    selected = [0, len(sequence) // 2, len(sequence) - 1] if wigner_indices is None else list(wigner_indices)
+    selected = (
+        [0, len(sequence) // 2, len(sequence) - 1]
+        if wigner_indices is None
+        else list(wigner_indices)
+    )
     if any(i < 0 or i >= len(sequence) for i in selected):
         raise ValueError("wigner_indices contain an out-of-range frame.")
     fig = plt.figure(figsize=(13.5, 9.5), constrained_layout=True)
@@ -577,7 +627,9 @@ def plot_evolution(
     ax_cov = fig.add_subplot(grid[0, 1])
     ax_wig = fig.add_subplot(grid[1, 0])
     ax_diag = fig.add_subplot(grid[1, 1])
-    plot_phase_space_trajectory(sequence, mode_name, times=times, n_sigma=n_sigma, ax=ax_phase)
+    plot_phase_space_trajectory(
+        sequence, mode_name, times=times, n_sigma=n_sigma, ax=ax_phase
+    )
     plot_covariance_evolution(sequence, mode_name, times=times, ax=ax_cov)
     snapshot = selected[-1]
     plot_wigner(sequence[snapshot], mode_name, ax=ax_wig)
@@ -591,8 +643,28 @@ def plot_evolution(
         fontweight="medium",
     )
     plot_diagnostics(sequence, times=times, ax=ax_diag)
-    fig.suptitle(f"Gaussian-state evolution · mode {mode_name}", fontsize=16, fontweight="medium")
+    fig.suptitle(
+        f"Gaussian-state evolution · mode {mode_name}", fontsize=16, fontweight="medium"
+    )
     return fig
+
+
+def plot_joint_correlation(
+    state: GaussianState,
+    mode_a: str,
+    mode_b: str,
+    quadrature: str = "x",
+) -> None:
+    P, X_a, X_b, _, _ = compute_joint_correlation(state, mode_a, mode_b)
+
+    plt.figure(figsize=(6, 5))
+    plt.contourf(X_a, X_b, P, 100, cmap="viridis")
+    plt.colorbar(label="Probability density")
+    plt.title(f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}")
+    plt.xlabel(f"{quadrature}_{mode_a}")
+    plt.ylabel(f"{quadrature}_{mode_b}")
+    plt.axis("equal")
+    plt.show()
 
 
 def plot_state_dashboard(
@@ -611,7 +683,11 @@ def plot_state_dashboard(
         constrained_layout=True,
     )
     columns = 4 if multimode else 3
-    grid = fig.add_gridspec(1, columns, width_ratios=(0.95, 0.95, 1.05, 1.05) if multimode else (0.95, 1.05, 1.05))
+    grid = fig.add_gridspec(
+        1,
+        columns,
+        width_ratios=(0.95, 0.95, 1.05, 1.05) if multimode else (0.95, 1.05, 1.05),
+    )
     axes = [fig.add_subplot(grid[0, i]) for i in range(columns)]
     plot_covariance_matrix(state, ax=axes[0], annotate=False)
     next_axis = 1
@@ -620,7 +696,9 @@ def plot_state_dashboard(
         next_axis += 1
     plot_phase_space(state, mode_name, ax=axes[next_axis])
     plot_wigner(state, mode_name, ax=axes[next_axis + 1])
-    fig.suptitle(f"Gaussian state · {', '.join(state.modes)}", fontsize=15, fontweight="medium")
+    fig.suptitle(
+        f"Gaussian state · {', '.join(state.modes)}", fontsize=15, fontweight="medium"
+    )
     return _finalize(fig, show)
 
 

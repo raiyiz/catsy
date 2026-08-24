@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from test_gaussian import wigner_test_state
 
 from catsy import GaussianState
 from catsy.visualization import (
@@ -76,6 +77,11 @@ class TestStateVisualizations:
             assert_layout_can_render(figure)
 
     @pytest.mark.visualize
+    def test_wigner_analytical_visualization_demo(self) -> None:
+        state = wigner_test_state()
+        (plot_wigner(state, "a", num_points=50),)
+
+    @pytest.mark.visualize
     def test_phase_space_geometry_is_consistent(self) -> None:
         state = _complex_state()
         figure = plot_phase_space(state, "a")
@@ -105,7 +111,9 @@ class TestStateVisualizations:
         ax = figure.axes[0]
         actual = np.asarray(ax.images[0].get_array())
         covariance = state.covariance
-        expected = covariance / np.sqrt(np.outer(np.diag(covariance), np.diag(covariance)))
+        expected = covariance / np.sqrt(
+            np.outer(np.diag(covariance), np.diag(covariance))
+        )
 
         np.testing.assert_allclose(actual, expected, atol=1e-12)
         np.testing.assert_allclose(np.diag(actual), 1.0, atol=1e-12)
@@ -198,9 +206,7 @@ class TestEvolutionVisualizations:
         self, assert_no_empty_axes, assert_layout_can_render
     ) -> None:
         states, times = _evolution()
-        dashboard = plot_evolution(
-            states, "a", times=times, wigner_indices=[0, 8, 16]
-        )
+        dashboard = plot_evolution(states, "a", times=times, wigner_indices=[0, 8, 16])
 
         assert len(dashboard.axes) >= 4
         assert dashboard._suptitle is not None
@@ -262,7 +268,9 @@ class TestEvolutionVisualizations:
         with pytest.raises(ValueError, match="same length"):
             plot_phase_space_trajectory_timecoded([state, state], "a", times=[0.0])
         with pytest.raises(ValueError, match="finite"):
-            plot_phase_space_trajectory_timecoded([state, state], "a", times=[0.0, np.nan])
+            plot_phase_space_trajectory_timecoded(
+                [state, state], "a", times=[0.0, np.nan]
+            )
         with pytest.raises(ValueError, match="monotonically"):
             plot_phase_space_trajectory_timecoded([state, state], "a", times=[1.0, 0.0])
 
@@ -284,6 +292,4 @@ class TestVisualizationValidation:
         with pytest.raises(ValueError, match="at least one"):
             plot_phase_space_trajectory([], "a")
         with pytest.raises(ValueError, match="same mode ordering"):
-            plot_phase_space_trajectory(
-                [state, GaussianState.vacuum(("a", "b"))], "a"
-            )
+            plot_phase_space_trajectory([state, GaussianState.vacuum(("a", "b"))], "a")
