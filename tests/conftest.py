@@ -6,6 +6,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pytest
 
+PLOT_PAUSE_SECONDS = 2.0
+
 if os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true":
     matplotlib.use("Agg")
 
@@ -24,16 +26,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "visualize: test that exercises interactive visualizations"
     )
-    config.addinivalue_line(
-        "markers", "visual: deprecated compatibility alias for visualize"
-    )
 
 
 def pytest_collection_modifyitems(config, items):
-    for item in items:
-        if "visual" in item.keywords:
-            item.add_marker("visualize")
-
     if config.getoption("--plot"):
         return
 
@@ -68,14 +63,14 @@ def show_plots(plot_enabled):
 
 @pytest.fixture(autouse=True)
 def manage_visual_figures(request, show_plots):
-    """Show visualization figures at the end of each visualization test, then close them."""
-    is_visualize = request.node.get_closest_marker("visualize") is not None
-    if not is_visualize:
+    """Display visualization figures briefly, then close them."""
+    if request.node.get_closest_marker("visualize") is None:
         yield
         return
 
     yield
 
     if show_plots:
-        plt.show(block=True)
+        plt.show(block=False)
+        plt.pause(PLOT_PAUSE_SECONDS)
     plt.close("all")
