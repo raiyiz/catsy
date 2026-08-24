@@ -1,3 +1,5 @@
+import io
+
 import numpy as np
 import pytest
 
@@ -173,6 +175,7 @@ class TestEvolutionVisualizations:
         assert animation._repeat is True
         animation._draw_next_frame(0, blit=False)
         animation._draw_next_frame(len(states) - 1, blit=False)
+        animation.save(io.BytesIO(), writer="pillow", fps=30)
 
     @pytest.mark.visualize
     def test_evolution_dashboard_has_no_empty_panels(self) -> None:
