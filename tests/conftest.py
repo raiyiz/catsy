@@ -1,6 +1,12 @@
 """Shared pytest fixtures and options for the catsy test suite."""
 
+import os
+
+import matplotlib
 import pytest
+
+if os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true":
+    matplotlib.use("Agg")
 
 from catsy.gaussian import GaussianState
 
