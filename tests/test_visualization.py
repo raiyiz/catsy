@@ -157,7 +157,7 @@ class TestEvolutionVisualizations:
         assert all("t =" in ax.get_title() for ax in wigner_axes)
         assert diagnostics.axes[0].get_title() == "State diagnostics"
 
-        for left, right in zip(wigner_axes, wigner_axes[1:], strict=True):
+        for left, right in zip(wigner_axes, wigner_axes[1:]):
             np.testing.assert_allclose(left.get_xlim(), right.get_xlim())
             np.testing.assert_allclose(left.get_ylim(), right.get_ylim())
         for figure in (covariance, wigner, diagnostics):
