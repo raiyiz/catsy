@@ -24,6 +24,13 @@ def pytest_addoption(parser):
         action="store_true",
         help="run tests marked visualize and display their figures locally",
     )
+    parser.addoption(
+        "--plot-pause",
+        action="store",
+        type=float,
+        default=PLOT_PAUSE_SECONDS,
+        help=f"seconds to pause between displayed visualization tests (default: {PLOT_PAUSE_SECONDS})",
+    )
 
 
 def pytest_configure(config):
@@ -104,8 +111,12 @@ def manage_visual_figures(request, monkeypatch):
 
     yield
 
+    pause = request.config.getoption("--plot-pause")
+    if pause < 0:
+        raise pytest.UsageError("--plot-pause must be non-negative")
+
     if request.config.getoption("--plot") and not IN_CI and plt.get_fignums():
         original_show(block=False)
-        plt.pause(PLOT_PAUSE_SECONDS)
+        plt.pause(pause)
 
     plt.close("all")
