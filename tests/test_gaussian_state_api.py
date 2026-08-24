@@ -86,7 +86,7 @@ def test_repr_reports_modes_and_purity():
     assert "purity~1.000" not in repr(lossy)
 
 
-@pytest.mark.visual
+@pytest.mark.visualize
 def test_plot_covariance_renders_without_error():
     state = (
         GaussianState.vacuum(("a", "b"))
