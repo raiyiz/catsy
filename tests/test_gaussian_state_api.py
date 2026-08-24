@@ -67,9 +67,6 @@ def test_circuit_matches_fluent_state_chain():
 
 
 def test_repr_reports_modes_and_purity():
-    # A pure two-mode state (squeeze + lossless beam splitter) must report
-    # purity~1.000; this also exercises purity() on a non-trivial covariance
-    # rather than only ever being read as a side effect of debugging.
     pure = (
         GaussianState.vacuum(("a", "b"))
         .squeeze("a", r=0.6)
@@ -80,8 +77,6 @@ def test_repr_reports_modes_and_purity():
     assert "modes=('a', 'b')" in text
     assert "purity~1.000" in text
 
-    # Loss strictly reduces purity below 1, so the printed value must move
-    # off the pure-state baseline too, not just be present.
     lossy = pure.loss("a", eta=0.5)
     assert "purity~1.000" not in repr(lossy)
 
