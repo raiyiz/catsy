@@ -3,13 +3,15 @@
 import os
 
 import matplotlib
-import matplotlib.pyplot as plt
 import pytest
 
 PLOT_PAUSE_SECONDS = 2.0
+IN_CI = os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true"
 
-if os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true":
+if IN_CI:
     matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
 
 from catsy.gaussian import GaussianState
 
@@ -54,23 +56,28 @@ def plot_enabled(request):
     return bool(request.config.getoption("--plot"))
 
 
-@pytest.fixture
-def show_plots(plot_enabled):
-    """Whether visualization figures should be shown interactively."""
-    in_ci = os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true"
-    return plot_enabled and not in_ci
-
-
 @pytest.fixture(autouse=True)
-def manage_visual_figures(request, show_plots):
-    """Display visualization figures briefly, then close them."""
+def manage_visual_figures(request, monkeypatch):
+    """Own Matplotlib display and cleanup for every visualization test."""
     if request.node.get_closest_marker("visualize") is None:
         yield
         return
 
+    def suppress_show(*args, **kwargs):
+        """Prevent test code or library helpers from owning display policy."""
+        return None
+
+    monkeypatch.setattr(plt, "show", suppress_show)
+
     yield
 
-    if show_plots:
-        plt.show(block=False)
+    if request.config.getoption("--plot") and not IN_CI and plt.get_fignums():
+        plt.show = suppress_show
+        # Call the original backend-level show through Matplotlib's FigureManager
+        # API so test/library calls to pyplot.show() remain centrally controlled.
+        managers = [manager for manager in plt._pylab_helpers.Gcf.get_all_managers()]
+        for manager in managers:
+            manager.show()
         plt.pause(PLOT_PAUSE_SECONDS)
+
     plt.close("all")
