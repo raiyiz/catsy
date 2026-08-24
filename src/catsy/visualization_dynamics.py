@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -61,19 +60,17 @@ def plot_phase_space_trajectory_timecoded(
     covariances = [_mode_geometry(state, mode_name)[1] for state in sequence]
 
     if ax is None:
-        figure, ax = plt.subplots(figsize=(6.8, 6.1), constrained_layout=True)
-        fig = cast(Figure, figure)
+        fig, ax = plt.subplots(figsize=(6.8, 6.1), constrained_layout=True)
     else:
-        fig = ax.figure
+        figure = ax.figure
+        if not isinstance(figure, Figure):
+            raise TypeError("visualization axes must belong to a Figure")
+        fig = figure
 
     if len(sequence) > 1:
-        segments = [
-            (start, end) for start, end in zip(means[:-1], means[1:], strict=True)
-        ]
+        segments = [(start, end) for start, end in zip(means[:-1], means[1:], strict=True)]
         norm = Normalize(vmin=float(time_values[0]), vmax=float(time_values[-1]))
-        line_collection = LineCollection(
-            segments, cmap="viridis", norm=norm, linewidth=2.4
-        )
+        line_collection = LineCollection(segments, cmap="viridis", norm=norm, linewidth=2.4)
         line_collection.set_array(time_values[:-1])
         ax.add_collection(line_collection)
         sm = ScalarMappable(norm=norm, cmap=line_collection.cmap)
@@ -103,7 +100,6 @@ def plot_phase_space_trajectory_timecoded(
     )
     _state_header(ax, sequence[-1], mode_name)
     ax.legend(frameon=False, loc="lower right")
-
     if show:
         plt.show()
     return fig
