@@ -69,13 +69,13 @@ class TestStateVisualizations:
     """Static views of representative Gaussian states."""
 
     @pytest.mark.visual
-    def test_static_visualizations(self, show_plots: bool) -> None:
+    def test_static_visualizations(self) -> None:
         state = _complex_state()
         figures = [
-            plot_covariance_matrix(state, show=show_plots),
-            plot_phase_space(state, "a", show=show_plots),
-            plot_wigner(state, "a", num_points=50, show=show_plots),
-            plot_state_dashboard(state, mode="b", show=show_plots),
+            plot_covariance_matrix(state),
+            plot_phase_space(state, "a"),
+            plot_wigner(state, "a", num_points=50),
+            plot_state_dashboard(state, mode="b"),
         ]
 
         assert len(figures[0].axes) == 2
@@ -87,9 +87,9 @@ class TestStateVisualizations:
             _assert_layout_can_render(figure)
 
     @pytest.mark.visual
-    def test_phase_space_geometry_is_consistent(self, show_plots: bool) -> None:
+    def test_phase_space_geometry_is_consistent(self) -> None:
         state = _complex_state()
-        figure = plot_phase_space(state, "a", show=show_plots)
+        figure = plot_phase_space(state, "a")
         ax = figure.axes[0]
 
         index = state.get_mode_index("a")
@@ -108,10 +108,10 @@ class TestStateVisualizations:
         assert np.isclose(ax.get_aspect(), 1.0)
 
     @pytest.mark.visual
-    def test_wigner_and_covariance_are_structurally_well_formed(self, show_plots: bool) -> None:
+    def test_wigner_and_covariance_are_structurally_well_formed(self) -> None:
         state = _complex_state()
-        covariance = plot_covariance_matrix(state, show=show_plots)
-        wigner = plot_wigner(state, "a", num_points=60, show=show_plots)
+        covariance = plot_covariance_matrix(state)
+        wigner = plot_wigner(state, "a", num_points=60)
 
         assert covariance.axes[0].images[0].get_array().shape == state.covariance.shape
         assert wigner.axes[0].collections
@@ -125,10 +125,10 @@ class TestEvolutionVisualizations:
     """Time-dependent views of nontrivial Gaussian dynamics."""
 
     @pytest.mark.visual
-    def test_phase_space_evolution_has_shared_geometry(self, show_plots: bool) -> None:
+    def test_phase_space_evolution_has_shared_geometry(self) -> None:
         states, times = _evolution()
         figure = plot_phase_space_trajectory(
-            states, "a", times=times, ellipse_every=2, n_sigma=2.0, show=show_plots
+            states, "a", times=times, ellipse_every=2, n_sigma=2.0
         )
         ax = figure.axes[0]
         assert len(ax.lines) >= 1
@@ -141,13 +141,13 @@ class TestEvolutionVisualizations:
         _assert_layout_can_render(figure)
 
     @pytest.mark.visual
-    def test_wigner_covariance_and_diagnostics_evolution(self, show_plots: bool) -> None:
+    def test_wigner_covariance_and_diagnostics_evolution(self) -> None:
         states, times = _evolution()
-        covariance = plot_covariance_evolution(states, "a", times=times, show=show_plots)
+        covariance = plot_covariance_evolution(states, "a", times=times)
         wigner = plot_wigner_evolution(
-            states, "a", times=times, indices=[0, 8, 16], num_points=40, show=show_plots
+            states, "a", times=times, indices=[0, 8, 16], num_points=40
         )
-        diagnostics = plot_diagnostics(states, times=times, show=show_plots)
+        diagnostics = plot_diagnostics(states, times=times)
 
         assert covariance.axes[0].get_xlabel() == "time"
         assert "Covariance evolution" in covariance.axes[0].get_title()
@@ -164,20 +164,20 @@ class TestEvolutionVisualizations:
             _assert_layout_can_render(figure)
 
     @pytest.mark.visual
-    def test_evolution_animation_is_loopable_and_renderable(self, show_plots: bool) -> None:
+    def test_evolution_animation_is_loopable_and_renderable(self) -> None:
         states, times = _evolution()
         animation = animate_phase_space(
-            states, "a", times=times, interval=30, repeat=True, show=show_plots
+            states, "a", times=times, interval=30, repeat=True
         )
         assert animation._repeat is True
         animation._draw_next_frame(0, blit=False)
         animation._draw_next_frame(len(states) - 1, blit=False)
 
     @pytest.mark.visual
-    def test_evolution_dashboard_has_no_empty_panels(self, show_plots: bool) -> None:
+    def test_evolution_dashboard_has_no_empty_panels(self) -> None:
         states, times = _evolution()
         dashboard = plot_evolution(
-            states, "a", times=times, wigner_indices=[0, 8, 16], show=show_plots
+            states, "a", times=times, wigner_indices=[0, 8, 16]
         )
 
         assert len(dashboard.axes) >= 4
@@ -187,8 +187,8 @@ class TestEvolutionVisualizations:
         _assert_layout_can_render(dashboard)
 
     @pytest.mark.visual
-    def test_multimode_state_dashboard_has_expected_structure(self, show_plots: bool) -> None:
-        dashboard = plot_state_dashboard(_complex_state(), mode="b", show=show_plots)
+    def test_multimode_state_dashboard_has_expected_structure(self) -> None:
+        dashboard = plot_state_dashboard(_complex_state(), mode="b")
         assert dashboard._suptitle is not None
         assert "a, b" in dashboard._suptitle.get_text()
         assert len(dashboard.axes) == 5
