@@ -166,6 +166,87 @@ def test_fock_gates_reject_non_qobj_and_non_operator_input():
         FockGates.photon_subtraction(qt.fock(N_cutoff, 0), mode_idx=0, N_cutoff=N_cutoff)
 
 
+def test_mean_photon_number_matches_known_fock_states():
+    N_cutoff = 10
+    vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
+    one_photon = qt.ket2dm(qt.fock(N_cutoff, 1))
+    assert FockGates.mean_photon_number(vacuum, N_cutoff=N_cutoff) == pytest.approx(
+        0.0, abs=1e-10
+    )
+    assert FockGates.mean_photon_number(one_photon, N_cutoff=N_cutoff) == pytest.approx(
+        1.0, abs=1e-10
+    )
+
+
+def test_mean_photon_number_matches_addition_and_subtraction():
+    # Photon addition/subtraction on vacuum give exact, independently known
+    # photon-number states (see test_photon_addition_on_vacuum_... above),
+    # so <n> before/after pins down mean_photon_number against ground truth
+    # rather than just checking it runs.
+    N_cutoff = 10
+    vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
+    added = FockGates.photon_addition(vacuum, mode_idx=0, N_cutoff=N_cutoff)
+    assert FockGates.mean_photon_number(added, N_cutoff=N_cutoff) == pytest.approx(
+        1.0, abs=1e-10
+    )
+
+
+def test_apply_kraus_operator_rejects_mismatched_dims():
+    N_cutoff = 5
+    rho = qt.ket2dm(qt.fock(N_cutoff, 0))
+    mismatched_op = qt.destroy(N_cutoff + 1)
+    with pytest.raises(ValueError, match="Hilbert space"):
+        FockGates.apply_kraus_operator(rho, mismatched_op)
+
+
+def test_photon_number_measurement_forced_outcome_on_known_state():
+    N_cutoff = 10
+    two_photon = qt.ket2dm(qt.fock(N_cutoff, 2))
+    outcome, remaining = FockGates.photon_number_measurement(
+        two_photon, mode_idx=0, N_cutoff=N_cutoff, outcome=2
+    )
+    assert outcome == 2
+    # Single-mode input: the only mode is measured out, leaving the trivial
+    # (1-dimensional, trace-1) remainder.
+    assert remaining.tr() == pytest.approx(1.0, abs=1e-10)
+
+
+def test_photon_number_measurement_rejects_zero_probability_outcome():
+    N_cutoff = 5
+    vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
+    with pytest.raises(ValueError):
+        FockGates.photon_number_measurement(
+            vacuum, mode_idx=0, N_cutoff=N_cutoff, outcome=3
+        )
+
+
+def test_photon_number_measurement_sampled_outcome_matches_fock_state():
+    # A pure |3> Fock state must always herald outcome 3 with probability 1,
+    # regardless of the RNG draw -- a deterministic check of the sampling
+    # path (as opposed to the outcome=... forced path exercised above).
+    N_cutoff = 10
+    three_photon = qt.ket2dm(qt.fock(N_cutoff, 3))
+    rng = np.random.default_rng(0)
+    outcome, _remaining = FockGates.photon_number_measurement(
+        three_photon, mode_idx=0, N_cutoff=N_cutoff, rng=rng
+    )
+    assert outcome == 3
+
+
+def test_photon_number_measurement_on_multimode_state_traces_out_measured_mode():
+    # _mode_operator's multi-mode embedding and the post-measurement ptrace
+    # are only exercised together by a multi-mode input; every other
+    # photon_number_measurement test above uses a single-mode state.
+    N_cutoff = 6
+    two_mode = qt.tensor(qt.ket2dm(qt.fock(N_cutoff, 1)), qt.ket2dm(qt.fock(N_cutoff, 2)))
+    outcome, remaining = FockGates.photon_number_measurement(
+        two_mode, mode_idx=0, N_cutoff=N_cutoff, outcome=1
+    )
+    assert outcome == 1
+    expected_remaining = qt.ket2dm(qt.fock(N_cutoff, 2))
+    assert qt.fidelity(remaining, expected_remaining) == pytest.approx(1.0, abs=1e-10)
+
+
 # Visual diagnostics
 
 
