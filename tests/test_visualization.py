@@ -64,6 +64,7 @@ def _single_mode_states() -> list[GaussianState]:
         GaussianState.vacuum(("a",)).squeeze("a", r=0.7),
     ]
 
+
 def _time_plotter(plotter: Callable, **kwargs) -> Callable:
     def render(states, times):
         return plotter(states, "a", times=times, **kwargs)
@@ -117,8 +118,6 @@ class TestStaticVisualizations:
         assert_no_empty_axes(figure)
         assert_layout_can_render(figure)
 
-
-
     @pytest.mark.visualize
     @pytest.mark.parametrize(
         "state",
@@ -137,7 +136,6 @@ class TestStaticVisualizations:
         figure = plot_phase_space(state, "a")
         assert len(figure.axes) == 1
         assert_layout_can_render(figure)
-
 
     @pytest.mark.visualize
     def test_phase_space_geometry_matches_covariance_eigendecomposition(self) -> None:
@@ -260,7 +258,9 @@ class TestEvolutionVisualizations:
         assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    @pytest.mark.parametrize("times", [None, [0.0, 0.5, 1.5, 3.0]], ids=["steps", "physical-time"])
+    @pytest.mark.parametrize(
+        "times", [None, [0.0, 0.5, 1.5, 3.0]], ids=["steps", "physical-time"]
+    )
     def test_timecoded_phase_space_accepts_time_conventions(
         self, times, assert_layout_can_render
     ) -> None:
