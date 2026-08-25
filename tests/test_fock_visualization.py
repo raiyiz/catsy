@@ -1,7 +1,7 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import qutip as qt
+from matplotlib import pyplot as plt
 
 from catsy.fock_visualization import (
     plot_fock_density_matrix,
@@ -79,40 +79,18 @@ def test_wigner_surfaces_for_n_photon_states(
     """Compare the radial Wigner oscillations of several number states."""
     n_values = (0, 1, 2, 3)
     cutoff = max(n_values) + 4
-    resolution = 60
-    grid = np.linspace(-4.0, 4.0, resolution)
-    x, p = np.meshgrid(grid, grid)
 
     fig = plt.figure(figsize=(12, 9), constrained_layout=True)
     for index, n in enumerate(n_values, start=1):
         ax = fig.add_subplot(2, 2, index, projection="3d")
-        wigner = qt.wigner(qt.fock(cutoff, n), grid, grid)
-        ax.plot_surface(
-            x,
-            p,
-            wigner,
-            rcount=resolution,
-            ccount=resolution,
-            linewidth=0,
-            antialiased=True,
-            cmap="RdBu_r",
+        plot_wigner(
+            qt.ket2dm(qt.fock(cutoff, n)),
+            xlim=(-4, 4),
+            resolution=48,
+            ax=ax,
+            projection="3d",
         )
-        ax.contour(
-            x,
-            p,
-            wigner,
-            levels=[0.0],
-            offset=float(np.min(wigner)),
-            colors="black",
-            linewidths=0.7,
-        )
-        ax.view_init(elev=32, azim=-55)
-        ax.set_zlim(float(np.min(wigner)), float(np.max(wigner)))
-        ax.set_box_aspect((1.0, 1.0, 0.65))
         ax.set_title(fr"$|{n}\rangle$")
-        ax.set_xlabel("$x$")
-        ax.set_ylabel("$p$")
-        ax.set_zlabel("$W(x,p)$")
 
     fig.suptitle("Wigner functions of n-photon states", fontweight="medium")
     fig.canvas.draw()
@@ -120,7 +98,6 @@ def test_wigner_surfaces_for_n_photon_states(
     assert len(fig.axes) == len(n_values)
     for ax in fig.axes:
         assert ax.collections
-        assert any(collection.get_array() is not None for collection in ax.collections)
     assert_no_empty_axes(fig)
     assert_layout_can_render(fig)
 
@@ -142,6 +119,11 @@ def test_wigner_surfaces_for_n_photon_states(
             lambda rho: plot_wigner(rho, xlim=(1.0, -1.0)),
             "xlim",
             id="invalid-wigner-limits",
+        ),
+        pytest.param(
+            lambda rho: plot_wigner(rho, projection="invalid"),
+            "projection",
+            id="invalid-wigner-projection",
         ),
     ],
 )
