@@ -702,6 +702,195 @@ def plot_state_dashboard(
     return _finalize(fig, show)
 
 
+def plot_phase_space_trajectory_timecoded(
+    states: Sequence[GaussianState],
+    mode_name: str,
+    *,
+    times: Sequence[float] | None = None,
+    ellipse_every: int | None = None,
+    n_sigma: float = 2.0,
+    ax: plt.Axes | None = None,
+    show: bool = False,
+) -> plt.Figure:
+    """Plot a phase-space trajectory with continuously time-coded motion.
+
+    The mean trajectory is rendered as a line collection whose segment colors
+    encode the supplied time coordinate. Sparse covariance ellipses preserve
+    uncertainty geometry without overwhelming the trajectory.
+    """
+    sequence = _states(states)
+    if n_sigma <= 0:
+        raise ValueError("n_sigma must be positive.")
+    if ellipse_every is not None and ellipse_every < 1:
+        raise ValueError("ellipse_every must be positive or None.")
+    if times is None:
+        time_values = np.arange(len(sequence), dtype=float)
+        time_label = "step"
+    else:
+        if len(times) != len(sequence):
+            raise ValueError("times must have the same length as states.")
+        time_values = np.asarray(times, dtype=float)
+        if not np.all(np.isfinite(time_values)):
+            raise ValueError("times must contain only finite values.")
+        if np.any(np.diff(time_values) < 0):
+            raise ValueError("times must be monotonically increasing.")
+        time_label = "time"
+
+    means = np.array([_mode_geometry(state, mode_name)[0] for state in sequence])
+    covariances = [_mode_geometry(state, mode_name)[1] for state in sequence]
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6.8, 6.1), constrained_layout=True)
+    else:
+        figure = ax.figure
+        if not isinstance(figure, Figure):
+            raise TypeError("visualization axes must belong to a Figure")
+        fig = figure
+
+    if len(sequence) > 1:
+        segments = [(start, end) for start, end in zip(means[:-1], means[1:], strict=True)]
+        norm = Normalize(vmin=float(time_values[0]), vmax=float(time_values[-1]))
+        line_collection = LineCollection(segments, cmap="viridis", norm=norm, linewidth=2.4)
+        line_collection.set_array(time_values[:-1])
+        ax.add_collection(line_collection)
+        sm = ScalarMappable(norm=norm, cmap=line_collection.cmap)
+        sm.set_array(time_values)
+        fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04, label=time_label)
+    else:
+        ax.scatter(means[:, 0], means[:, 1], s=48, zorder=4)
+
+    ax.scatter([means[0, 0]], [means[0, 1]], s=44, label="initial", zorder=5)
+    ax.scatter([means[-1, 0]], [means[-1, 1]], s=72, marker="*", label="final", zorder=5)
+
+    step = ellipse_every or max(1, len(sequence) // 6)
+    indices = list(range(0, len(sequence), step))
+    if indices[-1] != len(sequence) - 1:
+        indices.append(len(sequence) - 1)
+    for index in indices:
+        _add_ellipse(ax, means[index], covariances[index], n_sigma, alpha=0.22)
+
+    _style_phase_axes(ax)
+    _set_phase_limits(ax, means, covariances, n_sigma)
+    ax.set_xlabel(r"$x$ quadrature")
+    ax.set_ylabel(r"$p$ quadrature")
+    ax.set_title(
+        f"Time-coded phase-space evolution — mode {mode_name}",
+        pad=16,
+        fontweight="medium",
+    )
+    _state_header(ax, sequence[-1], mode_name)
+    ax.legend(frameon=False, loc="lower right")
+    if show:
+        plt.show()
+    return fig
+
+
+def _cross_mode_correlation(state: GaussianState, mode_a: int, mode_b: int) -> float:
+    a = 2 * mode_a
+    b = 2 * mode_b
+    covariance = state.covariance
+    block = covariance[a : a + 2, b : b + 2]
+    variances_a = np.diag(covariance[a : a + 2, a : a + 2])
+    variances_b = np.diag(covariance[b : b + 2, b : b + 2])
+    scale = np.sqrt(np.outer(variances_a, variances_b))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        normalized = np.divide(block, scale, out=np.zeros_like(block), where=scale > 0)
+    return float(np.max(np.abs(normalized)))
+
+
+def plot_multimode_evolution(
+    states: Sequence[GaussianState],
+    *,
+    times: Sequence[float] | None = None,
+    n_sigma: float = 2.0,
+    show: bool = False,
+) -> plt.Figure:
+    """Show per-mode phase-space trajectories and evolving cross-mode correlation."""
+    sequence = _states(states)
+    if len(sequence[0].modes) < 2:
+        raise ValueError("multimode evolution requires at least two modes.")
+    if n_sigma <= 0:
+        raise ValueError("n_sigma must be positive.")
+    if times is not None:
+        if len(times) != len(sequence):
+            raise ValueError("times must have the same length as states.")
+        time_values = np.asarray(times, dtype=float)
+        if not np.all(np.isfinite(time_values)):
+            raise ValueError("times must contain only finite values.")
+        if np.any(np.diff(time_values) < 0):
+            raise ValueError("times must be monotonically increasing.")
+        x = time_values
+        xlabel = "time"
+    else:
+        x = np.arange(len(sequence), dtype=float)
+        xlabel = "step"
+
+    mode_count = len(sequence[0].modes)
+    fig = plt.figure(figsize=(5.8 * mode_count, 8.0), constrained_layout=True)
+    grid = fig.add_gridspec(2, mode_count, height_ratios=(1.15, 0.85))
+    axes = [fig.add_subplot(grid[0, i]) for i in range(mode_count)]
+    correlation_ax = fig.add_subplot(grid[1, :])
+
+    for mode_index, (ax, mode_name) in enumerate(zip(axes, sequence[0].modes, strict=True)):
+        means = np.array([_mode_geometry(state, mode_name)[0] for state in sequence])
+        covariances = [_mode_geometry(state, mode_name)[1] for state in sequence]
+        ax.plot(means[:, 0], means[:, 1], lw=2.0, label="mean trajectory")
+        ax.scatter([means[0, 0]], [means[0, 1]], s=42, label="initial", zorder=4)
+        ax.scatter([means[-1, 0]], [means[-1, 1]], s=70, marker="*", label="final", zorder=4)
+        _style_phase_axes(ax)
+        stride = max(1, len(sequence) // 6)
+        for mean, covariance in zip(means[::stride], covariances[::stride], strict=True):
+            values, _ = np.linalg.eigh(covariance)
+            radius = n_sigma * np.sqrt(np.maximum(values, 0.0))
+            ax.add_patch(
+                Ellipse(
+                    (float(mean[0]), float(mean[1])),
+                    2.0 * float(radius.max()),
+                    2.0 * float(radius.min()),
+                    fill=False,
+                    alpha=0.22,
+                )
+            )
+        limits = [ax.get_xlim(), ax.get_ylim()]
+        extent = max(
+            abs(limits[0][0]), abs(limits[0][1]), abs(limits[1][0]), abs(limits[1][1]), 1.0
+        )
+        ax.set_xlim(-extent, extent)
+        ax.set_ylim(-extent, extent)
+        ax.set_xlabel(r"$x$")
+        ax.set_ylabel(r"$p$")
+        ax.set_title(f"Mode {mode_name}", fontweight="medium")
+        if mode_index == 0:
+            ax.legend(frameon=False, loc="best")
+
+    pair_values = np.array(
+        [
+            max(
+                _cross_mode_correlation(state, i, j)
+                for i in range(mode_count)
+                for j in range(i + 1, mode_count)
+            )
+            for state in sequence
+        ]
+    )
+    correlation_ax.plot(x, pair_values, lw=2.2, label="strongest cross-mode correlation")
+    correlation_ax.set_ylim(0.0, max(1.0, float(pair_values.max()) * 1.15))
+    correlation_ax.set_xlabel(xlabel)
+    correlation_ax.set_ylabel("max |quadrature correlation|")
+    correlation_ax.set_title("Multimode correlation evolution", fontweight="medium")
+    correlation_ax.grid(alpha=0.12, linewidth=0.5)
+    correlation_ax.spines[["top", "right"]].set_visible(False)
+    correlation_ax.legend(frameon=False, loc="best")
+    fig.suptitle(
+        f"Multimode Gaussian evolution · {', '.join(sequence[0].modes)}",
+        fontsize=16,
+        fontweight="medium",
+    )
+    if show:
+        plt.show()
+    return fig
+
+
 __all__ = [
     "animate_phase_space",
     "plot_covariance_evolution",
@@ -709,8 +898,10 @@ __all__ = [
     "plot_diagnostics",
     "plot_evolution",
     "plot_mode_correlation_map",
+    "plot_multimode_evolution",
     "plot_phase_space",
     "plot_phase_space_trajectory",
+    "plot_phase_space_trajectory_timecoded",
     "plot_state_dashboard",
     "plot_wigner",
     "plot_wigner_evolution",
