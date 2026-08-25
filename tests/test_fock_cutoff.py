@@ -27,7 +27,10 @@ def test_system_cutoff_is_inferred_from_multimode_state():
 
 
 def test_explicit_cutoff_remains_a_consistency_check():
-    rho = qt.ket2dm(qt.fock(8, 0))
+    # Use a one-photon state so subtraction has non-zero heralding
+    # probability; the test is about cutoff validation, not the vacuum
+    # no-click failure mode.
+    rho = qt.ket2dm(qt.fock(8, 1))
     photon_subtraction(rho, N_cutoff=8)
     with pytest.raises(ValueError, match="N_cutoff"):
         photon_addition(rho, N_cutoff=7)
