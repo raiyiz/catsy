@@ -296,7 +296,6 @@ class TestVisualizationValidation:
             plot_phase_space_trajectory([state, GaussianState.vacuum(("a", "b"))], "a")
 
 
-
 @pytest.mark.visualize
 def test_multimode_evolution_dashboard_has_mode_panels_and_correlation(
     assert_no_empty_axes,
@@ -320,7 +319,9 @@ def test_multimode_evolution_dashboard_has_mode_panels_and_correlation(
 
     correlation_axis = figure.axes[-1]
     assert len(correlation_axis.lines) == 1
-    np.testing.assert_allclose(correlation_axis.get_lines()[0].get_xdata(), np.linspace(0.0, 1.0, 6))
+    np.testing.assert_allclose(
+        correlation_axis.get_lines()[0].get_xdata(), np.linspace(0.0, 1.0, 6)
+    )
     assert np.max(correlation_axis.get_lines()[0].get_ydata()) > 0.0
 
 

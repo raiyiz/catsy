@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.artist import Artist
+from matplotlib.cm import ScalarMappable
+from matplotlib.collections import LineCollection
+from matplotlib.colors import Normalize
 from matplotlib.patches import Ellipse
 
 from .gaussian import GaussianState, compute_joint_correlation
@@ -748,9 +751,13 @@ def plot_phase_space_trajectory_timecoded(
         fig = figure
 
     if len(sequence) > 1:
-        segments = [(start, end) for start, end in zip(means[:-1], means[1:], strict=True)]
+        segments = [
+            (start, end) for start, end in zip(means[:-1], means[1:], strict=True)
+        ]
         norm = Normalize(vmin=float(time_values[0]), vmax=float(time_values[-1]))
-        line_collection = LineCollection(segments, cmap="viridis", norm=norm, linewidth=2.4)
+        line_collection = LineCollection(
+            segments, cmap="viridis", norm=norm, linewidth=2.4
+        )
         line_collection.set_array(time_values[:-1])
         ax.add_collection(line_collection)
         sm = ScalarMappable(norm=norm, cmap=line_collection.cmap)
@@ -831,12 +838,16 @@ def plot_multimode_evolution(
     axes = [fig.add_subplot(grid[0, i]) for i in range(mode_count)]
     correlation_ax = fig.add_subplot(grid[1, :])
 
-    for mode_index, (ax, mode_name) in enumerate(zip(axes, sequence[0].modes, strict=True)):
+    for mode_index, (ax, mode_name) in enumerate(
+        zip(axes, sequence[0].modes, strict=True)
+    ):
         means = np.array([_mode_geometry(state, mode_name)[0] for state in sequence])
         covariances = [_mode_geometry(state, mode_name)[1] for state in sequence]
         ax.plot(means[:, 0], means[:, 1], lw=2.0, label="mean trajectory")
         ax.scatter([means[0, 0]], [means[0, 1]], s=42, label="initial", zorder=4)
-        ax.scatter([means[-1, 0]], [means[-1, 1]], s=70, marker="*", label="final", zorder=4)
+        ax.scatter(
+            [means[-1, 0]], [means[-1, 1]], s=70, marker="*", label="final", zorder=4
+        )
         _style_phase_axes(ax)
         stride = max(1, len(sequence) // 6)
         for mean, covariance in zip(means[::stride], covariances[::stride], strict=True):
@@ -853,7 +864,11 @@ def plot_multimode_evolution(
             )
         limits = [ax.get_xlim(), ax.get_ylim()]
         extent = max(
-            abs(limits[0][0]), abs(limits[0][1]), abs(limits[1][0]), abs(limits[1][1]), 1.0
+            abs(limits[0][0]),
+            abs(limits[0][1]),
+            abs(limits[1][0]),
+            abs(limits[1][1]),
+            1.0,
         )
         ax.set_xlim(-extent, extent)
         ax.set_ylim(-extent, extent)
