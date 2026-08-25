@@ -1196,7 +1196,7 @@ def test_to_qutip_reconstructs_gaussian_covariance():
         .beam_splitter("a", "b", eta=0.37)
         .displace("a", alpha=0.4 + 0.2j)
     )
-    N_cutoff = 30
+    N_cutoff = 20
     rho = state.to_qutip(N_cutoff=N_cutoff)
 
     a_ops = []
@@ -1238,7 +1238,7 @@ def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
         .beam_splitter("a", "b", eta=0.5)
     )
     noisy_state = LossChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(state)
-    rho = noisy_state.to_qutip(N_cutoff=18)
+    rho = noisy_state.to_qutip(N_cutoff=15)
     assert rho.tr() == pytest.approx(1.0, abs=1e-9)
 
 
