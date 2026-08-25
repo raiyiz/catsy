@@ -20,7 +20,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.patches import Ellipse
 
-from .gaussian import GaussianState, compute_joint_correlation
+from . import GaussianState, compute_joint_correlation
 
 
 def _finalize(fig: plt.Figure, show: bool) -> plt.Figure:

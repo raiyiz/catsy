@@ -17,7 +17,7 @@ import numpy as np
 import qutip as qt
 import scipy.linalg
 
-from .core import (
+from catsy.core import (
     TOL_PHYSICALITY,
     _apply_gaussian_transform,
     _check_non_negative,
@@ -32,7 +32,7 @@ from .core import (
     _validate_physical_covariance,
     _williamson_decomposition,
 )
-from .types import (
+from catsy.types import (
     FloatArray,
     GaussianChannelData,
     GaussianStateData,

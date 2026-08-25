@@ -18,8 +18,8 @@ from catsy.gaussian import (
     squeeze,
     thermal_loss,
 )
+from catsy.gaussian.visualization import plot_joint_correlation
 from catsy.optics import Circuit, Gate
-from catsy.visualization import plot_joint_correlation
 
 # Analytic primitive checks
 

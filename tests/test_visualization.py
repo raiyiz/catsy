@@ -7,7 +7,7 @@ import pytest
 from catsy import GaussianState
 from catsy.core import DUAN_SEPARABILITY_BOUND
 from catsy.gaussian import LossChannels, compute_duan_inseparability
-from catsy.visualization import (
+from catsy.gaussian.visualization import (
     animate_phase_space,
     plot_covariance_evolution,
     plot_covariance_matrix,
