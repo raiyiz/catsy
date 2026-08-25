@@ -649,7 +649,7 @@ def plot_evolution(
     fig.suptitle(
         f"Gaussian-state evolution · mode {mode_name}", fontsize=16, fontweight="medium"
     )
-    return fig
+    return _finalize(fig, show)
 
 
 def plot_joint_correlation(
@@ -657,17 +657,24 @@ def plot_joint_correlation(
     mode_a: str,
     mode_b: str,
     quadrature: str = "x",
-) -> None:
-    P, X_a, X_b, _, _ = compute_joint_correlation(state, mode_a, mode_b)
-
-    plt.figure(figsize=(6, 5))
-    plt.contourf(X_a, X_b, P, 100, cmap="viridis")
-    plt.colorbar(label="Probability density")
-    plt.title(f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}")
-    plt.xlabel(f"{quadrature}_{mode_a}")
-    plt.ylabel(f"{quadrature}_{mode_b}")
-    plt.axis("equal")
-    plt.show()
+    *,
+    ax: plt.Axes | None = None,
+    show: bool = False,
+) -> plt.Figure:
+    P, X_a, X_b, _, _ = compute_joint_correlation(
+        state, mode_a, mode_b, quadrature=quadrature
+    )
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6.0, 5.0), constrained_layout=True)
+    else:
+        fig = cast(plt.Figure, ax.figure)
+    image = ax.contourf(X_a, X_b, P, 100, cmap="viridis")
+    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label="Probability density")
+    ax.set_title(f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}")
+    ax.set_xlabel(f"{quadrature}_{mode_a}")
+    ax.set_ylabel(f"{quadrature}_{mode_b}")
+    ax.set_aspect("equal", adjustable="box")
+    return _finalize(fig, show)
 
 
 def plot_state_dashboard(
@@ -745,10 +752,7 @@ def plot_phase_space_trajectory_timecoded(
     if ax is None:
         fig, ax = plt.subplots(figsize=(6.8, 6.1), constrained_layout=True)
     else:
-        figure = ax.figure
-        if not isinstance(figure, Figure):
-            raise TypeError("visualization axes must belong to a Figure")
-        fig = figure
+        fig = cast(plt.Figure, ax.figure)
 
     if len(sequence) > 1:
         segments = [
@@ -787,9 +791,7 @@ def plot_phase_space_trajectory_timecoded(
     )
     _state_header(ax, sequence[-1], mode_name)
     ax.legend(frameon=False, loc="lower right")
-    if show:
-        plt.show()
-    return fig
+    return _finalize(fig, show)
 
 
 def _cross_mode_correlation(state: GaussianState, mode_a: int, mode_b: int) -> float:
@@ -901,9 +903,7 @@ def plot_multimode_evolution(
         fontsize=16,
         fontweight="medium",
     )
-    if show:
-        plt.show()
-    return fig
+    return _finalize(fig, show)
 
 
 __all__ = [
@@ -912,6 +912,7 @@ __all__ = [
     "plot_covariance_matrix",
     "plot_diagnostics",
     "plot_evolution",
+    "plot_joint_correlation",
     "plot_mode_correlation_map",
     "plot_multimode_evolution",
     "plot_phase_space",
