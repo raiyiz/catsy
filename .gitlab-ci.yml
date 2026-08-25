@@ -41,7 +41,7 @@ pytest:
     # --plot runs the @pytest.mark.visualize tests too. matplotlib is
     # headless here (see MPLBACKEND above), so visualization tests render
     # without opening interactive windows.
-    - uv run pytest --plot --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
+    - uv run pytest --plot --timings --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
     when: always
     expose_as: "HTML coverage report"
