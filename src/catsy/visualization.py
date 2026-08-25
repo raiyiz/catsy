@@ -670,7 +670,9 @@ def plot_joint_correlation(
         fig = cast(plt.Figure, ax.figure)
     image = ax.contourf(X_a, X_b, P, 100, cmap="viridis")
     fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label="Probability density")
-    ax.set_title(f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}")
+    ax.set_title(
+        f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}"
+    )
     ax.set_xlabel(f"{quadrature}_{mode_a}")
     ax.set_ylabel(f"{quadrature}_{mode_b}")
     ax.set_aspect("equal", adjustable="box")
