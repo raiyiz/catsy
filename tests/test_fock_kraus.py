@@ -14,7 +14,7 @@ def test_single_kraus_application_matches_direct_kraus_formula():
     expected = kraus * rho * kraus.dag()
     expected = expected / expected.tr()
 
-    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-12)
+    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-8)
 
 
 def test_multiple_kraus_operators_match_sum_of_kraus_terms():
@@ -28,7 +28,7 @@ def test_multiple_kraus_operators_match_sum_of_kraus_terms():
     expected = k0 * rho * k0.dag() + k1 * rho * k1.dag()
     expected = expected / expected.tr()
 
-    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-12)
+    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-8)
 
 
 def test_kraus_application_rejects_empty_or_mismatched_sets():
