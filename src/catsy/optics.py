@@ -14,6 +14,16 @@ from typing import TYPE_CHECKING, Any, Protocol, TypedDict, cast
 import numpy as np
 import qutip as qt
 
+from catsy.gaussian import (
+    beam_splitter,
+    displace,
+    initial_state,
+    loss,
+    rotate,
+    squeeze,
+    thermal_loss,
+)
+
 from .core import _check_non_negative, _check_positive_int, _json_load, _json_save
 from .types import CircuitData, FloatArray, GateParameters, Modes, ParameterValue
 
@@ -372,6 +382,18 @@ _GATE_LABEL_ABBREVIATIONS = {
     "ThermalLoss": "TLOSS",
     "InitialState": "INIT",
 }
+
+
+for _name, _transform in (
+    ("Squeezer", squeeze),
+    ("Rotator", rotate),
+    ("Displacer", displace),
+    ("BeamSplitter", beam_splitter),
+    ("Noise", loss),
+    ("ThermalLoss", thermal_loss),
+    ("InitialState", initial_state),
+):
+    Circuit.register(_name, _transform)
 
 
 def _render_gate_label(gate: Gate) -> tuple[str, int]:
