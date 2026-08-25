@@ -1090,61 +1090,6 @@ def test_tmsv_entanglement_survives_but_weakens_under_loss():
     assert witness_heavy_loss > DUAN_SEPARABILITY_BOUND
 
 
-@pytest.mark.visualize
-def test_tmsv_entanglement_visualization_demo():
-    r = 1.0
-    tmsv = GaussianState.tmsv("a", "b", r=r)
-    vacuum = GaussianState.vacuum(("a", "b"))
-    classical = LossChannels.correlated_thermal_noise(
-        "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
-    ).apply(vacuum)
-
-    duan_tmsv = compute_duan_inseparability(tmsv, "a", "b")
-    duan_classical = compute_duan_inseparability(classical, "a", "b")
-    fig, axes = plt.subplots(2, 2, figsize=(11, 10))
-    panels = [
-        (
-            tmsv,
-            "x",
-            axes[0][0],
-            f"TMSV: x_a vs x_b\n(Duan sum = {duan_tmsv:.2f})",
-        ),
-        (
-            tmsv,
-            "p",
-            axes[0][1],
-            f"TMSV: p_a vs p_b\n(Duan sum = {duan_tmsv:.2f})",
-        ),
-        (
-            classical,
-            "x",
-            axes[1][0],
-            f"Classical noise: x_a vs x_b\n(Duan sum = {duan_classical:.2f})",
-        ),
-        (
-            classical,
-            "p",
-            axes[1][1],
-            f"Classical noise: p_a vs p_b\n(Duan sum = {duan_classical:.2f})",
-        ),
-    ]
-    for state, quad, ax, title in panels:
-        P, X_a, X_b, _, _ = compute_joint_correlation(
-            state, "a", "b", x_max=6.0, quadrature=quad
-        )
-        ax.contourf(X_a, X_b, P, 100, cmap="viridis")
-        ax.set_title(title)
-        ax.set_xlabel(f"{quad}_a")
-        ax.set_ylabel(f"{quad}_b")
-        ax.axis("equal")
-    fig.suptitle(
-        f"Genuine entanglement vs classical correlation "
-        f"(separability bound = {DUAN_SEPARABILITY_BOUND})"
-    )
-    plt.tight_layout()
-    plt.show()
-
-
 # Gaussian-to-Fock boundary
 
 

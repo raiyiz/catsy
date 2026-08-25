@@ -1,14 +1,17 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from test_gaussian import wigner_test_state
 
 from catsy import GaussianState
+from catsy.core import DUAN_SEPARABILITY_BOUND
+from catsy.gaussian import LossChannels, compute_duan_inseparability
 from catsy.visualization import (
     animate_phase_space,
     plot_covariance_evolution,
     plot_covariance_matrix,
     plot_diagnostics,
     plot_evolution,
+    plot_joint_correlation,
     plot_mode_correlation_map,
     plot_multimode_evolution,
     plot_phase_space,
@@ -76,11 +79,6 @@ class TestStateVisualizations:
         for figure in figures:
             assert_no_empty_axes(figure)
             assert_layout_can_render(figure)
-
-    @pytest.mark.visualize
-    def test_wigner_analytical_visualization_demo(self) -> None:
-        state = wigner_test_state()
-        (plot_wigner(state, "a", num_points=50),)
 
     @pytest.mark.visualize
     def test_phase_space_geometry_is_consistent(self) -> None:
@@ -329,3 +327,35 @@ def test_multimode_evolution_rejects_single_mode():
     state = GaussianState.vacuum(("a",))
     with pytest.raises(ValueError, match="at least two modes"):
         plot_multimode_evolution([state])
+
+
+@pytest.mark.visualize
+def test_joint_correlation_distinguishes_entanglement_from_classical_noise(
+    assert_no_empty_axes,
+    assert_layout_can_render,
+):
+    tmsv = GaussianState.tmsv("a", "b", r=1.0)
+    classical = LossChannels.correlated_thermal_noise(
+        "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
+    ).apply(GaussianState.vacuum(("a", "b")))
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
+    for (state, quad), ax in zip(
+        [(tmsv, "x"), (tmsv, "p"), (classical, "x"), (classical, "p")],
+        axes.flat,
+        strict=True,
+    ):
+        plot_joint_correlation(state, "a", "b", quadrature=quad, ax=ax)
+
+    fig.suptitle(
+        f"Genuine entanglement vs classical correlation "
+        f"(separability bound = {DUAN_SEPARABILITY_BOUND})"
+    )
+
+    assert len(fig.axes) == 8  # 4 panels + their colorbars
+    assert_no_empty_axes(fig)
+    assert_layout_can_render(fig)
+
+    duan_tmsv = compute_duan_inseparability(tmsv, "a", "b")
+    duan_classical = compute_duan_inseparability(classical, "a", "b")
+    assert duan_tmsv < DUAN_SEPARABILITY_BOUND < duan_classical

@@ -37,6 +37,8 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "visualize: test that exercises interactive visualizations"
     )
+    if config.getoption("--plot-pause") < 0:
+        raise pytest.UsageError("--plot-pause must be non-negative")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -111,11 +113,10 @@ def manage_visual_figures(request, monkeypatch):
 
     yield
 
-    pause = request.config.getoption("--plot-pause")
-    if pause < 0:
-        raise pytest.UsageError("--plot-pause must be non-negative")
-
+    # --plot-pause is validated once in pytest_configure, so it's safe to
+    # trust here; figure cleanup below always runs regardless of --plot.
     if request.config.getoption("--plot") and not IN_CI and plt.get_fignums():
+        pause = request.config.getoption("--plot-pause")
         original_show(block=False)
         plt.pause(pause)
 
