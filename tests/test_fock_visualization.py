@@ -78,6 +78,7 @@ def test_wigner_surfaces_for_n_photon_states(
 ):
     """Compare the radial Wigner oscillations of several number states."""
     n_values = (0, 1, 2, 3)
+    cutoff = max(n_values) + 4
     resolution = 60
     grid = np.linspace(-4.0, 4.0, resolution)
     x, p = np.meshgrid(grid, grid)
@@ -85,7 +86,7 @@ def test_wigner_surfaces_for_n_photon_states(
     fig = plt.figure(figsize=(12, 9), constrained_layout=True)
     for index, n in enumerate(n_values, start=1):
         ax = fig.add_subplot(2, 2, index, projection="3d")
-        wigner = qt.wigner(qt.fock_dm(n + 1, n), grid, grid)
+        wigner = qt.wigner(qt.fock(cutoff, n), grid, grid)
         ax.plot_surface(
             x,
             p,
