@@ -40,20 +40,30 @@ from .core import (
 )
 
 
-def _validate_state(rho: qt.Qobj, N_cutoff: int, mode_idx: int) -> int:
+def _validate_state(
+    rho: qt.Qobj,
+    N_cutoff: int | None,
+    mode_idx: int,
+) -> tuple[int, int]:
     if not isinstance(rho, qt.Qobj):
         raise TypeError(f"rho must be a QuTiP Qobj, got {type(rho).__name__}.")
     if not rho.isoper:
         raise ValueError("rho must be a QuTiP operator (density matrix).")
 
-    _check_positive_int(N_cutoff, "N_cutoff")
-
     dims = rho.dims[0]
-    if not dims or any(dim != N_cutoff for dim in dims):
+    if not dims or any(dim != dims[0] for dim in dims):
         raise ValueError(
-            "N_cutoff must match every mode dimension of rho; "
-            f"rho has dimensions {dims!r}, got N_cutoff={N_cutoff}."
+            "all system modes must have the same Fock dimension; "
+            f"got dimensions {dims!r}."
         )
+    inferred_cutoff = dims[0]
+    if N_cutoff is not None:
+        _check_positive_int(N_cutoff, "N_cutoff")
+        if N_cutoff != inferred_cutoff:
+            raise ValueError(
+                "N_cutoff must match every mode dimension of rho; "
+                f"rho has dimensions {dims!r}, got N_cutoff={N_cutoff}."
+            )
 
     n_modes = len(dims)
     if not isinstance(mode_idx, int) or not 0 <= mode_idx < n_modes:
@@ -61,7 +71,7 @@ def _validate_state(rho: qt.Qobj, N_cutoff: int, mode_idx: int) -> int:
             f"mode_idx must be an integer in [0, {n_modes - 1}], got {mode_idx!r}."
         )
 
-    return n_modes
+    return n_modes, inferred_cutoff
 
 
 def _embed_operator(op_1factor: qt.Qobj, dims: list[int], idx: int) -> qt.Qobj:
@@ -108,29 +118,29 @@ def _apply_kraus_operator(
 def photon_subtraction(
     rho: qt.Qobj,
     mode_idx: int = 0,
-    N_cutoff: int = 20,
+    N_cutoff: int | None = None,
 ) -> qt.Qobj:
     """Apply textbook photon subtraction ``rho -> a rho a†``."""
-    n_modes = _validate_state(rho, N_cutoff, mode_idx)
-    a_op = _mode_operator(qt.destroy(N_cutoff), n_modes, mode_idx, N_cutoff)
+    n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
+    a_op = _mode_operator(qt.destroy(cutoff), n_modes, mode_idx, cutoff)
     return _apply_kraus_operator(rho, a_op, "photon_subtraction")
 
 
 def photon_addition(
     rho: qt.Qobj,
     mode_idx: int = 0,
-    N_cutoff: int = 20,
+    N_cutoff: int | None = None,
 ) -> qt.Qobj:
     """Apply textbook photon addition ``rho -> a† rho a``."""
-    n_modes = _validate_state(rho, N_cutoff, mode_idx)
-    adag_op = _mode_operator(qt.create(N_cutoff), n_modes, mode_idx, N_cutoff)
+    n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
+    adag_op = _mode_operator(qt.create(cutoff), n_modes, mode_idx, cutoff)
     return _apply_kraus_operator(rho, adag_op, "photon_addition")
 
 
 def _click_heralded_operation(
     rho: qt.Qobj,
     mode_idx: int,
-    N_cutoff: int,
+    N_cutoff: int | None,
     ancilla_cutoff: int,
     coupling_strength: float,
     detector_efficiency: float,
@@ -138,15 +148,15 @@ def _click_heralded_operation(
     label: str,
 ) -> qt.Qobj:
     """Shared engine for realistic subtraction/addition operations."""
-    n_modes = _validate_state(rho, N_cutoff, mode_idx)
+    n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
     _check_positive_int(ancilla_cutoff, "ancilla_cutoff")
     _check_non_negative(coupling_strength, "coupling_strength")
     _check_unit_interval(detector_efficiency, "detector_efficiency")
 
-    dims = [N_cutoff] * n_modes + [ancilla_cutoff]
+    dims = [cutoff] * n_modes + [ancilla_cutoff]
     ancilla_idx = n_modes
 
-    a_sys = _embed_operator(qt.destroy(N_cutoff), dims, mode_idx)
+    a_sys = _embed_operator(qt.destroy(cutoff), dims, mode_idx)
     a_anc = _embed_operator(qt.destroy(ancilla_cutoff), dims, ancilla_idx)
 
     if coupling_kind == "subtract":
@@ -175,7 +185,7 @@ def _click_heralded_operation(
 def realistic_photon_subtraction(
     rho: qt.Qobj,
     mode_idx: int = 0,
-    N_cutoff: int = 20,
+    N_cutoff: int | None = None,
     tap_reflectivity: float = 0.05,
     detector_efficiency: float = 0.6,
     ancilla_cutoff: int = 6,
@@ -197,7 +207,7 @@ def realistic_photon_subtraction(
 def realistic_photon_addition(
     rho: qt.Qobj,
     mode_idx: int = 0,
-    N_cutoff: int = 20,
+    N_cutoff: int | None = None,
     coupling_strength: float = 0.05,
     detector_efficiency: float = 0.6,
     ancilla_cutoff: int = 6,
@@ -218,28 +228,28 @@ def realistic_photon_addition(
 def mean_photon_number(
     rho: qt.Qobj,
     mode_idx: int = 0,
-    N_cutoff: int = 20,
+    N_cutoff: int | None = None,
 ) -> float:
     """Return ``<n> = tr(rho * a†a)`` for the selected mode."""
-    n_modes = _validate_state(rho, N_cutoff, mode_idx)
-    n_op = _mode_operator(qt.num(N_cutoff), n_modes, mode_idx, N_cutoff)
+    n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
+    n_op = _mode_operator(qt.num(cutoff), n_modes, mode_idx, cutoff)
     return float(np.real((n_op * rho).tr()))
 
 
 def photon_number_measurement(
     rho: qt.Qobj,
     mode_idx: int = 0,
-    N_cutoff: int = 20,
+    N_cutoff: int | None = None,
     outcome: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[int, qt.Qobj]:
     """Ideal photon-number-resolving detection on ``mode_idx``."""
-    n_modes = _validate_state(rho, N_cutoff, mode_idx)
+    n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
 
     if outcome is not None:
-        if not isinstance(outcome, int) or not 0 <= outcome < N_cutoff:
+        if not isinstance(outcome, int) or not 0 <= outcome < cutoff:
             raise ValueError(
-                f"outcome must be an integer in [0, {N_cutoff - 1}], got {outcome!r}."
+                f"outcome must be an integer in [0, {cutoff - 1}], got {outcome!r}."
             )
     else:
         reduced = rho.ptrace(mode_idx) if n_modes > 1 else rho
@@ -251,10 +261,10 @@ def photon_number_measurement(
                 "numerically zero for every Fock level."
             )
         rng = rng if rng is not None else np.random.default_rng()
-        outcome = int(rng.choice(N_cutoff, p=probs / total))
+        outcome = int(rng.choice(cutoff, p=probs / total))
 
     projector = _mode_operator(
-        qt.fock_dm(N_cutoff, outcome), n_modes, mode_idx, N_cutoff
+        qt.fock_dm(cutoff, outcome), n_modes, mode_idx, cutoff
     )
     collapsed = _apply_kraus_operator(
         rho, projector, "photon_number_measurement"
