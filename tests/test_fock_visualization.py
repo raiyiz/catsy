@@ -4,6 +4,7 @@ import qutip as qt
 from matplotlib import pyplot as plt
 
 from catsy.fock_visualization import (
+    plot_fock_dashboard,
     plot_fock_density_matrix,
     plot_photon_statistics,
     plot_wigner,
@@ -36,6 +37,14 @@ def test_photon_statistics_for_fock_state_has_single_peak():
     assert np.count_nonzero(heights > 1e-12) == 1
 
 
+def test_photon_statistics_reports_sub_poissonian_fock_state():
+    rho = qt.ket2dm(qt.fock(10, 3))
+    figure = plot_photon_statistics(rho)
+    annotations = [text.get_text() for text in figure.axes[0].texts]
+
+    assert any("g^{(2)}" in text and "0.667" in text for text in annotations)
+
+
 def test_density_matrix_visualization_shows_coherences_for_cat_like_state():
     cutoff = 12
     state = (qt.fock(cutoff, 0) + qt.fock(cutoff, 4)).unit()
@@ -60,16 +69,39 @@ def test_wigner_visualization_contains_zero_contour_for_non_gaussian_state(
     assert_layout_can_render(figure)
 
 
-def test_multimode_visualization_reduces_to_selected_mode():
+@pytest.mark.visualize
+def test_fock_dashboard_keeps_all_complementary_views(
+    assert_no_empty_axes, assert_layout_can_render
+):
+    cutoff = 16
+    cat = (qt.coherent(cutoff, 1.8) + qt.coherent(cutoff, -1.8)).unit()
+    rho = qt.ket2dm(cat)
+    figure = plot_fock_dashboard(rho, xlim=(-5, 5), resolution=48)
+
+    assert len(figure.axes) >= 7
+    assert_no_empty_axes(figure)
+    assert_layout_can_render(figure)
+
+
+@pytest.mark.visualize
+def test_multimode_visualizations_reduce_to_selected_mode(
+    assert_no_empty_axes, assert_layout_can_render
+):
     cutoff = 8
     rho = qt.tensor(
         qt.ket2dm(qt.coherent(cutoff, 0.4)),
         qt.ket2dm(qt.fock(cutoff, 2)),
     )
-    figure = plot_photon_statistics(rho, mode_idx=1)
-    heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
+    figures = [
+        plot_photon_statistics(rho, mode_idx=1),
+        plot_wigner(rho, mode_idx=0, resolution=48),
+    ]
+    heights = np.array([bar.get_height() for bar in figures[0].axes[0].patches])
 
     assert heights[2] == pytest.approx(1.0)
+    for figure in figures:
+        assert_no_empty_axes(figure)
+        assert_layout_can_render(figure)
 
 
 @pytest.mark.visualize
