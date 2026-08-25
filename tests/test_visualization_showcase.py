@@ -20,9 +20,7 @@ def test_gaussian_dashboard_showcases_squeezed_displaced_state(
         .squeeze("signal", r=0.85, theta=0.28)
         .displace("signal", alpha=1.15 + 0.55j)
     )
-
     figure = plot_state_dashboard(state)
-
     assert len(figure.axes) >= 3
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
@@ -34,9 +32,7 @@ def test_gaussian_dashboard_showcases_two_mode_entanglement(
 ):
     """The two-mode squeezed vacuum exercises cross-mode structure in the dashboard."""
     state = GaussianState.tmsv("signal", "idler", r=0.72)
-
     figure = plot_state_dashboard(state, mode="signal")
-
     assert len(figure.axes) >= 4
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
@@ -54,24 +50,8 @@ def test_gaussian_multimode_evolution_showcases_correlation_dynamics(
         initial.squeeze("a", r=0.75).beam_splitter("a", "b", eta=0.5),
         initial.squeeze("a", r=1.0).beam_splitter("a", "b", eta=0.5),
     ]
-
     figure = plot_multimode_evolution(states, times=np.linspace(0.0, 1.0, len(states)))
-
     assert len(figure.axes) >= 3
-    assert_no_empty_axes(figure)
-    assert_layout_can_render(figure)
-
-
-@pytest.mark.visualize
-def test_gaussian_dashboard_showcases_two_mode_entanglement(
-    assert_no_empty_axes, assert_layout_can_render
-):
-    """The two-mode squeezed vacuum exercises cross-mode structure in the dashboard."""
-    state = GaussianState.tmsv("signal", "idler", r=0.72)
-
-    figure = plot_state_dashboard(state, mode="signal")
-
-    assert len(figure.axes) >= 4
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
@@ -84,9 +64,7 @@ def test_fock_dashboard_showcases_odd_cat_state(
     cutoff = 20
     cat = (qt.coherent(cutoff, 2.2) - qt.coherent(cutoff, -2.2)).unit()
     rho = qt.ket2dm(cat)
-
     figure = plot_fock_dashboard(rho, xlim=(-6, 6), resolution=64)
-
     assert len(figure.axes) >= 7
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
@@ -101,9 +79,7 @@ def test_fock_wigner_showcases_squeezed_cat_interference(
     cat = (qt.coherent(cutoff, 1.9) + qt.coherent(cutoff, -1.9)).unit()
     squeezed_cat = (qt.squeeze(cutoff, 0.65) * cat).unit()
     rho = qt.ket2dm(squeezed_cat)
-
     figure = plot_wigner(rho, xlim=(-6, 6), resolution=64)
-
     assert len(figure.axes[0].collections) >= 2
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
@@ -117,10 +93,8 @@ def test_fock_dashboard_showcases_high_order_fock_superposition(
     cutoff = 24
     state = (qt.fock(cutoff, 2) + 1j * qt.fock(cutoff, 11)).unit()
     rho = qt.ket2dm(state)
-
     figure = plot_fock_dashboard(rho, xlim=(-6, 6), resolution=64, n_max=13)
     magnitude = figure.axes[2].images[0].get_array()
-
     assert magnitude[2, 11] == pytest.approx(0.5, abs=1e-12)
     assert magnitude[11, 2] == pytest.approx(0.5, abs=1e-12)
     assert_no_empty_axes(figure)
@@ -133,11 +107,11 @@ def test_fock_wigner_showcases_higher_fock_state(
 ):
     """A higher Fock state makes radial Wigner oscillations visible."""
     cutoff = 22
-    rho = qt.ket2dm(qt.fock(cutoff, 8))
-
+    state = qt.fock(cutoff, 8)
+    rho = qt.ket2dm(state)
+    grid = np.linspace(-7, 7, 72)
     figure = plot_wigner(rho, xlim=(-7, 7), resolution=72)
-    wigner = qt.wigner(qt.fock(cutoff, 8), np.linspace(-7, 7, 72), np.linspace(-7, 7, 72))
-
+    wigner = qt.wigner(state, grid, grid)
     assert np.any(wigner > 0.05)
     assert np.any(wigner < -0.02)
     assert_no_empty_axes(figure)
@@ -151,19 +125,16 @@ def test_fock_wigner_showcases_four_component_compass_state(
     """A four-component cat produces higher-order phase-space interference."""
     cutoff = 32
     alpha = 2.4
-    components = [
-        qt.coherent(cutoff, alpha),
-        qt.coherent(cutoff, 1j * alpha),
-        qt.coherent(cutoff, -alpha),
-        qt.coherent(cutoff, -1j * alpha),
-    ]
-    compass = sum(components, qt.Qobj())
-    compass = compass.unit()
+    compass = (
+        qt.coherent(cutoff, alpha)
+        + qt.coherent(cutoff, 1j * alpha)
+        + qt.coherent(cutoff, -alpha)
+        + qt.coherent(cutoff, -1j * alpha)
+    ).unit()
     rho = qt.ket2dm(compass)
-
+    grid = np.linspace(-7, 7, 72)
     figure = plot_wigner(rho, xlim=(-7, 7), resolution=72)
-    wigner = qt.wigner(compass, np.linspace(-7, 7, 72), np.linspace(-7, 7, 72))
-
+    wigner = qt.wigner(compass, grid, grid)
     assert np.min(wigner) < -0.01
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
@@ -177,10 +148,8 @@ def test_fock_dashboard_showcases_fock_coherence_superposition(
     cutoff = 18
     state = (qt.fock(cutoff, 1) + 1j * qt.fock(cutoff, 7)).unit()
     rho = qt.ket2dm(state)
-
     figure = plot_fock_dashboard(rho, xlim=(-5, 5), resolution=56)
     magnitude = figure.axes[2].images[0].get_array()
-
     assert magnitude[1, 7] == pytest.approx(0.5, abs=1e-12)
     assert magnitude[7, 1] == pytest.approx(0.5, abs=1e-12)
     assert_no_empty_axes(figure)
