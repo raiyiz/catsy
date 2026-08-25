@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import numpy as np
 import qutip as qt
+from qutip.measurement import measurement_statistics
 
 from .core import (
     TOL_PHYSICALITY,
@@ -156,9 +157,7 @@ def _click_heralded_operation(
     dims = [cutoff] * n_modes + [ancilla_cutoff]
     ancilla_idx = n_modes
 
-    a_sys = _expand_operator(
-        qt.destroy(cutoff), dims=dims, mode_idx=mode_idx
-    )
+    a_sys = _expand_operator(qt.destroy(cutoff), dims=dims, mode_idx=mode_idx)
     a_anc = _expand_operator(
         qt.destroy(ancilla_cutoff), dims=dims, mode_idx=ancilla_idx
     )
@@ -258,7 +257,7 @@ def photon_number_measurement(
         _expand_operator(qt.fock_dm(cutoff, n), dims=dims, mode_idx=mode_idx)
         for n in range(cutoff)
     ]
-    collapsed_states, probabilities = qt.measurement_statistics(
+    collapsed_states, probabilities = measurement_statistics(
         rho, projectors, tol=TOL_PHYSICALITY
     )
     probabilities = np.asarray(probabilities, dtype=float)
