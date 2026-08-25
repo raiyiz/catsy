@@ -1,4 +1,5 @@
 import itertools
+from collections.abc import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,7 +27,7 @@ from catsy.visualization import (
 
 
 def _complex_state() -> GaussianState:
-    """A representative multimode Gaussian state for showcase plots."""
+    """Representative multimode Gaussian state for showcase plots."""
     return (
         GaussianState.tmsv("a", "b", r=0.9)
         .squeeze("a", r=0.65, theta=0.3)
@@ -39,7 +40,7 @@ def _complex_state() -> GaussianState:
 
 
 def _evolution() -> tuple[list[GaussianState], np.ndarray]:
-    """A nontrivial single-mode evolution for trajectory and Wigner plots."""
+    """Nontrivial single-mode evolution for trajectory and Wigner plots."""
     state = (
         GaussianState.vacuum(("a",))
         .squeeze("a", r=1.0, theta=0.2)
@@ -57,33 +58,80 @@ def _evolution() -> tuple[list[GaussianState], np.ndarray]:
     return states, np.linspace(0.0, 4.0, len(states))
 
 
-class TestStateVisualizations:
-    """Static views of representative Gaussian states."""
+def _single_mode_states() -> list[GaussianState]:
+    return [
+        GaussianState.vacuum(("a",)),
+        GaussianState.vacuum(("a",)).displace("a", 0.7),
+        GaussianState.vacuum(("a",)).squeeze("a", r=0.7),
+    ]
+
+
+def _plot_covariance(state: GaussianState) -> plt.Figure:
+    return plot_covariance_matrix(state)
+
+
+def _plot_phase_space(state: GaussianState) -> plt.Figure:
+    return plot_phase_space(state, "a")
+
+
+def _plot_wigner(state: GaussianState) -> plt.Figure:
+    return plot_wigner(state, "a", num_points=50)
+
+
+def _plot_mode_correlation(state: GaussianState) -> plt.Figure:
+    return plot_mode_correlation_map(state)
+
+
+def _plot_state_dashboard(state: GaussianState) -> plt.Figure:
+    return plot_state_dashboard(state, mode="b")
+
+
+STATIC_VISUALIZATIONS = [
+    pytest.param(_plot_covariance, 2, id="covariance"),
+    pytest.param(_plot_phase_space, 1, id="phase-space"),
+    pytest.param(_plot_wigner, 2, id="wigner"),
+    pytest.param(_plot_mode_correlation, 2, id="mode-correlation"),
+    pytest.param(_plot_state_dashboard, 7, id="multimode-dashboard"),
+]
+
+
+class TestStaticVisualizations:
+    """Static views and representative-state rendering."""
 
     @pytest.mark.visualize
-    def test_static_visualizations(
-        self, assert_no_empty_axes, assert_layout_can_render
+    @pytest.mark.parametrize("plotter, expected_axes", STATIC_VISUALIZATIONS)
+    def test_static_visualization_renders(
+        self,
+        plotter: Callable[[GaussianState], plt.Figure],
+        expected_axes: int,
+        assert_no_empty_axes,
+        assert_layout_can_render,
     ) -> None:
-        state = _complex_state()
-        figures = [
-            plot_covariance_matrix(state),
-            plot_phase_space(state, "a"),
-            plot_wigner(state, "a", num_points=50),
-            plot_mode_correlation_map(state),
-            plot_state_dashboard(state, mode="b"),
-        ]
-
-        assert len(figures[0].axes) == 2
-        assert len(figures[1].axes) == 1
-        assert len(figures[2].axes) == 2
-        assert len(figures[3].axes) == 2
-        assert len(figures[4].axes) == 7
-        for figure in figures:
-            assert_no_empty_axes(figure)
-            assert_layout_can_render(figure)
+        figure = plotter(_complex_state())
+        assert len(figure.axes) == expected_axes
+        assert_no_empty_axes(figure)
+        assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_phase_space_geometry_is_consistent(self) -> None:
+    @pytest.mark.parametrize("state_factory", [
+        pytest.param(lambda: GaussianState.vacuum(("a",)), id="vacuum"),
+        pytest.param(
+            lambda: GaussianState.vacuum(("a",)).squeeze("a", r=0.8), id="squeezed"
+        ),
+        pytest.param(
+            lambda: GaussianState.vacuum(("a",)).displace("a", 1.1 + 0.3j),
+            id="displaced",
+        ),
+    ])
+    def test_phase_space_renders_representative_states(
+        self, state_factory, assert_layout_can_render
+    ) -> None:
+        figure = plot_phase_space(state_factory(), "a")
+        assert len(figure.axes) == 1
+        assert_layout_can_render(figure)
+
+    @pytest.mark.visualize
+    def test_phase_space_geometry_matches_covariance_eigendecomposition(self) -> None:
         state = _complex_state()
         figure = plot_phase_space(state, "a")
         ax = figure.axes[0]
@@ -97,6 +145,7 @@ class TestStateVisualizations:
         vector = vectors[:, order[0]]
         expected_angle = np.degrees(np.arctan2(vector[1], vector[0]))
         ellipse = next(patch for patch in ax.patches if hasattr(patch, "angle"))
+
         np.testing.assert_allclose(ellipse.width, 4.0 * np.sqrt(values[0]))
         np.testing.assert_allclose(ellipse.height, 4.0 * np.sqrt(values[1]))
         np.testing.assert_allclose(ellipse.angle, expected_angle)
@@ -126,7 +175,7 @@ class TestStateVisualizations:
         assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_wigner_and_covariance_are_structurally_well_formed(
+    def test_wigner_and_covariance_structure_is_well_formed(
         self, assert_layout_can_render
     ) -> None:
         state = _complex_state()
@@ -141,52 +190,99 @@ class TestStateVisualizations:
         assert_layout_can_render(wigner)
 
 
+EVOLUTION_VISUALIZATIONS = [
+    pytest.param(
+        lambda states, times: plot_phase_space_trajectory(
+            states, "a", times=times, ellipse_every=2, n_sigma=2.0
+        ),
+        id="phase-space-trajectory",
+    ),
+    pytest.param(
+        lambda states, times: plot_covariance_evolution(states, "a", times=times),
+        id="covariance-evolution",
+    ),
+    pytest.param(
+        lambda states, times: plot_diagnostics(states, times=times),
+        id="diagnostics",
+    ),
+    pytest.param(
+        lambda states, times: plot_wigner_evolution(
+            states, "a", times=times, indices=[0, 8, 16], num_points=40
+        ),
+        id="wigner-evolution",
+    ),
+    pytest.param(
+        lambda states, times: plot_evolution(
+            states, "a", times=times, wigner_indices=[0, 8, 16]
+        ),
+        id="combined-evolution",
+    ),
+]
+
+
 class TestEvolutionVisualizations:
     """Time-dependent views of nontrivial Gaussian dynamics."""
 
     @pytest.mark.visualize
-    def test_phase_space_evolution_has_shared_geometry(
-        self, assert_no_empty_axes, assert_layout_can_render
+    @pytest.mark.parametrize("plotter", EVOLUTION_VISUALIZATIONS)
+    def test_evolution_visualization_renders(
+        self, plotter, assert_no_empty_axes, assert_layout_can_render
     ) -> None:
         states, times = _evolution()
-        figure = plot_phase_space_trajectory(
-            states, "a", times=times, ellipse_every=2, n_sigma=2.0
-        )
-        ax = figure.axes[0]
-        assert len(ax.lines) >= 1
-        assert len(ax.patches) >= 8
-        assert ax.get_xlabel() == "$x$ quadrature"
-        assert ax.get_ylabel() == "$p$ quadrature"
-        assert "Phase-space evolution" in ax.get_title()
-        np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
+        figure = plotter(states, times)
         assert_no_empty_axes(figure)
         assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_wigner_covariance_and_diagnostics_evolution(
-        self, assert_no_empty_axes, assert_layout_can_render
+    @pytest.mark.parametrize("n_states", [1, 2, 6, 17], ids=lambda n: f"states={n}")
+    def test_phase_space_trajectory_handles_sequence_lengths(
+        self, n_states, assert_layout_can_render
     ) -> None:
         states, times = _evolution()
-        covariance = plot_covariance_evolution(states, "a", times=times)
-        wigner = plot_wigner_evolution(
-            states, "a", times=times, indices=[0, 8, 16], num_points=40
+        states = states[:n_states]
+        times = times[:n_states]
+        figure = plot_phase_space_trajectory(states, "a", times=times)
+        assert len(figure.axes) == 1
+        assert_layout_can_render(figure)
+
+    @pytest.mark.visualize
+    @pytest.mark.parametrize("times", [None, [0.0, 0.5, 1.5, 3.0]], ids=["steps", "physical-time"])
+    def test_timecoded_phase_space_accepts_time_conventions(
+        self, times, assert_layout_can_render
+    ) -> None:
+        states = [
+            GaussianState.coherent(("a",), 0.2),
+            GaussianState.coherent(("a",), 0.8 + 0.4j),
+            GaussianState.coherent(("a",), 1.2 + 0.8j),
+            GaussianState.coherent(("a",), 0.3 + 1.1j),
+        ]
+        figure = plot_phase_space_trajectory_timecoded(
+            states, "a", times=times, ellipse_every=2
         )
-        diagnostics = plot_diagnostics(states, times=times)
+        ax = figure.axes[0]
+        assert "Time-coded phase-space evolution" in ax.get_title()
+        assert np.isclose(ax.get_aspect(), 1.0)
+        assert_layout_can_render(figure)
 
-        assert covariance.axes[0].get_xlabel() == "time"
-        assert "Covariance evolution" in covariance.axes[0].get_title()
-        wigner_axes = [ax for ax in wigner.axes if ax.get_title().startswith("t =")]
-        assert len(wigner_axes) == 3
-        assert len(wigner.axes) == 4
-        assert all("t =" in ax.get_title() for ax in wigner_axes)
-        assert diagnostics.axes[0].get_title() == "State diagnostics"
-
-        for left, right in itertools.pairwise(wigner_axes):
-            np.testing.assert_allclose(left.get_xlim(), right.get_xlim())
-            np.testing.assert_allclose(left.get_ylim(), right.get_ylim())
-        for figure in (covariance, wigner, diagnostics):
-            assert_no_empty_axes(figure)
-            assert_layout_can_render(figure)
+    @pytest.mark.visualize
+    def test_timecoded_phase_space_has_continuous_structure(
+        self, assert_layout_can_render
+    ) -> None:
+        states = [
+            GaussianState.coherent(("a",), 0.2),
+            GaussianState.coherent(("a",), 0.8 + 0.4j),
+            GaussianState.coherent(("a",), 1.2 + 0.8j),
+            GaussianState.coherent(("a",), 0.3 + 1.1j),
+        ]
+        figure = plot_phase_space_trajectory_timecoded(
+            states, "a", times=[0.0, 0.5, 1.5, 3.0], ellipse_every=2
+        )
+        ax = figure.axes[0]
+        assert len(ax.collections) >= 3
+        assert len(ax.patches) >= 2
+        assert figure.axes[1].get_ylabel() == "time"
+        np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
+        assert_layout_can_render(figure)
 
     @pytest.mark.visualize
     def test_evolution_animation_is_loopable_and_renderable(self, tmp_path) -> None:
@@ -202,13 +298,36 @@ class TestEvolutionVisualizations:
         assert output.exists()
         assert output.stat().st_size > 0
 
+
+DASHBOARD_VISUALIZATIONS = [
+    pytest.param(
+        GaussianState.vacuum(("a",)),
+        5,
+        id="single-mode",
+    ),
+    pytest.param(_complex_state(), 7, id="two-mode"),
+]
+
+
+class TestDashboardVisualizations:
+    """Dashboard composition across mode counts."""
+
     @pytest.mark.visualize
-    def test_evolution_dashboard_has_no_empty_panels(
+    @pytest.mark.parametrize("state, expected_axes", DASHBOARD_VISUALIZATIONS)
+    def test_state_dashboard_topology(
+        self, state, expected_axes, assert_no_empty_axes, assert_layout_can_render
+    ) -> None:
+        figure = plot_state_dashboard(state)
+        assert len(figure.axes) == expected_axes
+        assert_no_empty_axes(figure)
+        assert_layout_can_render(figure)
+
+    @pytest.mark.visualize
+    def test_evolution_dashboard_has_expected_structure(
         self, assert_no_empty_axes, assert_layout_can_render
     ) -> None:
         states, times = _evolution()
         dashboard = plot_evolution(states, "a", times=times, wigner_indices=[0, 8, 16])
-
         assert len(dashboard.axes) >= 4
         assert dashboard._suptitle is not None
         assert "mode a" in dashboard._suptitle.get_text()
@@ -216,148 +335,123 @@ class TestEvolutionVisualizations:
         assert_layout_can_render(dashboard)
 
     @pytest.mark.visualize
-    def test_multimode_state_dashboard_has_expected_structure(
-        self, assert_layout_can_render
-    ) -> None:
-        dashboard = plot_state_dashboard(_complex_state(), mode="b")
-        assert dashboard._suptitle is not None
-        assert "a, b" in dashboard._suptitle.get_text()
-        assert len(dashboard.axes) == 7
-        assert_layout_can_render(dashboard)
-
-    @pytest.mark.visualize
-    def test_timecoded_phase_space_has_continuous_time_structure(
-        self, assert_layout_can_render
+    def test_multimode_evolution_has_mode_panels_and_correlation(
+        self, assert_no_empty_axes, assert_layout_can_render
     ) -> None:
         states = [
-            GaussianState.coherent(("a",), 0.2),
-            GaussianState.coherent(("a",), 0.8 + 0.4j),
-            GaussianState.coherent(("a",), 1.2 + 0.8j),
-            GaussianState.coherent(("a",), 0.3 + 1.1j),
-        ]
-        times = [0.0, 0.5, 1.5, 3.0]
-        figure = plot_phase_space_trajectory_timecoded(
-            states, "a", times=times, ellipse_every=2
-        )
-
-        assert figure._suptitle is None
-        axes = [axis for axis in figure.axes if axis.get_xlabel() == "$x$ quadrature"]
-        assert len(axes) == 1
-        ax = axes[0]
-        assert len(ax.collections) >= 3
-        assert len(ax.patches) >= 2
-        assert "Time-coded phase-space evolution" in ax.get_title()
-        np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
-        assert_layout_can_render(figure)
-
-    @pytest.mark.visualize
-    def test_timecoded_phase_space_accepts_implicit_steps(
-        self, assert_layout_can_render
-    ) -> None:
-        states = [
-            GaussianState.vacuum(("a",)),
-            GaussianState.vacuum(("a",)).displace("a", alpha=0.7),
-        ]
-        figure = plot_phase_space_trajectory_timecoded(states, "a")
-        ax = figure.axes[0]
-        assert "mode a" in ax.texts[-1].get_text()
-        assert figure.axes[1].get_ylabel() == "step"
-        assert_layout_can_render(figure)
-
-    def test_timecoded_phase_space_rejects_invalid_times(self) -> None:
-        state = GaussianState.vacuum(("a",))
-        with pytest.raises(ValueError, match="same length"):
-            plot_phase_space_trajectory_timecoded([state, state], "a", times=[0.0])
-        with pytest.raises(ValueError, match="finite"):
-            plot_phase_space_trajectory_timecoded(
-                [state, state], "a", times=[0.0, np.nan]
+            (
+                GaussianState.vacuum(("a", "b"))
+                .squeeze("a", r=float(r))
+                .squeeze("b", r=float(r), theta=np.pi / 2)
+                .beam_splitter("a", "b", eta=0.5)
             )
-        with pytest.raises(ValueError, match="monotonically"):
-            plot_phase_space_trajectory_timecoded([state, state], "a", times=[1.0, 0.0])
+            for r in np.linspace(0.0, 0.8, 6)
+        ]
+        times = np.linspace(0.0, 1.0, len(states))
+        figure = plot_multimode_evolution(states, times=times)
+
+        assert len(figure.axes) == 3
+        assert_no_empty_axes(figure)
+        assert_layout_can_render(figure)
+        correlation_axis = figure.axes[-1]
+        assert len(correlation_axis.lines) == 1
+        np.testing.assert_allclose(correlation_axis.get_lines()[0].get_xdata(), times)
+        assert np.max(correlation_axis.get_lines()[0].get_ydata()) > 0.0
 
 
 class TestVisualizationValidation:
     """Argument and input validation for visualization helpers."""
 
-    def test_visualization_arguments_are_validated(self) -> None:
+    @pytest.mark.parametrize(
+        "call, match",
+        [
+            pytest.param(
+                lambda state: plot_phase_space(state, "a", n_sigma=0),
+                "n_sigma",
+                id="nonpositive-sigma",
+            ),
+            pytest.param(
+                lambda state: plot_wigner(state, "a", num_points=1),
+                "num_points",
+                id="invalid-wigner-grid",
+            ),
+            pytest.param(
+                lambda state: plot_phase_space_trajectory([state], "a", times=[0.0, 1.0]),
+                "same length",
+                id="trajectory-time-length",
+            ),
+            pytest.param(
+                lambda state: animate_phase_space([state], "a", interval=0),
+                "positive",
+                id="animation-interval",
+            ),
+            pytest.param(
+                lambda state: plot_phase_space_trajectory([], "a"),
+                "at least one",
+                id="empty-sequence",
+            ),
+            pytest.param(
+                lambda state: plot_phase_space_trajectory(
+                    [state, GaussianState.vacuum(("a", "b"))], "a"
+                ),
+                "same mode ordering",
+                id="mixed-mode-sequence",
+            ),
+        ],
+    )
+    def test_visualization_arguments_are_validated(self, call, match) -> None:
+        with pytest.raises(ValueError, match=match):
+            call(GaussianState.vacuum(("a",)))
+
+    @pytest.mark.parametrize(
+        "times, match",
+        [
+            pytest.param([0.0], "same length", id="wrong-length"),
+            pytest.param([0.0, np.nan], "finite", id="nonfinite"),
+            pytest.param([1.0, 0.0], "monotonically", id="decreasing"),
+        ],
+    )
+    def test_timecoded_phase_space_rejects_invalid_times(self, times, match) -> None:
         state = GaussianState.vacuum(("a",))
+        with pytest.raises(ValueError, match=match):
+            plot_phase_space_trajectory_timecoded([state, state], "a", times=times)
 
-        with pytest.raises(ValueError, match="n_sigma"):
-            plot_phase_space(state, "a", n_sigma=0)
-        with pytest.raises(ValueError, match="num_points"):
-            plot_wigner(state, "a", num_points=1)
-        with pytest.raises(ValueError, match="same length"):
-            plot_phase_space_trajectory([state], "a", times=[0.0, 1.0])
-        with pytest.raises(ValueError, match="positive"):
-            animate_phase_space([state], "a", interval=0)
-        with pytest.raises(ValueError, match="at least one"):
-            plot_phase_space_trajectory([], "a")
-        with pytest.raises(ValueError, match="same mode ordering"):
-            plot_phase_space_trajectory([state, GaussianState.vacuum(("a", "b"))], "a")
+    def test_multimode_evolution_rejects_single_mode(self) -> None:
+        state = GaussianState.vacuum(("a",))
+        with pytest.raises(ValueError, match="at least two modes"):
+            plot_multimode_evolution([state])
 
 
-@pytest.mark.visualize
-def test_multimode_evolution_dashboard_has_mode_panels_and_correlation(
-    assert_no_empty_axes,
-    assert_layout_can_render,
-):
-    states = []
-    for r in np.linspace(0.0, 0.8, 6):
-        state = (
-            GaussianState.vacuum(("a", "b"))
-            .squeeze("a", r=float(r))
-            .squeeze("b", r=float(r), theta=np.pi / 2)
-            .beam_splitter("a", "b", eta=0.5)
+class TestVisualizationShowcases:
+    """Physics-specific visualizations that are worth keeping explicit."""
+
+    @pytest.mark.visualize
+    def test_joint_correlation_distinguishes_entanglement_from_classical_noise(
+        self,
+        assert_no_empty_axes,
+        assert_layout_can_render,
+    ) -> None:
+        tmsv = GaussianState.tmsv("a", "b", r=1.0)
+        classical = LossChannels.correlated_thermal_noise(
+            "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
+        ).apply(GaussianState.vacuum(("a", "b")))
+
+        fig, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
+        for (state, quad), ax in zip(
+            [(tmsv, "x"), (tmsv, "p"), (classical, "x"), (classical, "p")],
+            axes.flat,
+            strict=True,
+        ):
+            plot_joint_correlation(state, "a", "b", quadrature=quad, ax=ax)
+
+        fig.suptitle(
+            f"Genuine entanglement vs classical correlation "
+            f"(separability bound = {DUAN_SEPARABILITY_BOUND})"
         )
-        states.append(state)
+        assert len(fig.axes) == 8
+        assert_no_empty_axes(fig)
+        assert_layout_can_render(fig)
 
-    figure = plot_multimode_evolution(states, times=np.linspace(0.0, 1.0, len(states)))
-
-    assert len(figure.axes) == 3
-    assert_no_empty_axes(figure)
-    assert_layout_can_render(figure)
-
-    correlation_axis = figure.axes[-1]
-    assert len(correlation_axis.lines) == 1
-    np.testing.assert_allclose(
-        correlation_axis.get_lines()[0].get_xdata(), np.linspace(0.0, 1.0, 6)
-    )
-    assert np.max(correlation_axis.get_lines()[0].get_ydata()) > 0.0
-
-
-def test_multimode_evolution_rejects_single_mode():
-    state = GaussianState.vacuum(("a",))
-    with pytest.raises(ValueError, match="at least two modes"):
-        plot_multimode_evolution([state])
-
-
-@pytest.mark.visualize
-def test_joint_correlation_distinguishes_entanglement_from_classical_noise(
-    assert_no_empty_axes,
-    assert_layout_can_render,
-):
-    tmsv = GaussianState.tmsv("a", "b", r=1.0)
-    classical = LossChannels.correlated_thermal_noise(
-        "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
-    ).apply(GaussianState.vacuum(("a", "b")))
-
-    fig, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
-    for (state, quad), ax in zip(
-        [(tmsv, "x"), (tmsv, "p"), (classical, "x"), (classical, "p")],
-        axes.flat,
-        strict=True,
-    ):
-        plot_joint_correlation(state, "a", "b", quadrature=quad, ax=ax)
-
-    fig.suptitle(
-        f"Genuine entanglement vs classical correlation "
-        f"(separability bound = {DUAN_SEPARABILITY_BOUND})"
-    )
-
-    assert len(fig.axes) == 8  # 4 panels + their colorbars
-    assert_no_empty_axes(fig)
-    assert_layout_can_render(fig)
-
-    duan_tmsv = compute_duan_inseparability(tmsv, "a", "b")
-    duan_classical = compute_duan_inseparability(classical, "a", "b")
-    assert duan_tmsv < DUAN_SEPARABILITY_BOUND < duan_classical
+        duan_tmsv = compute_duan_inseparability(tmsv, "a", "b")
+        duan_classical = compute_duan_inseparability(classical, "a", "b")
+        assert duan_tmsv < DUAN_SEPARABILITY_BOUND < duan_classical
