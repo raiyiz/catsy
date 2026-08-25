@@ -105,13 +105,21 @@ def test_wigner_surfaces_for_n_photon_states(
             colors="black",
             linewidths=0.7,
         )
+        ax.view_init(elev=32, azim=-55)
+        ax.set_zlim(float(np.min(wigner)), float(np.max(wigner)))
+        ax.set_box_aspect((1.0, 1.0, 0.65))
         ax.set_title(fr"$|{n}\rangle$")
         ax.set_xlabel("$x$")
         ax.set_ylabel("$p$")
         ax.set_zlabel("$W(x,p)$")
 
     fig.suptitle("Wigner functions of n-photon states", fontweight="medium")
+    fig.canvas.draw()
+
     assert len(fig.axes) == len(n_values)
+    for ax in fig.axes:
+        assert ax.collections
+        assert any(collection.get_array() is not None for collection in ax.collections)
     assert_no_empty_axes(fig)
     assert_layout_can_render(fig)
 
