@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 
+from .visualization import figure_and_axes, finalize_figure, style_phase_axes
+
 
 def _mode_state(rho: qt.Qobj, mode_idx: int) -> qt.Qobj:
     """Return a single-mode density matrix, tracing other modes out."""
@@ -33,10 +35,23 @@ def _mode_state(rho: qt.Qobj, mode_idx: int) -> qt.Qobj:
     return rho if len(dims) == 1 else rho.ptrace(mode_idx)
 
 
-def _finalize(fig: plt.Figure, show: bool) -> plt.Figure:
-    if show:
-        plt.show()
-    return fig
+def _photon_statistics(rho: qt.Qobj) -> tuple[np.ndarray, float, float]:
+    """Return probabilities, mean photon number, and ``g^(2)(0)``."""
+    probabilities = np.clip(np.real(rho.diag()), 0.0, None)
+    total = probabilities.sum()
+    if total <= np.finfo(float).eps:
+        raise ValueError("rho has no positive diagonal probability mass.")
+    probabilities /= total
+
+    n = np.arange(len(probabilities))
+    mean = float(np.dot(n, probabilities))
+    factorial_second = float(np.dot(n * (n - 1), probabilities))
+    g2 = (
+        factorial_second / mean**2
+        if mean > np.finfo(float).eps
+        else float("nan")
+    )
+    return probabilities, mean, g2
 
 
 def plot_photon_statistics(
@@ -47,15 +62,10 @@ def plot_photon_statistics(
     n_max: int | None = None,
     show: bool = False,
 ) -> plt.Figure:
-    """Plot photon-number probabilities and annotate non-Poissonianity.
-
-    QuTiP provides the standard Fock-distribution rendering; Catsy adds the
-    mean photon number and ``g^(2)(0)`` diagnostic on top.
-    """
+    """Plot photon-number probabilities and annotate non-Poissonianity."""
     state = _mode_state(rho, mode_idx)
     cutoff = state.dims[0][0]
-    probabilities = np.clip(np.real(state.diag()), 0.0, None)
-    probabilities /= probabilities.sum()
+    probabilities, mean, g2 = _photon_statistics(state)
 
     if n_max is None:
         support = np.flatnonzero(probabilities > 1e-8)
@@ -64,20 +74,7 @@ def plot_photon_statistics(
     if not isinstance(n_max, int) or not 0 <= n_max < cutoff:
         raise ValueError(f"n_max must be an integer in [0, {cutoff - 1}].")
 
-    n = np.arange(cutoff)
-    mean = float(np.dot(n, probabilities))
-    factorial_second = float(np.dot(n * (n - 1), probabilities))
-    g2 = (
-        factorial_second / mean**2
-        if mean > np.finfo(float).eps
-        else float("nan")
-    )
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(7.0, 4.8), constrained_layout=True)
-    else:
-        fig = cast(plt.Figure, ax.figure)
-
+    fig, ax = figure_and_axes(ax, figsize=(7.0, 4.8))
     qt.plot_fock_distribution(
         state,
         fig=fig,
@@ -113,29 +110,20 @@ def plot_photon_statistics(
         },
     )
     ax.legend(frameon=False)
-    return _finalize(fig, show)
+    return finalize_figure(fig, show)
 
 
-def plot_fock_density_matrix(
-    rho: qt.Qobj,
-    *,
-    mode_idx: int = 0,
-    show: bool = False,
-) -> plt.Figure:
-    """Visualize diagonal occupation and off-diagonal Fock coherences.
-
-    The two panels show ``|rho_mn|`` and ``arg(rho_mn)``. This makes coherent
-    superpositions, phase structure, and mixed-state decoherence visible in a
-    way that a photon-number histogram alone cannot capture.
-    """
-    state = _mode_state(rho, mode_idx)
+def _draw_density_matrix(
+    state: qt.Qobj,
+    ax_mag: plt.Axes,
+    ax_phase: plt.Axes,
+) -> None:
+    """Draw magnitude and phase of a single-mode density matrix."""
     matrix = state.full()
     cutoff = matrix.shape[0]
     magnitude = np.abs(matrix)
     phase = np.angle(matrix)
 
-    fig, axes = plt.subplots(1, 2, figsize=(10.0, 4.8), constrained_layout=True)
-    ax_mag, ax_phase = axes
     image_mag = ax_mag.imshow(magnitude, origin="lower", interpolation="nearest")
     image_phase = ax_phase.imshow(
         phase,
@@ -146,17 +134,41 @@ def plot_fock_density_matrix(
         vmax=np.pi,
     )
     ticks = np.arange(cutoff)
-    for ax in axes:
+    for ax in (ax_mag, ax_phase):
         ax.set_xticks(ticks)
         ax.set_yticks(ticks)
         ax.set_xlabel("Fock index $n$")
         ax.set_ylabel("Fock index $m$")
     ax_mag.set_title(r"Magnitude $|\rho_{mn}|$")
     ax_phase.set_title(r"Phase $\arg(\rho_{mn})$")
+    fig = cast(plt.Figure, ax_mag.figure)
     fig.colorbar(image_mag, ax=ax_mag, fraction=0.046, pad=0.04)
     fig.colorbar(image_phase, ax=ax_phase, fraction=0.046, pad=0.04, label="radians")
+
+
+def plot_fock_density_matrix(
+    rho: qt.Qobj,
+    *,
+    mode_idx: int = 0,
+    axes: tuple[plt.Axes, plt.Axes] | None = None,
+    show: bool = False,
+) -> plt.Figure:
+    """Visualize diagonal occupation and off-diagonal Fock coherences."""
+    state = _mode_state(rho, mode_idx)
+    if axes is None:
+        fig, created_axes = plt.subplots(
+            1, 2, figsize=(10.0, 4.8), constrained_layout=True
+        )
+        ax_mag, ax_phase = created_axes
+    else:
+        ax_mag, ax_phase = axes
+        fig = cast(plt.Figure, ax_mag.figure)
+        if ax_phase.figure is not fig:
+            raise ValueError("axes must belong to the same Matplotlib figure.")
+
+    _draw_density_matrix(state, ax_mag, ax_phase)
     fig.suptitle(f"Fock density matrix — mode {mode_idx}", fontweight="medium")
-    return _finalize(fig, show)
+    return finalize_figure(fig, show)
 
 
 def plot_wigner(
@@ -186,15 +198,11 @@ def plot_wigner(
 
     state = _mode_state(rho, mode_idx)
     grid = np.linspace(xlim[0], xlim[1], resolution)
-
-    if ax is None:
-        if projection == "3d":
-            fig = plt.figure(figsize=(6.8, 5.8), constrained_layout=True)
-            ax = fig.add_subplot(111, projection="3d")
-        else:
-            fig, ax = plt.subplots(figsize=(6.6, 5.8), constrained_layout=True)
-    else:
-        fig = cast(plt.Figure, ax.figure)
+    fig, ax = figure_and_axes(
+        ax,
+        figsize=(6.8, 5.8) if projection == "3d" else (6.6, 5.8),
+        projection="3d" if projection == "3d" else None,
+    )
 
     qt.plot_wigner(
         state,
@@ -218,8 +226,58 @@ def plot_wigner(
             linewidths=0.8,
             alpha=0.8,
         )
-        ax.axhline(0, lw=0.5, ls="--", alpha=0.25)
-        ax.axvline(0, lw=0.5, ls="--", alpha=0.25)
-        ax.set_aspect("equal", adjustable="box")
+        style_phase_axes(ax)
 
-    return _finalize(fig, show)
+    return finalize_figure(fig, show)
+
+
+def plot_fock_dashboard(
+    rho: qt.Qobj,
+    *,
+    mode_idx: int = 0,
+    xlim: tuple[float, float] = (-5.0, 5.0),
+    resolution: int = 140,
+    n_max: int | None = None,
+    show: bool = False,
+) -> plt.Figure:
+    """Render a dense four-panel Fock-state diagnostic dashboard.
+
+    The dashboard deliberately combines complementary views: number
+    statistics, Wigner negativity, coherence magnitude, and coherence phase.
+    It is intended for exploratory work and preserves the full information
+    available in the truncated single-mode density matrix.
+    """
+    state = _mode_state(rho, mode_idx)
+    fig = plt.figure(figsize=(13.5, 9.5), constrained_layout=True)
+    grid = fig.add_gridspec(2, 2, width_ratios=(1.0, 1.05), height_ratios=(1.0, 1.0))
+    ax_stats = fig.add_subplot(grid[0, 0])
+    ax_wigner = fig.add_subplot(grid[0, 1])
+    ax_mag = fig.add_subplot(grid[1, 0])
+    ax_phase = fig.add_subplot(grid[1, 1])
+
+    plot_photon_statistics(
+        state,
+        mode_idx=0,
+        ax=ax_stats,
+        n_max=n_max,
+    )
+    plot_wigner(
+        state,
+        mode_idx=0,
+        xlim=xlim,
+        resolution=resolution,
+        ax=ax_wigner,
+    )
+    plot_fock_density_matrix(state, mode_idx=0, axes=(ax_mag, ax_phase))
+    fig.suptitle(
+        f"Fock-state dashboard — mode {mode_idx}", fontsize=16, fontweight="medium"
+    )
+    return finalize_figure(fig, show)
+
+
+__all__ = [
+    "plot_fock_dashboard",
+    "plot_fock_density_matrix",
+    "plot_photon_statistics",
+    "plot_wigner",
+]
