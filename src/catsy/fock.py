@@ -188,11 +188,12 @@ def _click_heralded_operation(
         generator = coupling_strength * (
             a_sys * a_anc.dag() - a_sys.dag() * a_anc
         )
+        coupling_unitary = generator.expm()
     else:
-        generator = coupling_strength * (
-            a_sys.dag() * a_anc.dag() - a_sys * a_anc
-        )
-    coupling_unitary = generator.expm()
+        # QuTiP's generalized two-mode squeezing operator is
+        # exp(1/2 * (z* a_sys a_anc - z a_sys† a_anc†)). For real z=-2g,
+        # this is exactly exp(g * (a_sys† a_anc† - a_sys a_anc)).
+        coupling_unitary = qt.squeezing(a_sys, a_anc, -2.0 * coupling_strength)
 
     ancilla_vacuum = qt.fock_dm(ancilla_cutoff, 0)
     rho_extended = qt.tensor(rho, ancilla_vacuum)
