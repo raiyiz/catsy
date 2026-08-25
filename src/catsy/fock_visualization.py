@@ -64,11 +64,14 @@ def plot_photon_statistics(
     if not isinstance(n_max, int) or not 0 <= n_max < cutoff:
         raise ValueError(f"n_max must be an integer in [0, {cutoff - 1}].")
 
-    n = np.arange(n_max + 1)
-    p = probabilities[: n_max + 1]
-    mean = float(np.dot(n, p))
-    factorial_second = float(np.dot(n * (n - 1), p))
-    g2 = factorial_second / mean**2 if mean > np.finfo(float).eps else float("nan")
+    n = np.arange(cutoff)
+    mean = float(np.dot(n, probabilities))
+    factorial_second = float(np.dot(n * (n - 1), probabilities))
+    g2 = (
+        factorial_second / mean**2
+        if mean > np.finfo(float).eps
+        else float("nan")
+    )
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(7.0, 4.8), constrained_layout=True)
@@ -79,9 +82,9 @@ def plot_photon_statistics(
         state,
         fig=fig,
         ax=ax,
-        n_toconv=n_max,
-        show=False,
+        unit_y_range=False,
     )
+    ax.set_xlim(-0.5, n_max + 0.5)
     ax.axvline(
         mean,
         ls="--",
@@ -200,7 +203,7 @@ def plot_wigner(
         projection=projection,
         fig=fig,
         ax=ax,
-        show=False,
+        colorbar=projection == "2d",
     )
     ax.set_title(f"Wigner function — mode {mode_idx}", pad=14, fontweight="medium")
 
