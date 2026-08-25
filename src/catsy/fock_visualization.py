@@ -49,15 +49,14 @@ def plot_photon_statistics(
 ) -> plt.Figure:
     """Plot photon-number probabilities and annotate non-Poissonianity.
 
-    The panel shows ``P(n)`` together with the mean photon number and the
-    normalized factorial moment ``g^(2)(0) = <n(n-1)>/<n>^2``. The latter
-    distinguishes antibunched/sub-Poissonian states from classical Poissonian
-    statistics without relying on a Gaussian approximation.
+    QuTiP provides the standard Fock-distribution rendering; Catsy adds the
+    mean photon number and ``g^(2)(0)`` diagnostic on top.
     """
     state = _mode_state(rho, mode_idx)
     cutoff = state.dims[0][0]
     probabilities = np.clip(np.real(state.diag()), 0.0, None)
     probabilities /= probabilities.sum()
+
     if n_max is None:
         support = np.flatnonzero(probabilities > 1e-8)
         n_max = int(support[-1]) if support.size else 0
@@ -75,15 +74,27 @@ def plot_photon_statistics(
         fig, ax = plt.subplots(figsize=(7.0, 4.8), constrained_layout=True)
     else:
         fig = cast(plt.Figure, ax.figure)
-    ax.bar(n, p, width=0.82, alpha=0.82, label=r"$P(n)$")
-    ax.axvline(mean, ls="--", lw=1.4, alpha=0.65, label=fr"$\langle n\rangle={mean:.2f}$")
-    ax.set_xlabel("photon number $n$")
-    ax.set_ylabel("probability")
+
+    qt.plot_fock_distribution(
+        state,
+        fig=fig,
+        ax=ax,
+        n_toconv=n_max,
+        show=False,
+    )
+    ax.axvline(
+        mean,
+        ls="--",
+        lw=1.4,
+        alpha=0.65,
+        label=fr"$\langle n\rangle={mean:.2f}$",
+    )
     ax.set_title(f"Photon-number statistics — mode {mode_idx}", pad=14)
-    ax.set_xticks(n)
-    ax.grid(axis="y", alpha=0.12, linewidth=0.5)
-    ax.spines[["top", "right"]].set_visible(False)
-    annotation = fr"$g^{{(2)}}(0) = {g2:.3g}$" if np.isfinite(g2) else r"$g^{(2)}(0)$ undefined"
+    annotation = (
+        fr"$g^{{(2)}}(0) = {g2:.3g}$"
+        if np.isfinite(g2)
+        else r"$g^{(2)}(0)$ undefined"
+    )
     ax.text(
         0.98,
         0.96,
@@ -91,7 +102,12 @@ def plot_photon_statistics(
         transform=ax.transAxes,
         ha="right",
         va="top",
-        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.85, "edgecolor": "none"},
+        bbox={
+            "boxstyle": "round,pad=0.3",
+            "facecolor": "white",
+            "alpha": 0.85,
+            "edgecolor": "none",
+        },
     )
     ax.legend(frameon=False)
     return _finalize(fig, show)
@@ -147,13 +163,14 @@ def plot_wigner(
     xlim: tuple[float, float] = (-5.0, 5.0),
     resolution: int = 180,
     ax: plt.Axes | None = None,
+    projection: str = "2d",
     show: bool = False,
 ) -> plt.Figure:
-    """Plot a single-mode Wigner function, including its negativity contour.
+    """Plot a single-mode Wigner function using QuTiP's renderer.
 
-    For a multimode state, ``mode_idx`` is reduced first. A black zero contour
-    separates positive and negative Wigner regions, making non-Gaussian
-    structure such as photon-subtraction-induced negativity easy to inspect.
+    ``projection`` can be ``"2d"`` or ``"3d"``. For the 2D view, Catsy adds
+    the zero-negativity contour; all Wigner evaluation and rendering are
+    delegated to QuTiP.
     """
     if resolution < 32:
         raise ValueError("resolution must be at least 32.")
@@ -161,22 +178,45 @@ def plot_wigner(
         raise ValueError("xlim must be an increasing pair of finite values.")
     if not np.all(np.isfinite(xlim)):
         raise ValueError("xlim must contain finite values.")
+    if projection not in {"2d", "3d"}:
+        raise ValueError("projection must be '2d' or '3d'.")
 
     state = _mode_state(rho, mode_idx)
     grid = np.linspace(xlim[0], xlim[1], resolution)
-    wigner = qt.wigner(state, grid, grid)
 
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6.6, 5.8), constrained_layout=True)
+        if projection == "3d":
+            fig = plt.figure(figsize=(6.8, 5.8), constrained_layout=True)
+            ax = fig.add_subplot(111, projection="3d")
+        else:
+            fig, ax = plt.subplots(figsize=(6.6, 5.8), constrained_layout=True)
     else:
         fig = cast(plt.Figure, ax.figure)
-    image = ax.contourf(grid, grid, wigner, levels=80, cmap="RdBu_r")
-    ax.contour(grid, grid, wigner, levels=[0.0], colors="black", linewidths=0.8, alpha=0.8)
-    ax.axhline(0, lw=0.5, ls="--", alpha=0.25)
-    ax.axvline(0, lw=0.5, ls="--", alpha=0.25)
-    ax.set_aspect("equal", adjustable="box")
-    ax.set_xlabel(r"$x$")
-    ax.set_ylabel(r"$p$")
+
+    qt.plot_wigner(
+        state,
+        xvec=grid,
+        yvec=grid,
+        projection=projection,
+        fig=fig,
+        ax=ax,
+        show=False,
+    )
     ax.set_title(f"Wigner function — mode {mode_idx}", pad=14, fontweight="medium")
-    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label=r"$W(x,p)$")
+
+    if projection == "2d":
+        wigner = qt.wigner(state, grid, grid)
+        ax.contour(
+            grid,
+            grid,
+            wigner,
+            levels=[0.0],
+            colors="black",
+            linewidths=0.8,
+            alpha=0.8,
+        )
+        ax.axhline(0, lw=0.5, ls="--", alpha=0.25)
+        ax.axvline(0, lw=0.5, ls="--", alpha=0.25)
+        ax.set_aspect("equal", adjustable="box")
+
     return _finalize(fig, show)
