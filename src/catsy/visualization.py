@@ -7,6 +7,7 @@ and animations so state and dynamics remain easy to compare.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 from typing import cast
 
@@ -757,9 +758,7 @@ def plot_phase_space_trajectory_timecoded(
         fig = cast(plt.Figure, ax.figure)
 
     if len(sequence) > 1:
-        segments = [
-            (start, end) for start, end in zip(means[:-1], means[1:], strict=True)
-        ]
+        segments = [(start, end) for start, end in itertools.pairwise(means)]
         norm = Normalize(vmin=float(time_values[0]), vmax=float(time_values[-1]))
         line_collection = LineCollection(
             segments, cmap="viridis", norm=norm, linewidth=2.4

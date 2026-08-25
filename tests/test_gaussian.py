@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 import qutip as qt
-from matplotlib import pyplot as plt
 
 from catsy.core import DUAN_SEPARABILITY_BOUND, _williamson_decomposition
 from catsy.gaussian import (

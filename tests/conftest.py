@@ -4,18 +4,18 @@ import os
 from collections.abc import Callable
 
 import matplotlib
+import matplotlib.pyplot as plt
 import pytest
 from matplotlib.figure import Figure
 
-PLOT_PAUSE_SECONDS = 2.0
+from catsy.gaussian import GaussianState
+
 IN_CI = os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("GITLAB_CI") == "true"
 
 if IN_CI:
     matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt
-
-from catsy.gaussian import GaussianState
+PLOT_PAUSE_SECONDS = 2.0
 
 
 def pytest_addoption(parser):
