@@ -29,6 +29,8 @@ boundary via ``GaussianState.to_qutip()``.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 import qutip as qt
 from qutip.measurement import measurement_statistics
@@ -93,27 +95,47 @@ def _mode_operator(
     return _expand_operator(op_1mode, [N_cutoff] * n_modes, mode_idx)
 
 
-def _apply_kraus_operator(
+def _apply_kraus_operators(
     rho: qt.Qobj,
-    kraus_op: qt.Qobj,
-    label: str = "apply_kraus_operator",
+    kraus_ops: Sequence[qt.Qobj],
+    label: str = "apply_kraus_operators",
 ) -> qt.Qobj:
-    """Apply a single Kraus operator and renormalize."""
-    if not isinstance(kraus_op, qt.Qobj) or not kraus_op.isoper:
-        raise TypeError("kraus_op must be a QuTiP operator (Qobj).")
-    if kraus_op.dims[0] != rho.dims[0] or kraus_op.dims[1] != rho.dims[1]:
-        raise ValueError(
-            "kraus_op must act on the same Hilbert space as rho; "
-            f"got kraus_op.dims={kraus_op.dims!r}, rho.dims={rho.dims!r}."
-        )
+    """Apply a conditional operation represented by Kraus operators.
 
-    rho_new = kraus_op * rho * kraus_op.dag()
+    The unnormalized post-selected state is
+    ``sum_i K_i rho K_i.dag()``. QuTiP performs the Kraus-to-superoperator
+    conversion; Catsy only handles the conditional renormalization and the
+    domain-specific zero-success-probability error.
+    """
+    kraus_ops = list(kraus_ops)
+    if not kraus_ops:
+        raise ValueError("kraus_ops must contain at least one operator.")
+    for kraus_op in kraus_ops:
+        if not isinstance(kraus_op, qt.Qobj) or not kraus_op.isoper:
+            raise TypeError("every Kraus operator must be a QuTiP operator (Qobj).")
+        if kraus_op.dims[0] != rho.dims[0] or kraus_op.dims[1] != rho.dims[1]:
+            raise ValueError(
+                "all Kraus operators must act on the same Hilbert space as rho; "
+                f"got kraus_op.dims={kraus_op.dims!r}, rho.dims={rho.dims!r}."
+            )
+
+    channel = qt.kraus_to_super(kraus_ops)
+    rho_new = qt.vector_to_operator(channel * qt.operator_to_vector(rho))
     trace_val = rho_new.tr()
     if abs(trace_val) < TOL_PHYSICALITY:
         raise ValueError(
             f"{label}: heralding success probability is numerically zero."
         )
     return rho_new / trace_val
+
+
+def _apply_kraus_operator(
+    rho: qt.Qobj,
+    kraus_op: qt.Qobj,
+    label: str = "apply_kraus_operator",
+) -> qt.Qobj:
+    """Backward-compatible single-Kraus wrapper."""
+    return _apply_kraus_operators(rho, [kraus_op], label)
 
 
 def photon_subtraction(
@@ -124,7 +146,7 @@ def photon_subtraction(
     """Apply textbook photon subtraction ``rho -> a rho a†``."""
     n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
     a_op = _mode_operator(qt.destroy(cutoff), n_modes, mode_idx, cutoff)
-    return _apply_kraus_operator(rho, a_op, "photon_subtraction")
+    return _apply_kraus_operators(rho, [a_op], "photon_subtraction")
 
 
 def photon_addition(
@@ -135,7 +157,7 @@ def photon_addition(
     """Apply textbook photon addition ``rho -> a† rho a``."""
     n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
     adag_op = _mode_operator(qt.create(cutoff), n_modes, mode_idx, cutoff)
-    return _apply_kraus_operator(rho, adag_op, "photon_addition")
+    return _apply_kraus_operators(rho, [adag_op], "photon_addition")
 
 
 def _click_heralded_operation(
@@ -185,7 +207,7 @@ def _click_heralded_operation(
         mode_idx=ancilla_idx,
     )
 
-    rho_heralded = _apply_kraus_operator(rho_coupled, click_operator, label)
+    rho_heralded = _apply_kraus_operators(rho_coupled, [click_operator], label)
     return rho_heralded.ptrace(list(range(n_modes)))
 
 
