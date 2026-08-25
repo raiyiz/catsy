@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import qutip as qt
@@ -69,6 +70,50 @@ def test_multimode_visualization_reduces_to_selected_mode():
     heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
 
     assert heights[2] == pytest.approx(1.0)
+
+
+@pytest.mark.visualize
+def test_wigner_surfaces_for_n_photon_states(
+    assert_no_empty_axes, assert_layout_can_render
+):
+    """Compare the radial Wigner oscillations of several number states."""
+    n_values = (0, 1, 2, 3)
+    resolution = 60
+    grid = np.linspace(-4.0, 4.0, resolution)
+    x, p = np.meshgrid(grid, grid)
+
+    fig = plt.figure(figsize=(12, 9), constrained_layout=True)
+    for index, n in enumerate(n_values, start=1):
+        ax = fig.add_subplot(2, 2, index, projection="3d")
+        wigner = qt.wigner(qt.fock_dm(n + 1, n), grid, grid)
+        ax.plot_surface(
+            x,
+            p,
+            wigner,
+            rcount=resolution,
+            ccount=resolution,
+            linewidth=0,
+            antialiased=True,
+            cmap="RdBu_r",
+        )
+        ax.contour(
+            x,
+            p,
+            wigner,
+            levels=[0.0],
+            offset=float(np.min(wigner)),
+            colors="black",
+            linewidths=0.7,
+        )
+        ax.set_title(fr"$|{n}\rangle$")
+        ax.set_xlabel("$x$")
+        ax.set_ylabel("$p$")
+        ax.set_zlabel("$W(x,p)$")
+
+    fig.suptitle("Wigner functions of n-photon states", fontweight="medium")
+    assert len(fig.axes) == len(n_values)
+    assert_no_empty_axes(fig)
+    assert_layout_can_render(fig)
 
 
 @pytest.mark.parametrize(
