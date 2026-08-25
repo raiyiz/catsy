@@ -615,7 +615,6 @@ def initial_state(
     raise ValueError(f"Unknown Gaussian initial state kind {kind!r}.")
 
 
-
 # ========================================================================
 # Measurements
 # ========================================================================
