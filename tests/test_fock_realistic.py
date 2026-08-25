@@ -13,6 +13,21 @@ def _squeezed_vacuum(r: float = 0.6) -> qt.Qobj:
     return qt.ket2dm(psi)
 
 
+def test_quutip_two_mode_squeezing_matches_realistic_addition_convention():
+    cutoff = 6
+    ancilla_cutoff = 5
+    coupling = 0.12
+    dims = [cutoff, ancilla_cutoff]
+    a_sys = qt.expand_operator(qt.destroy(cutoff), dims=dims, targets=0)
+    a_anc = qt.expand_operator(qt.destroy(ancilla_cutoff), dims=dims, targets=1)
+
+    generator = coupling * (a_sys.dag() * a_anc.dag() - a_sys * a_anc)
+    expected = generator.expm()
+    actual = qt.squeezing(a_sys, a_anc, -2.0 * coupling)
+
+    assert qt.fidelity(actual, expected) == pytest.approx(1.0, abs=1e-10)
+
+
 @pytest.mark.parametrize(
     ("ideal", "realistic", "realistic_kwargs"),
     [
