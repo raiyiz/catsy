@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from catsy.gaussian import GaussianState, beam_splitter, loss, squeeze
+from catsy.gaussian.visualization import plot_covariance_matrix
 from catsy.optics import Circuit, Gate
-from catsy.visualization import plot_covariance_matrix
 
 
 def test_gaussian_state_constructors_and_fluent_transformations():
