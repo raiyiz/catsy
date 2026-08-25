@@ -74,14 +74,22 @@ def _validate_state(
     return n_modes, inferred_cutoff
 
 
+def _expand_operator(
+    op_1mode: qt.Qobj,
+    dims: list[int],
+    mode_idx: int,
+) -> qt.Qobj:
+    """Expand a single-mode operator onto the selected subsystem."""
+    return qt.expand_operator(op_1mode, dims=dims, targets=mode_idx)
+
+
 def _mode_operator(
     op_1mode: qt.Qobj,
     n_modes: int,
     mode_idx: int,
     N_cutoff: int,
 ) -> qt.Qobj:
-    """Expand a single-mode operator onto the selected subsystem."""
-    return qt.expand_operator(op_1mode, [N_cutoff] * n_modes, mode_idx)
+    return _expand_operator(op_1mode, [N_cutoff] * n_modes, mode_idx)
 
 
 def _apply_kraus_operator(
@@ -148,9 +156,11 @@ def _click_heralded_operation(
     dims = [cutoff] * n_modes + [ancilla_cutoff]
     ancilla_idx = n_modes
 
-    a_sys = _mode_operator(qt.destroy(cutoff), len(dims), mode_idx, cutoff)
-    a_anc = _mode_operator(
-        qt.destroy(ancilla_cutoff), len(dims), ancilla_idx, ancilla_cutoff
+    a_sys = _expand_operator(
+        qt.destroy(cutoff), dims=dims, mode_idx=mode_idx
+    )
+    a_anc = _expand_operator(
+        qt.destroy(ancilla_cutoff), dims=dims, mode_idx=ancilla_idx
     )
 
     if coupling_kind == "subtract":
@@ -170,11 +180,10 @@ def _click_heralded_operation(
     no_click_diag = (1.0 - detector_efficiency) ** np.arange(ancilla_cutoff)
     click_diag = np.sqrt(np.clip(1.0 - no_click_diag, 0.0, None))
     click_operator_anc = qt.Qobj(np.diag(click_diag))
-    click_operator = _mode_operator(
+    click_operator = _expand_operator(
         click_operator_anc,
-        len(dims),
-        ancilla_idx,
-        ancilla_cutoff,
+        dims=dims,
+        mode_idx=ancilla_idx,
     )
 
     rho_heralded = _apply_kraus_operator(rho_coupled, click_operator, label)
@@ -246,10 +255,10 @@ def photon_number_measurement(
     n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
     dims = [cutoff] * n_modes
     projectors = [
-        qt.expand_operator(qt.fock_dm(cutoff, n), dims, mode_idx)
+        _expand_operator(qt.fock_dm(cutoff, n), dims=dims, mode_idx=mode_idx)
         for n in range(cutoff)
     ]
-    collapsed_states, probabilities = qt.measurement_statistics_povm(
+    collapsed_states, probabilities = qt.measurement_statistics(
         rho, projectors, tol=TOL_PHYSICALITY
     )
     probabilities = np.asarray(probabilities, dtype=float)
