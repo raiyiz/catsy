@@ -247,6 +247,135 @@ def test_photon_number_measurement_on_multimode_state_traces_out_measured_mode()
     assert qt.fidelity(remaining, expected_remaining) == pytest.approx(1.0, abs=1e-10)
 
 
+# Realistic (click-heralded) subtraction & addition
+
+
+def test_realistic_subtraction_converges_to_ideal_in_weak_tap_high_efficiency_limit():
+    N_cutoff = 12
+    psi = qt.coherent(N_cutoff, 1.0)
+    rho = qt.ket2dm(psi)
+
+    realistic = FockGates.realistic_photon_subtraction(
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=1e-4,
+        detector_efficiency=0.999,
+        ancilla_cutoff=6,
+    )
+    ideal = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=N_cutoff)
+    assert qt.fidelity(realistic, ideal) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_realistic_addition_converges_to_ideal_in_weak_coupling_high_efficiency_limit():
+    N_cutoff = 12
+    psi = qt.coherent(N_cutoff, 1.0)
+    rho = qt.ket2dm(psi)
+
+    realistic = FockGates.realistic_photon_addition(
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        coupling_strength=1e-4,
+        detector_efficiency=0.999,
+        ancilla_cutoff=6,
+    )
+    ideal = FockGates.photon_addition(rho, mode_idx=0, N_cutoff=N_cutoff)
+    assert qt.fidelity(realistic, ideal) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_realistic_subtraction_output_stays_a_valid_density_matrix():
+    N_cutoff = 10
+    rho = qt.ket2dm(qt.coherent(N_cutoff, 0.8))
+    result = FockGates.realistic_photon_subtraction(
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.2,
+        detector_efficiency=0.5,
+        ancilla_cutoff=5,
+    )
+    assert result.tr() == pytest.approx(1.0, abs=1e-8)
+    eigenvalues = result.eigenenergies()
+    assert np.all(eigenvalues > -1e-9)
+
+
+def test_realistic_addition_output_stays_a_valid_density_matrix():
+    N_cutoff = 10
+    rho = qt.ket2dm(qt.coherent(N_cutoff, 0.8))
+    result = FockGates.realistic_photon_addition(
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        coupling_strength=0.2,
+        detector_efficiency=0.5,
+        ancilla_cutoff=5,
+    )
+    assert result.tr() == pytest.approx(1.0, abs=1e-8)
+    eigenvalues = result.eigenenergies()
+    assert np.all(eigenvalues > -1e-9)
+
+
+def test_lower_detector_efficiency_degrades_fidelity_to_ideal_subtraction():
+    # A worse detector should herald a less faithful subtraction event --
+    # this pins down the *direction* of detector_efficiency's effect, not
+    # just that the function runs at some value. Uses a squeezed state
+    # rather than a coherent one: splitting a coherent state at a
+    # beamsplitter never entangles it with the tap (coherent states stay a
+    # product state), so a coherent-state herald is always pure regardless
+    # of efficiency and wouldn't distinguish the two detectors.
+    N_cutoff = 16
+    psi = (qt.squeeze(N_cutoff, 0.5) * qt.fock(N_cutoff, 0)).unit()
+    rho = qt.ket2dm(psi)
+    ideal = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=N_cutoff)
+
+    good_detector = FockGates.realistic_photon_subtraction(
+        rho, N_cutoff=N_cutoff, tap_reflectivity=0.05, detector_efficiency=0.95
+    )
+    poor_detector = FockGates.realistic_photon_subtraction(
+        rho, N_cutoff=N_cutoff, tap_reflectivity=0.05, detector_efficiency=0.2
+    )
+    fid_good = qt.fidelity(good_detector, ideal)
+    fid_poor = qt.fidelity(poor_detector, ideal)
+    assert fid_good > fid_poor
+
+
+def test_realistic_photon_ops_reject_invalid_parameters():
+    N_cutoff = 8
+    rho = qt.ket2dm(qt.fock(N_cutoff, 1))
+    with pytest.raises(ValueError):
+        FockGates.realistic_photon_subtraction(
+            rho, N_cutoff=N_cutoff, tap_reflectivity=-0.1
+        )
+    with pytest.raises(ValueError):
+        FockGates.realistic_photon_subtraction(
+            rho, N_cutoff=N_cutoff, detector_efficiency=1.5
+        )
+    with pytest.raises(ValueError):
+        FockGates.realistic_photon_addition(
+            rho, N_cutoff=N_cutoff, coupling_strength=-0.1
+        )
+    with pytest.raises(ValueError):
+        FockGates.realistic_photon_subtraction(rho, N_cutoff=N_cutoff, ancilla_cutoff=0)
+
+
+def test_realistic_photon_ops_act_only_on_the_selected_mode():
+    N_cutoff = 6
+    two_mode_vacuum = qt.tensor(
+        qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 0))
+    )
+    result = FockGates.realistic_photon_addition(
+        two_mode_vacuum,
+        mode_idx=1,
+        N_cutoff=N_cutoff,
+        coupling_strength=1e-4,
+        detector_efficiency=0.999,
+        ancilla_cutoff=4,
+    )
+    expected = qt.tensor(qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 1)))
+    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-3)
+
+
 # Visual diagnostics
 
 
@@ -274,5 +403,70 @@ def test_native_qutip_wigner_plot_demo(assert_no_empty_axes, assert_layout_can_r
 
     histogram_fig, _histogram_ax = qt.matrix_histogram(rho.full().real[:10, :10])
     assert_layout_can_render(histogram_fig)
+
+    plt.show()
+
+
+@pytest.mark.visualize
+def test_realistic_vs_ideal_subtraction_wigner_and_photon_stats_demo(
+    assert_no_empty_axes, assert_layout_can_render
+):
+    # Side-by-side view of what "realistic" buys over "ideal": Wigner
+    # functions of a coherent state after ideal vs. click-heralded photon
+    # subtraction, plus the photon-number distributions that show the
+    # click-heralded version isn't a pure single-photon-subtracted state.
+    # A squeezed vacuum is used rather than a coherent state: a coherent
+    # state passed through a beamsplitter tap never entangles with the tap
+    # (it stays a product state), so its heralded subtraction would always
+    # come out pure regardless of tap_reflectivity/detector_efficiency and
+    # the comparison below would show no visible difference.
+    N_cutoff = 20
+    psi = (qt.squeeze(N_cutoff, 0.6) * qt.fock(N_cutoff, 0)).unit()
+    rho = qt.ket2dm(psi)
+
+    ideal = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=N_cutoff)
+    realistic = FockGates.realistic_photon_subtraction(
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.15,
+        detector_efficiency=0.55,
+        ancilla_cutoff=8,
+    )
+
+    xvec = np.linspace(-5, 5, 150)
+    W_ideal = qt.wigner(ideal, xvec, xvec)
+    W_realistic = qt.wigner(realistic, xvec, xvec)
+    w_lim = max(np.abs(W_ideal).max(), np.abs(W_realistic).max())
+
+    fig, (ax_ideal, ax_realistic, ax_stats) = plt.subplots(1, 3, figsize=(13, 4))
+
+    ax_ideal.contourf(xvec, xvec, W_ideal, 100, cmap="RdBu_r", vmin=-w_lim, vmax=w_lim)
+    ax_ideal.set_title("Ideal subtraction (a rho a†)")
+    ax_ideal.set_aspect("equal")
+
+    ax_realistic.contourf(
+        xvec, xvec, W_realistic, 100, cmap="RdBu_r", vmin=-w_lim, vmax=w_lim
+    )
+    ax_realistic.set_title("Realistic (click-heralded) subtraction")
+    ax_realistic.set_aspect("equal")
+
+    n_max = 8
+    n_vals = np.arange(n_max)
+    p_ideal = np.real(ideal.diag())[:n_max]
+    p_realistic = np.real(realistic.diag())[:n_max]
+    width = 0.4
+    ax_stats.bar(n_vals - width / 2, p_ideal, width, label="ideal")
+    ax_stats.bar(n_vals + width / 2, p_realistic, width, label="realistic")
+    ax_stats.set_xlabel("photon number n")
+    ax_stats.set_ylabel("P(n)")
+    ax_stats.set_title("Photon-number distribution")
+    ax_stats.legend()
+
+    fig.suptitle("Ideal vs. click-heralded photon subtraction")
+    fig.tight_layout()
+
+    assert_no_empty_axes(fig)
+    assert_layout_can_render(fig)
 
     plt.show()

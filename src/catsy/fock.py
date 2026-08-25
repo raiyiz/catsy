@@ -14,6 +14,16 @@ photon subtraction/addition, ideal photon-number-resolving detection, and
 mean-photon-number readout. This mirrors the Gaussian layer's own
 generic-channel-plus-presets split (``GaussianChannel`` + ``LossChannels``).
 
+:meth:`photon_subtraction`/:meth:`photon_addition` are the textbook,
+unit-efficiency operators ``a``/``a†``. :meth:`realistic_photon_subtraction`/
+:meth:`realistic_photon_addition` model how these are actually implemented
+on an optical bench: a weak coupling to an ancilla mode (a beamsplitter tap
+for subtraction, a weak parametric two-mode-squeezing interaction for
+addition) followed by heralding on an imperfect "click" detector on the
+ancilla. In the limit of weak coupling and unit detector efficiency, both
+converge to the corresponding ideal operator; at finite coupling and
+efficiency they reproduce the impurity real heralded sources have.
+
 The Fock layer deliberately operates on QuTiP objects rather than a
 bespoke wrapper class. Conversion from a
 :class:`~catsy.gaussian.GaussianState` belongs at the phase-space/Fock
@@ -26,7 +36,12 @@ from __future__ import annotations
 import numpy as np
 import qutip as qt
 
-from .core import TOL_PHYSICALITY, _check_positive_int
+from .core import (
+    TOL_PHYSICALITY,
+    _check_non_negative,
+    _check_positive_int,
+    _check_unit_interval,
+)
 
 
 class FockGates:
@@ -57,17 +72,32 @@ class FockGates:
         return n_modes
 
     @staticmethod
+    def _embed_operator(
+        op_1factor: qt.Qobj,
+        dims: list[int],
+        idx: int,
+    ) -> qt.Qobj:
+        """Embed a single-factor operator into a multi-factor tensor space.
+
+        Unlike :meth:`_mode_operator`, ``dims`` need not be uniform -- this
+        is what lets :meth:`_click_heralded_operation` embed operators into
+        a space made of same-cutoff system modes plus a differently-sized
+        ancilla mode.
+        """
+        if len(dims) == 1:
+            return op_1factor
+        op_list = [qt.qeye(d) for d in dims]
+        op_list[idx] = op_1factor
+        return qt.tensor(*op_list)
+
+    @staticmethod
     def _mode_operator(
         op_1mode: qt.Qobj,
         n_modes: int,
         mode_idx: int,
         N_cutoff: int,
     ) -> qt.Qobj:
-        if n_modes == 1:
-            return op_1mode
-        op_list = [qt.qeye(N_cutoff) for _ in range(n_modes)]
-        op_list[mode_idx] = op_1mode
-        return qt.tensor(*op_list)
+        return FockGates._embed_operator(op_1mode, [N_cutoff] * n_modes, mode_idx)
 
     @staticmethod
     def apply_kraus_operator(
@@ -132,6 +162,150 @@ class FockGates:
             qt.create(N_cutoff), n_modes, mode_idx, N_cutoff
         )
         return FockGates.apply_kraus_operator(rho, adag_op, "photon_addition")
+
+    @staticmethod
+    def _click_heralded_operation(
+        rho: qt.Qobj,
+        mode_idx: int,
+        N_cutoff: int,
+        ancilla_cutoff: int,
+        coupling_strength: float,
+        detector_efficiency: float,
+        coupling_kind: str,
+        label: str,
+    ) -> qt.Qobj:
+        """Shared engine for the realistic subtraction/addition operations.
+
+        Couples ``mode_idx`` to a fresh vacuum ancilla mode (a beamsplitter
+        for ``coupling_kind="subtract"``, a two-mode squeezer for
+        ``coupling_kind="add"``), then applies an imperfect on/off
+        ("click"/"no click") detector to the ancilla and heralds on a click.
+        The detector's positive-operator-valued measure is the standard
+        model for an avalanche-photodiode-style bucket detector with
+        quantum efficiency ``detector_efficiency``:
+
+            Pi_no_click = sum_n (1 - detector_efficiency)^n |n><n|
+            Pi_click    = I - Pi_no_click
+
+        The post-click state is obtained via the (Lueders) measurement
+        operator ``sqrt(Pi_click)``, which is well defined here because
+        ``Pi_click`` is diagonal in the ancilla Fock basis. The ancilla is
+        then traced out.
+        """
+        n_modes = FockGates._validate_state(rho, N_cutoff, mode_idx)
+        _check_positive_int(ancilla_cutoff, "ancilla_cutoff")
+        _check_non_negative(coupling_strength, "coupling_strength")
+        _check_unit_interval(detector_efficiency, "detector_efficiency")
+
+        dims = [N_cutoff] * n_modes + [ancilla_cutoff]
+        ancilla_idx = n_modes
+
+        a_sys = FockGates._embed_operator(qt.destroy(N_cutoff), dims, mode_idx)
+        a_anc = FockGates._embed_operator(qt.destroy(ancilla_cutoff), dims, ancilla_idx)
+
+        if coupling_kind == "subtract":
+            # Weak beamsplitter tap: in the coupling_strength -> 0 limit the
+            # ancilla mode picks up ~coupling_strength * a_sys, so heralding
+            # a click implements ~a_sys on the system (see module tests).
+            generator = coupling_strength * (a_sys * a_anc.dag() - a_sys.dag() * a_anc)
+        else:
+            # Weak non-degenerate parametric coupling: in the
+            # coupling_strength -> 0 limit the ancilla mode picks up
+            # ~coupling_strength * a_sys.dag(), so heralding a click
+            # implements ~a_sys.dag() on the system.
+            generator = coupling_strength * (a_sys.dag() * a_anc.dag() - a_sys * a_anc)
+        coupling_unitary = generator.expm()
+
+        ancilla_vacuum = qt.fock_dm(ancilla_cutoff, 0)
+        rho_extended = qt.tensor(rho, ancilla_vacuum)
+        rho_coupled = coupling_unitary * rho_extended * coupling_unitary.dag()
+
+        no_click_diag = (1.0 - detector_efficiency) ** np.arange(ancilla_cutoff)
+        click_diag = np.sqrt(np.clip(1.0 - no_click_diag, 0.0, None))
+        click_operator_anc = qt.Qobj(np.diag(click_diag))
+        click_operator = FockGates._embed_operator(click_operator_anc, dims, ancilla_idx)
+
+        rho_heralded = FockGates.apply_kraus_operator(rho_coupled, click_operator, label)
+        return rho_heralded.ptrace(list(range(n_modes)))
+
+    @staticmethod
+    def realistic_photon_subtraction(
+        rho: qt.Qobj,
+        mode_idx: int = 0,
+        N_cutoff: int = 20,
+        tap_reflectivity: float = 0.05,
+        detector_efficiency: float = 0.6,
+        ancilla_cutoff: int = 6,
+    ) -> qt.Qobj:
+        """Heralded photon subtraction via a beamsplitter tap + click detector.
+
+        This is how photon subtraction is actually done on an optical
+        bench (Wenger, Tualle-Brouri & Grangier, PRL 92, 153601 (2004)):
+        rather than applying the ideal operator ``a`` directly, a small
+        fraction ``tap_reflectivity`` of ``mode_idx`` is coupled onto a
+        fresh vacuum ancilla via a beamsplitter, and a click on an
+        avalanche photodiode of quantum efficiency ``detector_efficiency``
+        heralds a (probabilistic, imperfect) subtraction event.
+        ``ancilla_cutoff`` truncates the ancilla's Hilbert space and should
+        be kept small (population there stays low for a weak tap).
+
+        As ``tap_reflectivity -> 0`` and ``detector_efficiency -> 1``, this
+        converges to :meth:`photon_subtraction`; see the module's tests for
+        a numerical check of that limit. Larger ``tap_reflectivity`` or
+        lower ``detector_efficiency`` give a less pure, more realistic
+        heralded state.
+        """
+        _check_unit_interval(tap_reflectivity, "tap_reflectivity")
+        return FockGates._click_heralded_operation(
+            rho,
+            mode_idx,
+            N_cutoff,
+            ancilla_cutoff,
+            coupling_strength=np.arcsin(np.sqrt(tap_reflectivity)),
+            detector_efficiency=detector_efficiency,
+            coupling_kind="subtract",
+            label="realistic_photon_subtraction",
+        )
+
+    @staticmethod
+    def realistic_photon_addition(
+        rho: qt.Qobj,
+        mode_idx: int = 0,
+        N_cutoff: int = 20,
+        coupling_strength: float = 0.05,
+        detector_efficiency: float = 0.6,
+        ancilla_cutoff: int = 6,
+    ) -> qt.Qobj:
+        """Heralded photon addition via weak parametric coupling + click detector.
+
+        The experimental counterpart of :meth:`photon_addition` (Zavatta,
+        Viciani & Bellini, Science 306, 660 (2004)): unlike subtraction,
+        adding energy to the field cannot be done with a passive
+        beamsplitter tap, so ``mode_idx`` is instead weakly coupled to a
+        fresh vacuum ancilla via a (non-degenerate) parametric
+        two-mode-squeezing interaction of strength ``coupling_strength``,
+        and a click on a detector of quantum efficiency
+        ``detector_efficiency`` heralds an (probabilistic, imperfect)
+        addition event. ``ancilla_cutoff`` truncates the ancilla's
+        Hilbert space and should be kept small (population there stays low
+        for weak coupling).
+
+        As ``coupling_strength -> 0`` and ``detector_efficiency -> 1``,
+        this converges to :meth:`photon_addition`; see the module's tests
+        for a numerical check of that limit. Larger ``coupling_strength``
+        or lower ``detector_efficiency`` give a less pure, more realistic
+        heralded state.
+        """
+        return FockGates._click_heralded_operation(
+            rho,
+            mode_idx,
+            N_cutoff,
+            ancilla_cutoff,
+            coupling_strength=coupling_strength,
+            detector_efficiency=detector_efficiency,
+            coupling_kind="add",
+            label="realistic_photon_addition",
+        )
 
     @staticmethod
     def mean_photon_number(
