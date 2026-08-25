@@ -327,22 +327,30 @@ def test_classical_phase_jitter_channel_applies():
     assert jittered.covariance[1, 1] > 0.5
 
 
-def test_gaussian_state_rejects_unphysical_covariance():
-    with pytest.raises(ValueError, match="uncertainty relation"):
-        GaussianState(
-            modes=("a",),
-            displacement=np.zeros(2),
-            covariance=0.1 * np.eye(2),
-        )
-
-
-def test_gaussian_state_rejects_duplicate_mode_names():
-    with pytest.raises(ValueError, match="Duplicate mode"):
-        GaussianState(
-            modes=("a", "a"),
-            displacement=np.zeros(4),
-            covariance=0.5 * np.eye(4),
-        )
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        (
+            {
+                "modes": ("a",),
+                "displacement": np.zeros(2),
+                "covariance": 0.1 * np.eye(2),
+            },
+            "uncertainty relation",
+        ),
+        (
+            {
+                "modes": ("a", "a"),
+                "displacement": np.zeros(4),
+                "covariance": 0.5 * np.eye(4),
+            },
+            "Duplicate mode",
+        ),
+    ],
+)
+def test_gaussian_state_rejects_invalid_construction(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        GaussianState(**kwargs)
 
 
 @pytest.mark.parametrize(
@@ -364,54 +372,67 @@ def test_gaussian_state_rejects_mismatched_shapes(displacement, covariance, matc
 # Channels
 
 
-def test_gaussian_state_rejects_nonsymmetric_covariance():
-    covariance = np.array([[0.5, 0.1], [0.0, 0.5]])
-    with pytest.raises(ValueError, match="symmetric"):
-        GaussianState(
-            modes=("a",),
-            displacement=np.zeros(2),
-            covariance=covariance,
-        )
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        (
+            {
+                "modes": ("a",),
+                "displacement": np.zeros(2),
+                "covariance": np.array([[0.5, 0.1], [0.0, 0.5]]),
+            },
+            "symmetric",
+        ),
+        (
+            {
+                "modes": ("a",),
+                "displacement": np.zeros(2),
+                "covariance": np.diag([np.inf, np.inf]),
+            },
+            "finite",
+        ),
+    ],
+)
+def test_gaussian_state_rejects_invalid_covariance(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        GaussianState(**kwargs)
 
 
-def test_gaussian_state_rejects_nonfinite_values():
-    covariance = np.diag([np.inf, np.inf])
-    with pytest.raises(ValueError, match="finite"):
-        GaussianState(
-            modes=("a",),
-            displacement=np.zeros(2),
-            covariance=covariance,
-        )
-
-
-def test_gaussian_channel_rejects_non_cp_channel():
-    with pytest.raises(ValueError, match="complete positivity"):
-        GaussianChannel(
-            target_modes=("a",),
-            X=2.0 * np.eye(2),
-            Y=np.zeros((2, 2)),
-            d0=np.zeros(2),
-        )
-
-
-def test_gaussian_channel_rejects_nonsymmetric_noise():
-    with pytest.raises(ValueError, match="symmetric"):
-        GaussianChannel(
-            target_modes=("a",),
-            X=np.eye(2),
-            Y=np.array([[0.1, 0.2], [0.0, 0.1]]),
-            d0=np.zeros(2),
-        )
-
-
-def test_gaussian_channel_rejects_duplicate_target_modes():
-    with pytest.raises(ValueError, match="Duplicate target mode"):
-        GaussianChannel(
-            target_modes=("a", "a"),
-            X=np.eye(4),
-            Y=np.zeros((4, 4)),
-            d0=np.zeros(4),
-        )
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        (
+            {
+                "target_modes": ("a",),
+                "X": 2.0 * np.eye(2),
+                "Y": np.zeros((2, 2)),
+                "d0": np.zeros(2),
+            },
+            "complete positivity",
+        ),
+        (
+            {
+                "target_modes": ("a",),
+                "X": np.eye(2),
+                "Y": np.array([[0.1, 0.2], [0.0, 0.1]]),
+                "d0": np.zeros(2),
+            },
+            "symmetric",
+        ),
+        (
+            {
+                "target_modes": ("a", "a"),
+                "X": np.eye(4),
+                "Y": np.zeros((4, 4)),
+                "d0": np.zeros(4),
+            },
+            "Duplicate target mode",
+        ),
+    ],
+)
+def test_gaussian_channel_rejects_invalid_construction(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        GaussianChannel(**kwargs)
 
 
 def test_thermal_loss_is_a_valid_gaussian_channel():
@@ -847,15 +868,36 @@ def test_homodyne_measurement_collapses_tmsv_correlation():
     assert np.sign(collapsed.displacement[0]) != np.sign(collapsed_neg.displacement[0])
 
 
-def test_homodyne_measurement_is_reproducible_with_seeded_rng():
+@pytest.mark.parametrize(
+    ("measure", "kwargs", "seed"),
+    [
+        (
+            GaussianMeasurements.homodyne_measurement,
+            {"phi": 0.0},
+            42,
+        ),
+        (
+            GaussianMeasurements.heterodyne_measurement,
+            {},
+            7,
+        ),
+    ],
+)
+def test_measurement_is_reproducible_with_seeded_rng(measure, kwargs, seed):
     state = GaussianState.vacuum(modes=("a",))
-    v1, _ = GaussianMeasurements.homodyne_measurement(
-        state, measured_mode="a", phi=0.0, rng=np.random.default_rng(42)
+    v1, _ = measure(
+        state,
+        measured_mode="a",
+        rng=np.random.default_rng(seed),
+        **kwargs,
     )
-    v2, _ = GaussianMeasurements.homodyne_measurement(
-        state, measured_mode="a", phi=0.0, rng=np.random.default_rng(42)
+    v2, _ = measure(
+        state,
+        measured_mode="a",
+        rng=np.random.default_rng(seed),
+        **kwargs,
     )
-    assert v1 == v2
+    np.testing.assert_allclose(v1, v2)
 
 
 @pytest.mark.parametrize(
@@ -871,13 +913,28 @@ def test_homodyne_rejects_nonfinite_inputs(kwargs, match):
         GaussianMeasurements.homodyne_measurement(state, measured_mode="a", **kwargs)
 
 
-def test_homodyne_single_mode_returns_valid_empty_state():
+@pytest.mark.parametrize(
+    ("measure", "kwargs", "expected"),
+    [
+        (
+            GaussianMeasurements.homodyne_measurement,
+            {"phi": 0.0, "outcome": 1.25},
+            1.25,
+        ),
+        (
+            GaussianMeasurements.heterodyne_measurement,
+            {"outcome": np.array([0.2, -0.3])},
+            np.array([0.2, -0.3]),
+        ),
+    ],
+)
+def test_single_mode_measurement_returns_valid_empty_state(
+    measure, kwargs, expected
+):
     state = GaussianState.coherent(modes=("a",), alphas=0.7 + 0.2j)
-    outcome, collapsed = GaussianMeasurements.homodyne_measurement(
-        state, measured_mode="a", phi=0.0, outcome=1.25
-    )
+    outcome, collapsed = measure(state, measured_mode="a", **kwargs)
 
-    assert outcome == pytest.approx(1.25)
+    np.testing.assert_allclose(outcome, expected)
     assert collapsed.modes == ()
     assert collapsed.displacement.shape == (0,)
     assert collapsed.covariance.shape == (0, 0)
@@ -1225,12 +1282,3 @@ def test_heterodyne_measurement_adds_vacuum_noise_and_collapses_to_coherent():
     assert (eigvals >= 0.5 - 1e-9).all()
 
 
-def test_heterodyne_measurement_is_reproducible_with_seeded_rng():
-    state = GaussianState.vacuum(modes=("a",))
-    v1, _ = GaussianMeasurements.heterodyne_measurement(
-        state, measured_mode="a", rng=np.random.default_rng(7)
-    )
-    v2, _ = GaussianMeasurements.heterodyne_measurement(
-        state, measured_mode="a", rng=np.random.default_rng(7)
-    )
-    np.testing.assert_allclose(v1, v2)
