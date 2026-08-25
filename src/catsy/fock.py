@@ -74,22 +74,14 @@ def _validate_state(
     return n_modes, inferred_cutoff
 
 
-def _embed_operator(op_1factor: qt.Qobj, dims: list[int], idx: int) -> qt.Qobj:
-    """Embed a single-factor operator into a multi-factor tensor space."""
-    if len(dims) == 1:
-        return op_1factor
-    op_list = [qt.qeye(d) for d in dims]
-    op_list[idx] = op_1factor
-    return qt.tensor(*op_list)
-
-
 def _mode_operator(
     op_1mode: qt.Qobj,
     n_modes: int,
     mode_idx: int,
     N_cutoff: int,
 ) -> qt.Qobj:
-    return _embed_operator(op_1mode, [N_cutoff] * n_modes, mode_idx)
+    """Expand a single-mode operator onto the selected subsystem."""
+    return qt.expand_operator(op_1mode, [N_cutoff] * n_modes, mode_idx)
 
 
 def _apply_kraus_operator(
@@ -156,8 +148,10 @@ def _click_heralded_operation(
     dims = [cutoff] * n_modes + [ancilla_cutoff]
     ancilla_idx = n_modes
 
-    a_sys = _embed_operator(qt.destroy(cutoff), dims, mode_idx)
-    a_anc = _embed_operator(qt.destroy(ancilla_cutoff), dims, ancilla_idx)
+    a_sys = _mode_operator(qt.destroy(cutoff), len(dims), mode_idx, cutoff)
+    a_anc = _mode_operator(
+        qt.destroy(ancilla_cutoff), len(dims), ancilla_idx, ancilla_cutoff
+    )
 
     if coupling_kind == "subtract":
         generator = coupling_strength * (
@@ -176,7 +170,12 @@ def _click_heralded_operation(
     no_click_diag = (1.0 - detector_efficiency) ** np.arange(ancilla_cutoff)
     click_diag = np.sqrt(np.clip(1.0 - no_click_diag, 0.0, None))
     click_operator_anc = qt.Qobj(np.diag(click_diag))
-    click_operator = _embed_operator(click_operator_anc, dims, ancilla_idx)
+    click_operator = _mode_operator(
+        click_operator_anc,
+        len(dims),
+        ancilla_idx,
+        ancilla_cutoff,
+    )
 
     rho_heralded = _apply_kraus_operator(rho_coupled, click_operator, label)
     return rho_heralded.ptrace(list(range(n_modes)))
@@ -233,7 +232,7 @@ def mean_photon_number(
     """Return ``<n> = tr(rho * a†a)`` for the selected mode."""
     n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
     n_op = _mode_operator(qt.num(cutoff), n_modes, mode_idx, cutoff)
-    return float(np.real((n_op * rho).tr()))
+    return float(np.real(qt.expect(n_op, rho)))
 
 
 def photon_number_measurement(
@@ -245,31 +244,37 @@ def photon_number_measurement(
 ) -> tuple[int, qt.Qobj]:
     """Ideal photon-number-resolving detection on ``mode_idx``."""
     n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
+    dims = [cutoff] * n_modes
+    projectors = [
+        qt.expand_operator(qt.fock_dm(cutoff, n), dims, mode_idx)
+        for n in range(cutoff)
+    ]
+    collapsed_states, probabilities = qt.measurement_statistics_povm(
+        rho, projectors, tol=TOL_PHYSICALITY
+    )
+    probabilities = np.asarray(probabilities, dtype=float)
 
     if outcome is not None:
         if not isinstance(outcome, int) or not 0 <= outcome < cutoff:
             raise ValueError(
                 f"outcome must be an integer in [0, {cutoff - 1}], got {outcome!r}."
             )
+        if probabilities[outcome] < TOL_PHYSICALITY:
+            raise ValueError(
+                "photon_number_measurement: selected outcome has "
+                "numerically zero probability."
+            )
     else:
-        reduced = rho.ptrace(mode_idx) if n_modes > 1 else rho
-        probs = np.clip(np.real(reduced.diag()), 0.0, None)
-        total = probs.sum()
+        total = probabilities.sum()
         if total < TOL_PHYSICALITY:
             raise ValueError(
                 "photon_number_measurement: outcome probabilities are "
                 "numerically zero for every Fock level."
             )
         rng = rng if rng is not None else np.random.default_rng()
-        outcome = int(rng.choice(cutoff, p=probs / total))
+        outcome = int(rng.choice(cutoff, p=probabilities / total))
 
-    projector = _mode_operator(
-        qt.fock_dm(cutoff, outcome), n_modes, mode_idx, cutoff
-    )
-    collapsed = _apply_kraus_operator(
-        rho, projector, "photon_number_measurement"
-    )
-
+    collapsed = collapsed_states[outcome]
     if n_modes > 1:
         remaining = [i for i in range(n_modes) if i != mode_idx]
         collapsed = collapsed.ptrace(remaining)
