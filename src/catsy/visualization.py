@@ -152,7 +152,7 @@ def _quadrature_correlation(covariance: np.ndarray) -> np.ndarray:
             covariance, scale, out=np.zeros_like(covariance), where=scale > 0
         )
     np.fill_diagonal(correlation, 1.0)
-    return correlation
+    return cast(np.ndarray, correlation)
 
 
 def plot_covariance_matrix(
