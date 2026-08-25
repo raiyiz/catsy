@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Ellipse
 
 from .gaussian import GaussianState
 from .visualization import _mode_geometry, _states, _style_phase_axes
@@ -32,12 +32,7 @@ def plot_multimode_evolution(
     n_sigma: float = 2.0,
     show: bool = False,
 ) -> plt.Figure:
-    """Show per-mode phase-space trajectories and evolving cross-mode correlation.
-
-    The top row contains one phase-space trajectory per mode. The bottom panel
-    tracks the strongest normalized quadrature correlation between any pair of
-    modes, making correlation build-up or decay visible alongside local motion.
-    """
+    """Show per-mode phase-space trajectories and evolving cross-mode correlation."""
     sequence = _states(states)
     if len(sequence[0].modes) < 2:
         raise ValueError("multimode evolution requires at least two modes.")
@@ -70,11 +65,12 @@ def plot_multimode_evolution(
         ax.scatter([means[0, 0]], [means[0, 1]], s=42, label="initial", zorder=4)
         ax.scatter([means[-1, 0]], [means[-1, 1]], s=70, marker="*", label="final", zorder=4)
         _style_phase_axes(ax)
-        for mean, covariance in zip(means[:: max(1, len(sequence) // 6)], covariances[:: max(1, len(sequence) // 6)], strict=True):
+        stride = max(1, len(sequence) // 6)
+        for mean, covariance in zip(means[::stride], covariances[::stride], strict=True):
             values, _ = np.linalg.eigh(covariance)
             radius = n_sigma * np.sqrt(np.maximum(values, 0.0))
             ax.add_patch(
-                plt.matplotlib.patches.Ellipse(
+                Ellipse(
                     (float(mean[0]), float(mean[1])),
                     2.0 * float(radius.max()),
                     2.0 * float(radius.min()),
@@ -83,7 +79,9 @@ def plot_multimode_evolution(
                 )
             )
         limits = [ax.get_xlim(), ax.get_ylim()]
-        extent = max(abs(limits[0][0]), abs(limits[0][1]), abs(limits[1][0]), abs(limits[1][1]), 1.0)
+        extent = max(
+            abs(limits[0][0]), abs(limits[0][1]), abs(limits[1][0]), abs(limits[1][1]), 1.0
+        )
         ax.set_xlim(-extent, extent)
         ax.set_ylim(-extent, extent)
         ax.set_xlabel(r"$x$")
@@ -110,10 +108,14 @@ def plot_multimode_evolution(
     correlation_ax.grid(alpha=0.12, linewidth=0.5)
     correlation_ax.spines[["top", "right"]].set_visible(False)
     correlation_ax.legend(frameon=False, loc="best")
-    fig.suptitle(f"Multimode Gaussian evolution · {', '.join(sequence[0].modes)}", fontsize=16, fontweight="medium")
+    fig.suptitle(
+        f"Multimode Gaussian evolution · {', '.join(sequence[0].modes)}",
+        fontsize=16,
+        fontweight="medium",
+    )
     if show:
         plt.show()
-    return cast(plt.Figure, fig)
+    return fig
 
 
 __all__ = ["plot_multimode_evolution"]
