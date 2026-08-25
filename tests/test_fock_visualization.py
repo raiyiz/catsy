@@ -100,7 +100,7 @@ class TestFockVisualizationValidation:
         "call, match",
         [
             pytest.param(
-                lambda rho: plot_photon_statistics(rho, n_max=0),
+                lambda rho: plot_photon_statistics(rho, n_max=-1),
                 "n_max",
                 id="invalid-photon-number-range",
             ),
