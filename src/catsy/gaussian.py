@@ -32,7 +32,6 @@ from .core import (
     _validate_physical_covariance,
     _williamson_decomposition,
 )
-from .optics import Circuit
 from .types import (
     FloatArray,
     GaussianChannelData,
@@ -538,7 +537,7 @@ class LossChannels:
 
 
 # ========================================================================
-# Circuit
+# Transforms
 # ========================================================================
 
 logger = logging.getLogger("catsy")
@@ -615,17 +614,6 @@ def initial_state(
         return GaussianState.tmsv(modes[0], modes[1], cast(float, kwargs["r"]))
     raise ValueError(f"Unknown Gaussian initial state kind {kind!r}.")
 
-
-for _name, _transform in (
-    ("Squeezer", squeeze),
-    ("Rotator", rotate),
-    ("Displacer", displace),
-    ("BeamSplitter", beam_splitter),
-    ("Noise", loss),
-    ("ThermalLoss", thermal_loss),
-    ("InitialState", initial_state),
-):
-    Circuit.register(_name, _transform)
 
 
 # ========================================================================
