@@ -928,9 +928,7 @@ def test_homodyne_rejects_nonfinite_inputs(kwargs, match):
         ),
     ],
 )
-def test_single_mode_measurement_returns_valid_empty_state(
-    measure, kwargs, expected
-):
+def test_single_mode_measurement_returns_valid_empty_state(measure, kwargs, expected):
     state = GaussianState.coherent(modes=("a",), alphas=0.7 + 0.2j)
     outcome, collapsed = measure(state, measured_mode="a", **kwargs)
 
@@ -1280,5 +1278,3 @@ def test_heterodyne_measurement_adds_vacuum_noise_and_collapses_to_coherent():
     assert collapsed.modes == ("b",)
     eigvals = np.linalg.eigvalsh(collapsed.covariance)
     assert (eigvals >= 0.5 - 1e-9).all()
-
-
