@@ -313,7 +313,7 @@ def test_draw_prints_the_rendered_schematic(capsys):
 
 
 @pytest.mark.visualize
-def test_visual_schematic_draw():
+def test_visual_schematic_draw(capsys):
     # Schema one
     mzi = Circuit(name="MZI Interferometer Node").add_mode("line_1").add_mode("line_2")
     mzi.beam_splitter("line_1", "line_2", eta=0.5)
@@ -321,7 +321,10 @@ def test_visual_schematic_draw():
     mzi.rotate("line_2", phi=0.785)
     mzi.beam_splitter("line_1", "line_2", eta=0.5)
 
-    mzi.draw(input_states={"Route 1": "|α=1.5>", "Route 2": "|ξ=0.8>"})
+    schema_one_states = {"Route 1": "|α=1.5>", "Route 2": "|ξ=0.8>"}
+    mzi.draw(input_states=schema_one_states)
+    captured = capsys.readouterr()
+    assert captured.out.strip() == mzi.render_schematic(schema_one_states).strip()
 
     # Schema two
     mzi = Circuit(name="Colored MZI Architecture").add_mode("line_1").add_mode("line_2")
@@ -331,7 +334,10 @@ def test_visual_schematic_draw():
     mzi.rotate("line_2", phi=1.57)
     mzi.beam_splitter("line_1", "line_2", eta=0.5)
 
-    mzi.draw(input_states={"Route 1": "|α=2.0>", "Route 2": "|0>"})
+    schema_two_states = {"Route 1": "|α=2.0>", "Route 2": "|0>"}
+    mzi.draw(input_states=schema_two_states)
+    captured = capsys.readouterr()
+    assert captured.out.strip() == mzi.render_schematic(schema_two_states).strip()
 
 
 # Cavity and interferometer parameter validation
@@ -416,9 +422,7 @@ def test_mzi_scan_rejects_invalid_theta_list(theta_list, match):
 
 
 @pytest.mark.visualize
-def test_laser_pulse_cavity_plot_demo():
-    import matplotlib.pyplot as plt
-
+def test_laser_pulse_cavity_plot_demo(assert_no_empty_axes, assert_layout_can_render):
     N_cutoff = 15
     rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     tlist = np.linspace(0, 5, 100)
@@ -432,18 +436,18 @@ def test_laser_pulse_cavity_plot_demo():
     n_op = qt.num(N_cutoff)
     photon_numbers = [qt.expect(n_op, s) for s in states]
 
-    plt.figure(figsize=(6, 4))
+    fig = plt.figure(figsize=(6, 4))
     plt.plot(tlist, photon_numbers)
     plt.xlabel("time")
     plt.ylabel("<n>")
     plt.title("Driven Kerr cavity: photon number vs time")
+    assert_no_empty_axes(fig)
+    assert_layout_can_render(fig)
     plt.show()
 
 
 @pytest.mark.visualize
-def test_full_cavity_multipanel_plot_demo():
-    import matplotlib.pyplot as plt
-
+def test_full_cavity_multipanel_plot_demo(assert_no_empty_axes, assert_layout_can_render):
     N_cutoff = 12
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
@@ -452,7 +456,7 @@ def test_full_cavity_multipanel_plot_demo():
         psi_cat, theta_list
     )
 
-    _fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     axes[0].plot(theta_list, results["n1"])
     axes[0].set_title("Mean photon number, arm 1")
     axes[1].plot(theta_list, results["n2"])
@@ -460,6 +464,8 @@ def test_full_cavity_multipanel_plot_demo():
     axes[2].plot(theta_list, results["parity1"])
     axes[2].set_title("Parity, arm 1")
     plt.tight_layout()
+    assert_no_empty_axes(fig)
+    assert_layout_can_render(fig)
     plt.show()
 
 
@@ -780,7 +786,7 @@ def test_cat_state_single_shot_through_mzi():
 
 
 @pytest.mark.visualize
-def test_cat_mzi_phase_scan_fringes():
+def test_cat_mzi_phase_scan_fringes(assert_no_empty_axes, assert_layout_can_render):
     # Loss-free (kappa=0) phase scan of a cat state through the MZI -- the
     # clean-case counterpart plotted alongside the noisy one in
     # test_decoherence_mzi_parity_visibility_drops_with_loss. Routed through
@@ -796,7 +802,7 @@ def test_cat_mzi_phase_scan_fringes():
         psi_cat, theta_list
     )
 
-    _fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
     ax1.plot(
         theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2
@@ -829,4 +835,6 @@ def test_cat_mzi_phase_scan_fringes():
     ax2.legend()
 
     plt.tight_layout()
+    assert_no_empty_axes(fig)
+    assert_layout_can_render(fig)
     plt.show()

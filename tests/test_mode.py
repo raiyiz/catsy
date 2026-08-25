@@ -1,3 +1,5 @@
+import pytest
+
 from catsy import Mode
 from catsy.optics import Mode as OpticsMode
 
@@ -15,10 +17,7 @@ def test_mode_identity_equality():
     assert first != second
 
 
-def test_mode_rejects_empty_names():
-    try:
-        Mode(" ")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("Mode should reject an empty name")
+@pytest.mark.parametrize("name", ["", " "])
+def test_mode_rejects_empty_names(name):
+    with pytest.raises(ValueError):
+        Mode(name)

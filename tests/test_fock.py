@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import qutip as qt
+from matplotlib import pyplot as plt
 
 from catsy.fock import FockGates
 from catsy.gaussian import (
@@ -169,9 +170,7 @@ def test_fock_gates_reject_non_qobj_and_non_operator_input():
 
 
 @pytest.mark.visualize
-def test_native_qutip_wigner_plot_demo():
-    import matplotlib.pyplot as plt
-
+def test_native_qutip_wigner_plot_demo(assert_no_empty_axes, assert_layout_can_render):
     state = Circuit().add_mode("a")
     state.add_gate(
         Gate(
@@ -186,8 +185,13 @@ def test_native_qutip_wigner_plot_demo():
 
     xvec = np.linspace(-5, 5, 150)
     W = qt.wigner(rho, xvec, xvec)
-    plt.figure(figsize=(5, 4))
+    wigner_fig = plt.figure(figsize=(5, 4))
     plt.contourf(xvec, xvec, W, 100, cmap="RdBu_r")
     plt.title("Native QuTiP Wigner function (squeezed vacuum)")
-    qt.matrix_histogram(rho.full().real[:10, :10])
+    assert_no_empty_axes(wigner_fig)
+    assert_layout_can_render(wigner_fig)
+
+    histogram_fig, _histogram_ax = qt.matrix_histogram(rho.full().real[:10, :10])
+    assert_layout_can_render(histogram_fig)
+
     plt.show()
