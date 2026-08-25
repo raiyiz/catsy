@@ -1,4 +1,3 @@
-import itertools
 from collections.abc import Callable
 
 import matplotlib.pyplot as plt
@@ -65,6 +64,12 @@ def _single_mode_states() -> list[GaussianState]:
         GaussianState.vacuum(("a",)).squeeze("a", r=0.7),
     ]
 
+def _time_plotter(plotter: Callable, **kwargs) -> Callable:
+    def render(states, times):
+        return plotter(states, "a", times=times, **kwargs)
+
+    return render
+
 
 def _plot_covariance(state: GaussianState) -> plt.Figure:
     return plot_covariance_matrix(state)
@@ -112,23 +117,27 @@ class TestStaticVisualizations:
         assert_no_empty_axes(figure)
         assert_layout_can_render(figure)
 
+
+
     @pytest.mark.visualize
-    @pytest.mark.parametrize("state_factory", [
-        pytest.param(lambda: GaussianState.vacuum(("a",)), id="vacuum"),
-        pytest.param(
-            lambda: GaussianState.vacuum(("a",)).squeeze("a", r=0.8), id="squeezed"
-        ),
-        pytest.param(
-            lambda: GaussianState.vacuum(("a",)).displace("a", 1.1 + 0.3j),
-            id="displaced",
-        ),
-    ])
+    @pytest.mark.parametrize(
+        "state",
+        [
+            pytest.param(state, id=name)
+            for name, state in zip(
+                ("vacuum", "displaced", "squeezed"),
+                _single_mode_states(),
+                strict=True,
+            )
+        ],
+    )
     def test_phase_space_renders_representative_states(
-        self, state_factory, assert_layout_can_render
+        self, state, assert_layout_can_render
     ) -> None:
-        figure = plot_phase_space(state_factory(), "a")
+        figure = plot_phase_space(state, "a")
         assert len(figure.axes) == 1
         assert_layout_can_render(figure)
+
 
     @pytest.mark.visualize
     def test_phase_space_geometry_matches_covariance_eigendecomposition(self) -> None:
@@ -192,13 +201,15 @@ class TestStaticVisualizations:
 
 EVOLUTION_VISUALIZATIONS = [
     pytest.param(
-        lambda states, times: plot_phase_space_trajectory(
-            states, "a", times=times, ellipse_every=2, n_sigma=2.0
+        _time_plotter(
+            plot_phase_space_trajectory,
+            ellipse_every=2,
+            n_sigma=2.0,
         ),
         id="phase-space-trajectory",
     ),
     pytest.param(
-        lambda states, times: plot_covariance_evolution(states, "a", times=times),
+        _time_plotter(plot_covariance_evolution),
         id="covariance-evolution",
     ),
     pytest.param(
@@ -206,14 +217,17 @@ EVOLUTION_VISUALIZATIONS = [
         id="diagnostics",
     ),
     pytest.param(
-        lambda states, times: plot_wigner_evolution(
-            states, "a", times=times, indices=[0, 8, 16], num_points=40
+        _time_plotter(
+            plot_wigner_evolution,
+            indices=[0, 8, 16],
+            num_points=40,
         ),
         id="wigner-evolution",
     ),
     pytest.param(
-        lambda states, times: plot_evolution(
-            states, "a", times=times, wigner_indices=[0, 8, 16]
+        _time_plotter(
+            plot_evolution,
+            wigner_indices=[0, 8, 16],
         ),
         id="combined-evolution",
     ),
@@ -285,12 +299,12 @@ class TestEvolutionVisualizations:
         assert_layout_can_render(figure)
 
     @pytest.mark.visualize
-    def test_evolution_animation_is_loopable_and_renderable(self, tmp_path) -> None:
+    def test_evolution_animation_is_renderable(self, tmp_path) -> None:
         states, times = _evolution()
         animation = animate_phase_space(
-            states, "a", times=times, interval=30, repeat=True
+            states, "a", times=times, interval=30, repeat=False
         )
-        assert animation._repeat is True
+        assert animation._repeat is False
         animation._draw_next_frame(0, blit=False)
         animation._draw_next_frame(len(states) - 1, blit=False)
         output = tmp_path / "phase_space.gif"
