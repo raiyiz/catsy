@@ -27,6 +27,16 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 
+The two visualization modules deliberately separate physics-specific rendering from shared presentation mechanics. Gaussian plots operate on Gaussian-state representations, while Fock plots operate on QuTiP density matrices; both delegate common figure lifecycle and styling tasks to #src-link("src/catsy/visualization.py", label: [`visualization.py`]):
+
+```text
+Gaussian visualization ─┐
+                        ├─> catsy.visualization
+Fock visualization ─────┘
+```
+
+The shared layer provides consistent figure creation/finalization, phase-axis styling, boxed annotations, and colorbars. This keeps the public plotting modules focused on the physical quantities they render rather than duplicating Matplotlib presentation code.
+
 There is no separate compatibility-shim or simulation-only module: `FockGates` lives in `catsy.fock`, and `KerrCavity`/`MachZehnderInterferometer` live in `catsy.optics`, since both model specific pieces of optical hardware rather than generic phase-space transformations. Imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
 
 ```python
