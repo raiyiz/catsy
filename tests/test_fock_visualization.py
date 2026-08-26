@@ -45,13 +45,18 @@ def test_photon_statistics_reports_sub_poissonian_fock_state():
 
 def test_density_matrix_visualization_shows_coherences_for_cat_like_state():
     cutoff = 12
-    state = (qt.fock(cutoff, 0) + qt.fock(cutoff, 4)).unit()
+    phase = 0.7
+    state = (qt.fock(cutoff, 0) + np.exp(1j * phase) * qt.fock(cutoff, 4)).unit()
     rho = qt.ket2dm(state)
     figure = plot_fock_density_matrix(rho)
     magnitude_image = figure.axes[0].images[0].get_array()
+    phase_image = figure.axes[1].images[0].get_array()
 
     assert magnitude_image[0, 4] == pytest.approx(0.5, abs=1e-12)
     assert magnitude_image[4, 0] == pytest.approx(0.5, abs=1e-12)
+    assert phase_image[0, 4] == pytest.approx(-phase, abs=1e-12)
+    assert phase_image[4, 0] == pytest.approx(phase, abs=1e-12)
+    assert phase_image.mask[0, 1]
 
 
 @pytest.mark.visualize
