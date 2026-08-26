@@ -8,7 +8,7 @@ consistent and gives future visualization backends a small stable surface.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
@@ -45,7 +45,7 @@ def annotate_box(
     x: float,
     y: float,
     text: str,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> None:
     """Add a shared rounded, translucent annotation box to an axes."""
     bbox = {
