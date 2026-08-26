@@ -12,6 +12,7 @@ from typing import cast
 
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
+from matplotlib.colorbar import Colorbar
 
 
 def finalize_figure(fig: plt.Figure, show: bool) -> plt.Figure:
@@ -65,7 +66,7 @@ def add_colorbar(
     ax: plt.Axes | list[plt.Axes],
     *,
     label: str | None = None,
-):
+) -> Colorbar:
     """Add a consistently sized colorbar to one or more axes."""
     colorbar = fig.colorbar(mappable, ax=ax, fraction=0.046, pad=0.04)
     if label is not None:
