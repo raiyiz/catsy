@@ -43,6 +43,26 @@ def test_photon_statistics_reports_sub_poissonian_fock_state():
     assert any("g^{(2)}" in text and "0.667" in text for text in annotations)
 
 
+def test_photon_statistics_respects_explicit_n_max():
+    rho = qt.ket2dm(qt.fock(10, 3))
+    figure = plot_photon_statistics(rho, n_max=5)
+    heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
+
+    assert len(heights) == 6
+    assert heights[3] == pytest.approx(1.0)
+    assert np.count_nonzero(heights > 1e-12) == 1
+
+
+def test_photon_statistics_infers_cutoff_beyond_occupied_support():
+    rho = qt.ket2dm(qt.fock(10, 3))
+    figure = plot_photon_statistics(rho)
+    heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
+
+    assert len(heights) == 6
+    assert heights[3] == pytest.approx(1.0)
+    assert np.allclose(heights[4:], 0.0)
+
+
 def test_density_matrix_visualization_shows_coherences_for_cat_like_state():
     cutoff = 12
     phase = 0.7
