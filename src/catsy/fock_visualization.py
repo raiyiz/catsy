@@ -158,7 +158,9 @@ def _draw_density_matrix(
     ax_phase.set_title(r"Phase $\arg(\rho_{mn})$")
     fig = cast(plt.Figure, ax_mag.figure)
     add_colorbar(fig, image_mag, ax_mag)
-    phase_colorbar = add_colorbar(fig, image_phase, ax_phase, label=r"phase $\arg(\rho_{mn})$ [rad]")
+    phase_colorbar = add_colorbar(
+        fig, image_phase, ax_phase, label=r"phase $\arg(\rho_{mn})$ [rad]"
+    )
     phase_colorbar.set_ticks([-np.pi, -np.pi / 2, 0.0, np.pi / 2, np.pi])
     phase_colorbar.set_ticklabels([r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"])
 

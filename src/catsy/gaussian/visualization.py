@@ -20,7 +20,12 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.patches import Ellipse
 
-from catsy.visualization import finalize_figure, style_phase_axes
+from catsy.visualization import (
+    add_colorbar,
+    annotate_box,
+    finalize_figure,
+    style_phase_axes,
+)
 
 from . import GaussianState, compute_joint_correlation
 
@@ -52,21 +57,16 @@ def _state_summary(state: GaussianState, mode_name: str | None = None) -> str:
 def _state_header(
     ax: plt.Axes, state: GaussianState, mode_name: str | None = None
 ) -> None:
-    ax.text(
+    annotate_box(
+        ax,
         0.02,
         0.98,
         _state_summary(state, mode_name),
-        transform=ax.transAxes,
+        # transform=ax.transAxes,
         va="top",
         ha="left",
         fontsize=9,
         alpha=0.72,
-        bbox={
-            "boxstyle": "round,pad=0.35",
-            "facecolor": "white",
-            "alpha": 0.82,
-            "edgecolor": "none",
-        },
     )
 
 
@@ -166,7 +166,7 @@ def plot_covariance_matrix(
     ax.set_title("Covariance matrix", pad=16, fontweight="medium")
     ax.set_xlabel("quadrature")
     ax.set_ylabel("quadrature")
-    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label=r"$V$")
+    add_colorbar(fig, image, ax=ax, label=r"$V$")
     _state_header(ax, state)
     if annotate:
         threshold = 0.45 * limit
@@ -208,7 +208,7 @@ def plot_mode_correlation_map(
     ax.set_xlabel("quadrature")
     ax.set_ylabel("quadrature")
     ax.set_title("Mode correlation map", pad=16, fontweight="medium")
-    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label=r"$C_{ij}$")
+    add_colorbar(fig, image, ax=ax, label=r"$C_{ij}$")
     _state_header(ax, state)
 
     for boundary in range(1, len(state.modes)):
@@ -539,7 +539,7 @@ def plot_wigner(
     ax.set_title(f"Wigner function — mode {mode_name}", pad=16, fontweight="medium")
     _state_header(ax, state, mode_name)
     if colorbar:
-        fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label=r"$W(x,p)$")
+        add_colorbar(fig, image, ax=ax, label=r"$W(x,p)$")
     return finalize_figure(fig, show)
 
 
@@ -587,7 +587,7 @@ def plot_wigner_evolution(
         label = f"t = {times[index]:g}" if times is not None else f"step {index}"
         ax.set_title(label, pad=12, fontweight="medium")
     assert image is not None
-    fig.colorbar(image, ax=list(axes_flat), fraction=0.02, pad=0.03, label=r"$W(x,p)$")
+    add_colorbar(fig, image, ax=list(axes_pad=0.03, label=r"$W(x,p)$"))
     fig.suptitle(f"Wigner evolution — mode {mode_name}", y=1.02, fontsize=14)
     return finalize_figure(fig, show)
 
@@ -658,7 +658,7 @@ def plot_joint_correlation(
     else:
         fig = cast(plt.Figure, ax.figure)
     image = ax.contourf(X_a, X_b, P, 100, cmap="viridis")
-    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label="Probability density")
+    add_colorbar(fig, image, ax=ax, label="Probability density")
     ax.set_title(
         f"Correlation: quadrature {quadrature}_{mode_a} vs {quadrature}_{mode_b}"
     )
@@ -755,7 +755,7 @@ def plot_phase_space_trajectory_timecoded(
         ax.add_collection(line_collection)
         sm = ScalarMappable(norm=norm, cmap=line_collection.cmap)
         sm.set_array(time_values)
-        fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04, label=time_label)
+        add_colorbar(fig, sm, ax=ax, label=time_label)
     else:
         ax.scatter(means[:, 0], means[:, 1], s=48, zorder=4)
 
