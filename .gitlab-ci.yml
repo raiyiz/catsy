@@ -124,7 +124,14 @@ docs-links:
         - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
+    - python3 scripts/check_doc_links.py --fix
     - python3 scripts/check_doc_links.py
+  artifacts:
+    when: always
+    paths:
+      - docs/
+      - README.md
+    expire_in: 1 week
 
 typst:
   stage: docs
