@@ -51,6 +51,25 @@ def _photon_statistics(rho: qt.Qobj) -> tuple[np.ndarray, float, float]:
     return probabilities, mean, g2
 
 
+def _state_description(rho: qt.Qobj) -> str:
+    """Return a concise physical description suitable for plot titles."""
+    probabilities, mean, g2 = _photon_statistics(rho)
+    peak = int(np.argmax(probabilities))
+    if probabilities[peak] > 1.0 - 1e-10:
+        return rf"Fock state $|{peak}\rangle$"
+    if np.isfinite(g2) and np.isclose(g2, 1.0, atol=2e-3):
+        return rf"Poissonian state ($\langle n\rangle={mean:.2f}$)"
+    if np.isclose(mean, 0.0, atol=1e-10):
+        return "Vacuum state"
+    parity = float(np.sum(probabilities[::2]) - np.sum(probabilities[1::2]))
+    if abs(parity) > 0.98:
+        parity_name = "even-parity" if parity > 0 else "odd-parity"
+        return rf"{parity_name} state ($\langle n\rangle={mean:.2f}$)"
+    if np.isfinite(g2):
+        return rf"Nonclassical state ($\langle n\rangle={mean:.2f}$, $g^{{(2)}}(0)={g2:.2f}$)"
+    return rf"Fock-space state ($\langle n\rangle={mean:.2f}$)"
+
+
 def plot_photon_statistics(
     rho: qt.Qobj,
     *,
@@ -86,7 +105,7 @@ def plot_photon_statistics(
         alpha=0.65,
         label=rf"$\langle n\rangle={mean:.2f}$",
     )
-    ax.set_title(f"Photon-number statistics — mode {mode_idx}", pad=14)
+    ax.set_title(_state_description(state), pad=14)
     annotation = (
         rf"$g^{{(2)}}(0) = {g2:.3g}$" if np.isfinite(g2) else r"$g^{(2)}(0)$ undefined"
     )
@@ -162,7 +181,7 @@ def plot_fock_density_matrix(
             raise ValueError("axes must belong to the same Matplotlib figure.")
 
     _draw_density_matrix(state, ax_mag, ax_phase)
-    fig.suptitle(f"Fock density matrix — mode {mode_idx}", fontweight="medium")
+    fig.suptitle(_state_description(state), fontweight="medium")
     return finalize_figure(fig, show)
 
 
@@ -238,7 +257,7 @@ def plot_wigner(
         )
         style_phase_axes(ax)
 
-    ax.set_title(f"Wigner function — mode {mode_idx}", pad=14, fontweight="medium")
+    ax.set_title(_state_description(state), pad=14, fontweight="medium")
     return finalize_figure(fig, show)
 
 
@@ -280,9 +299,7 @@ def plot_fock_dashboard(
         ax=ax_wigner,
     )
     plot_fock_density_matrix(state, mode_idx=0, axes=(ax_mag, ax_phase))
-    fig.suptitle(
-        f"Fock-state dashboard — mode {mode_idx}", fontsize=16, fontweight="medium"
-    )
+    fig.suptitle(_state_description(state), fontsize=16, fontweight="medium")
     return finalize_figure(fig, show)
 
 
