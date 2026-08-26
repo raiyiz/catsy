@@ -16,12 +16,8 @@ import pytest
 import qutip as qt
 
 from catsy import GaussianState
-from catsy.fock_visualization import (
-    plot_photon_statistics,
-)
-from catsy.fock_visualization import (
-    plot_wigner as plot_fock_wigner,
-)
+from catsy.fock.visualization import plot_photon_statistics
+from catsy.fock.visualization import plot_wigner as plot_fock_wigner
 from catsy.gaussian import LossChannels
 from catsy.gaussian.visualization import (
     plot_covariance_matrix,

@@ -3,7 +3,7 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catsy.fock_visualization import (
+from catsy.fock.visualization import (
     plot_fock_dashboard,
     plot_fock_density_matrix,
     plot_photon_statistics,

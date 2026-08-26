@@ -35,7 +35,7 @@ import numpy as np
 import qutip as qt
 from qutip.measurement import measurement_statistics
 
-from .core import (
+from catsy.core import (
     TOL_PHYSICALITY,
     _check_non_negative,
     _check_positive_int,
