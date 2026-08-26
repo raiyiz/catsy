@@ -66,6 +66,7 @@ Building gates from these handles instead of bare strings means a mode meant for
 | Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L750) |
 | Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian/__init__.py#L289) |
 | Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L671), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L595) |
+| Visualize a truncated Fock-space state      | [`plot_fock_dashboard()`](src/catsy/fock_visualization.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
 
