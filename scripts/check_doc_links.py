@@ -94,7 +94,10 @@ def _recover_definition_line(
     """Return a unique current definition line for ``symbol``, if available."""
     if symbol is None:
         return None
-    matches = _definition_lines(REPO_ROOT / path_str, symbol)
+    target = REPO_ROOT / path_str
+    if not target.is_file():
+        return None
+    matches = _definition_lines(target, symbol)
     return matches[0] if len(matches) == 1 and matches[0] != line_no else None
 
 
