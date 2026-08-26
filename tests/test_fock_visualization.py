@@ -21,7 +21,7 @@ def test_fock_visualizations_render_representative_state(
     plot_wigner(rho, resolution=48, ax=axes[1])
     figure.suptitle("Squeezed-vacuum Fock representation", fontweight="medium")
 
-    assert len(figure.axes) == 2
+    assert len(figure.axes) == 3  # Wigner adds a colorbar axis.
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
