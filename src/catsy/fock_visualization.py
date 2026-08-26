@@ -14,6 +14,7 @@ from typing import cast
 import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
+from matplotlib.colors import Normalize
 
 from .visualization import figure_and_axes, finalize_figure, style_phase_axes
 
@@ -198,18 +199,34 @@ def plot_wigner(
         projection="3d" if projection == "3d" else None,
     )
 
-    qt.plot_wigner(
-        state,
-        xvec=grid,
-        yvec=grid,
-        projection=projection,
-        fig=fig,
-        ax=ax,
-        colorbar=projection == "2d",
-    )
-    ax.set_title(f"Wigner function — mode {mode_idx}", pad=14, fontweight="medium")
+    if projection == "3d":
+        # QuTiP's 3D renderer does not expose the Wigner values' colour
+        # normalization. Compute the surface here so the colormap always
+        # spans the actual minimum and maximum of this Wigner function.
+        wigner = qt.wigner(state, grid, grid)
+        X, Y = np.meshgrid(grid, grid)
+        norm = Normalize(vmin=float(wigner.min()), vmax=float(wigner.max()))
+        surface = ax.plot_surface(
+            X,
+            Y,
+            wigner,
+            cmap="viridis",
+            norm=norm,
+            linewidth=0,
+            antialiased=True,
+        )
+        fig.colorbar(surface, ax=ax, shrink=0.7, pad=0.08, label="Wigner value")
+    else:
+        qt.plot_wigner(
+            state,
+            xvec=grid,
+            yvec=grid,
+            projection=projection,
+            fig=fig,
+            ax=ax,
+            colorbar=True,
+        )
 
-    if projection == "2d":
         wigner = qt.wigner(state, grid, grid)
         ax.contour(
             grid,
@@ -222,6 +239,7 @@ def plot_wigner(
         )
         style_phase_axes(ax)
 
+    ax.set_title(f"Wigner function — mode {mode_idx}", pad=14, fontweight="medium")
     return finalize_figure(fig, show)
 
 
