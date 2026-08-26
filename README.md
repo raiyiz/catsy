@@ -65,7 +65,7 @@ Building gates from these handles instead of bare strings means a mode meant for
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian/__init__.py#L83) |
 | Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L750) |
 | Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian/__init__.py#L289) |
-| Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L671), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L595) |
+| Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L670), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L594) |
 | Visualize a truncated Fock-space state      | [`plot_fock_dashboard()`](src/catsy/fock/visualization.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
@@ -172,7 +172,7 @@ uv run pytest --plot
 | [`core.py`](src/catsy/core.py)         | conventions, validation, numerical helpers                          |
 | [`gaussian/`](src/catsy/gaussian/__init__.py) | states, operations, channels, measurements                   |
 | [`gaussian/visualization.py`](src/catsy/gaussian/visualization.py) | Gaussian-state plots, dashboards, and animations |
-| [`fock.py`](src/catsy/fock.py)         | Fock-space functionality                                             |
+| [`fock.py`](src/catsy/fock/__init__.py)         | Fock-space functionality                                             |
 | [`fock/visualization.py`](src/catsy/fock/visualization.py) | photon-statistics, Fock-coherence, and Wigner plots for QuTiP states |
 | [`visualization.py`](src/catsy/visualization.py) | shared plotting primitives (figure lifecycle, phase-space styling, annotation, and colorbar helpers) used by both visualization modules above |
 | [`optics.py`](src/catsy/optics.py)     | circuits, modes, QuTiP-based cavity/interferometer simulations       |
