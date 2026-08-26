@@ -62,7 +62,6 @@ def _state_header(
         0.02,
         0.98,
         _state_summary(state, mode_name),
-        # transform=ax.transAxes,
         va="top",
         ha="left",
         fontsize=9,
