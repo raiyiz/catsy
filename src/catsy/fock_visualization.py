@@ -200,7 +200,7 @@ def plot_wigner(
 ) -> plt.Figure:
     """Plot a single-mode Wigner function using QuTiP's renderer.
 
-    ``projection`` can be ``"2d"`` or ``"3d"`. For the 2D view, Catsy adds
+    ``projection`` can be ``"2d"`` or ``"3d"``. For the 2D view, Catsy adds
     the zero-negativity contour; all Wigner evaluation and rendering are
     delegated to QuTiP.
     """
@@ -262,3 +262,53 @@ def plot_wigner(
 
     ax.set_title(_state_description(state), pad=14, fontweight="medium")
     return finalize_figure(fig, show)
+
+
+def plot_fock_dashboard(
+    rho: qt.Qobj,
+    *,
+    mode_idx: int = 0,
+    xlim: tuple[float, float] = (-5.0, 5.0),
+    resolution: int = 140,
+    n_max: int | None = None,
+    show: bool = False,
+) -> plt.Figure:
+    """Render a dense four-panel Fock-state diagnostic dashboard.
+
+    The dashboard deliberately combines complementary views: number
+    statistics, Wigner negativity, coherence magnitude, and coherence phase.
+    It is intended for exploratory work and preserves the full information
+    available in the truncated single-mode density matrix.
+    """
+    state = _mode_state(rho, mode_idx)
+    fig = plt.figure(figsize=(13.5, 9.5), constrained_layout=True)
+    grid = fig.add_gridspec(2, 2, width_ratios=(1.0, 1.05), height_ratios=(1.0, 1.0))
+    ax_stats = fig.add_subplot(grid[0, 0])
+    ax_wigner = fig.add_subplot(grid[0, 1])
+    ax_mag = fig.add_subplot(grid[1, 0])
+    ax_phase = fig.add_subplot(grid[1, 1])
+
+    plot_photon_statistics(
+        state,
+        mode_idx=0,
+        ax=ax_stats,
+        n_max=n_max,
+    )
+    plot_wigner(
+        state,
+        mode_idx=0,
+        xlim=xlim,
+        resolution=resolution,
+        ax=ax_wigner,
+    )
+    plot_fock_density_matrix(state, mode_idx=0, axes=(ax_mag, ax_phase))
+    fig.suptitle(_state_description(state), fontsize=16, fontweight="medium")
+    return finalize_figure(fig, show)
+
+
+__all__ = [
+    "plot_fock_dashboard",
+    "plot_fock_density_matrix",
+    "plot_photon_statistics",
+    "plot_wigner",
+]
