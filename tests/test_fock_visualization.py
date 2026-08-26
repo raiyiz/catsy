@@ -178,6 +178,11 @@ def test_wigner_surfaces_for_n_photon_states(
             id="invalid-wigner-limits",
         ),
         pytest.param(
+            lambda rho: plot_wigner(rho, xlim=(0.0, np.inf)),
+            "xlim",
+            id="nonfinite-wigner-limits",
+        ),
+        pytest.param(
             lambda rho: plot_wigner(rho, projection="invalid"),
             "projection",
             id="invalid-wigner-projection",
