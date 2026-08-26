@@ -86,6 +86,21 @@ def test_fock_dashboard_keeps_all_complementary_views(
     assert_layout_can_render(figure)
 
 
+def test_fock_dashboard_selects_requested_mode():
+    cutoff = 8
+    rho = qt.tensor(
+        qt.ket2dm(qt.coherent(cutoff, 0.4)),
+        qt.ket2dm(qt.fock(cutoff, 2)),
+    )
+
+    figure = plot_fock_dashboard(rho, mode_idx=1, resolution=48)
+
+    heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
+    assert heights[2] == pytest.approx(1.0)
+    assert np.count_nonzero(heights > 1e-12) == 1
+    assert figure.axes[0].get_title().startswith("Fock state")
+
+
 @pytest.mark.visualize
 def test_multimode_visualizations_show_selected_mode_pair(
     assert_no_empty_axes, assert_layout_can_render
