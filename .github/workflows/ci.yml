@@ -62,7 +62,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        run: uv python install 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - name: Check documentation source links
         run: python3 scripts/check_doc_links.py
 
