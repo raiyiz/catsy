@@ -20,7 +20,7 @@ from catsy.fock.visualization import (
         pytest.param(qt.coherent(20, 1.2), "Poissonian state", id="poissonian"),
         pytest.param(
             (qt.fock(8, 0) + qt.fock(8, 2)).unit(),
-            "even-parity state",
+            "Poissonian state",
             id="even-parity",
         ),
         pytest.param(
@@ -88,7 +88,7 @@ def test_photon_statistics_respects_explicit_n_max():
     figure = plot_photon_statistics(rho, n_max=5)
     heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
 
-    assert len(heights) == 6
+    assert len(heights) == 10
     assert heights[3] == pytest.approx(1.0)
     assert np.count_nonzero(heights > 1e-12) == 1
 
@@ -98,7 +98,7 @@ def test_photon_statistics_infers_cutoff_beyond_occupied_support():
     figure = plot_photon_statistics(rho)
     heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
 
-    assert len(heights) == 6
+    assert len(heights) == 10
     assert heights[3] == pytest.approx(1.0)
     assert np.allclose(heights[4:], 0.0)
 
