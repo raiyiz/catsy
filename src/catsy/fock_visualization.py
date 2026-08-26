@@ -17,7 +17,13 @@ import qutip as qt
 from matplotlib.colors import Normalize
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from .visualization import figure_and_axes, finalize_figure, style_phase_axes
+from .visualization import (
+    add_colorbar,
+    annotate_box,
+    figure_and_axes,
+    finalize_figure,
+    style_phase_axes,
+)
 
 
 def _mode_state(rho: qt.Qobj, mode_idx: int) -> qt.Qobj:
@@ -110,19 +116,13 @@ def plot_photon_statistics(
     annotation = (
         rf"$g^{{(2)}}(0) = {g2:.3g}$" if np.isfinite(g2) else r"$g^{(2)}(0)$ undefined"
     )
-    ax.text(
+    annotate_box(
+        ax,
         0.98,
         0.96,
         annotation,
-        transform=ax.transAxes,
         ha="right",
         va="top",
-        bbox={
-            "boxstyle": "round,pad=0.3",
-            "facecolor": "white",
-            "alpha": 0.85,
-            "edgecolor": "none",
-        },
     )
     ax.legend(frameon=False)
     return finalize_figure(fig, show)
@@ -157,9 +157,8 @@ def _draw_density_matrix(
     ax_mag.set_title(r"Magnitude $|\rho_{mn}|$")
     ax_phase.set_title(r"Phase $\arg(\rho_{mn})$")
     fig = cast(plt.Figure, ax_mag.figure)
-    fig.colorbar(image_mag, ax=ax_mag, fraction=0.046, pad=0.04)
-    phase_colorbar = fig.colorbar(image_phase, ax=ax_phase, fraction=0.046, pad=0.04)
-    phase_colorbar.set_label(r"phase $\arg(\rho_{mn})$ [rad]")
+    add_colorbar(fig, image_mag, ax_mag)
+    phase_colorbar = add_colorbar(fig, image_phase, ax_phase, label=r"phase $\arg(\rho_{mn})$ [rad]")
     phase_colorbar.set_ticks([-np.pi, -np.pi / 2, 0.0, np.pi / 2, np.pi])
     phase_colorbar.set_ticklabels([r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"])
 
@@ -290,20 +289,9 @@ def plot_fock_dashboard(
     ax_mag = fig.add_subplot(grid[1, 0])
     ax_phase = fig.add_subplot(grid[1, 1])
 
-    plot_photon_statistics(
-        state,
-        mode_idx=0,
-        ax=ax_stats,
-        n_max=n_max,
-    )
-    plot_wigner(
-        state,
-        mode_idx=0,
-        xlim=xlim,
-        resolution=resolution,
-        ax=ax_wigner,
-    )
-    plot_fock_density_matrix(state, mode_idx=0, axes=(ax_mag, ax_phase))
+    plot_photon_statistics(state, ax=ax_stats, n_max=n_max)
+    plot_wigner(state, xlim=xlim, resolution=resolution, ax=ax_wigner)
+    plot_fock_density_matrix(state, axes=(ax_mag, ax_phase))
     fig.suptitle(_state_description(state), fontsize=16, fontweight="medium")
     return finalize_figure(fig, show)
 
