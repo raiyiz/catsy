@@ -587,7 +587,7 @@ def plot_wigner_evolution(
         label = f"t = {times[index]:g}" if times is not None else f"step {index}"
         ax.set_title(label, pad=12, fontweight="medium")
     assert image is not None
-    add_colorbar(fig, image, ax=list(axes_pad=0.03, label=r"$W(x,p)$"))
+    add_colorbar(fig, image, ax=axes_flat, label=r"$W(x,p)$")
     fig.suptitle(f"Wigner evolution — mode {mode_name}", y=1.02, fontsize=14)
     return finalize_figure(fig, show)
 
