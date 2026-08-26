@@ -21,8 +21,8 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [#src-link("src/catsy/gaussian/__init__.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
   [#src-link("src/catsy/gaussian/visualization.py")], [Gaussian-state plots, composite dashboards (`plot_state_dashboard`, `plot_evolution`, `plot_multimode_evolution`), and animations (Chapter 6).],
   [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
-  [#src-link("src/catsy/fock_visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for QuTiP states (Chapter 6).],
-  [#src-link("src/catsy/visualization.py")], [Plotting primitives (figure lifecycle, phase-space styling) shared by the two visualization modules above.],
+  [#src-link("src/catsy/fock_visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for QuTiP states, including the `plot_fock_dashboard` composite view (Chapter 6).],
+  [#src-link("src/catsy/visualization.py")], [Plotting primitives (figure lifecycle, phase-space styling, shared annotation and colorbar helpers) shared by the two visualization modules above.],
   [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
@@ -77,7 +77,6 @@ final = circuit.run(initial)
 
 ```python
 from catsy import GaussianState
-
 state = GaussianState.vacuum(("a",))
 state = state.squeeze("a", r=0.5)
 state = state.displace("a", alpha=0.4 + 0.2j)
@@ -98,6 +97,15 @@ Plot-generating tests (`plot_covariance_matrix`, `plot_wigner`, `plot_joint_corr
 ```bash
 uv run pytest --plot
 ```
+
+For timing diagnostics and plotting demos, two additional pytest options are available:
+
+```bash
+uv run pytest --plot --timings
+uv run pytest --plot --plot-pause 0.5
+```
+
+`--timings` reports the slowest marked plotting tests, while `--plot-pause` adds a short pause after plot-generating tests when interactive inspection is useful. Tests can also use the `timing(max_seconds=...)` marker to enforce an explicit wall-clock budget for a test.
 
 == Scope and boundaries
 
