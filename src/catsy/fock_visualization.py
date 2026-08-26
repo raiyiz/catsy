@@ -178,7 +178,7 @@ def plot_wigner(
 ) -> plt.Figure:
     """Plot a single-mode Wigner function using QuTiP's renderer.
 
-    ``projection`` can be ``"2d"`` or ``"3d"``. For the 2D view, Catsy adds
+    ``projection`` can be ``"2d"`` or ``"3d"`. For the 2D view, Catsy adds
     the zero-negativity contour; all Wigner evaluation and rendering are
     delegated to QuTiP.
     """
@@ -206,7 +206,7 @@ def plot_wigner(
         wigner = qt.wigner(state, grid, grid)
         X, Y = np.meshgrid(grid, grid)
         norm = Normalize(vmin=float(wigner.min()), vmax=float(wigner.max()))
-        surface = ax.plot_surface(
+        ax.plot_surface(
             X,
             Y,
             wigner,
@@ -215,7 +215,6 @@ def plot_wigner(
             linewidth=0,
             antialiased=True,
         )
-        fig.colorbar(surface, ax=ax, shrink=0.7, pad=0.08, label="Wigner value")
     else:
         qt.plot_wigner(
             state,
