@@ -5,8 +5,9 @@ This module instead collects richer, physically meaningful examples that are
 useful as visual smoke tests and as a record of the states catsy is intended
 to make easy to explore.
 
-Gallery tests deliberately keep assertions to figure-level rendering checks.
-Physics-specific and API-specific assertions belong in the contract suites.
+Gallery tests deliberately keep assertions to figure-level rendering checks,
+except for genuinely gallery-specific physical properties. API-specific
+assertions belong in the contract suites.
 """
 
 import matplotlib.pyplot as plt
@@ -15,6 +16,7 @@ import pytest
 import qutip as qt
 
 from catsy import GaussianState
+from catsy.gaussian import LossChannels
 from catsy.fock_visualization import plot_fock_dashboard, plot_wigner as plot_fock_wigner
 from catsy.gaussian.visualization import (
     plot_evolution,
@@ -57,15 +59,10 @@ def test_showcase_gaussian_entanglement_gallery(
 ):
     """Contrast genuine two-mode squeezing with correlated classical noise."""
     tmsv = GaussianState.tmsv("a", "b", r=1.0)
-    classical = GaussianState.vacuum(("a", "b"))
-
-    # The contract suite owns the Duan/separability assertion. The gallery
-    # only presents the two physically distinct correlation patterns together.
-    from catsy.gaussian import LossChannels
-
     classical = LossChannels.correlated_thermal_noise(
         "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
-    ).apply(classical)
+    ).apply(GaussianState.vacuum(("a", "b")))
+
     figure, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
     for (state, quadrature), ax in zip(
         [(tmsv, "x"), (tmsv, "p"), (classical, "x"), (classical, "p")],
@@ -136,7 +133,6 @@ def test_showcase_fock_number_state_gallery(assert_no_empty_axes, assert_layout_
 
     figure.suptitle("Wigner functions of n-photon states", fontweight="medium")
     figure.canvas.draw()
-    assert all(ax.collections for ax in figure.axes)
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
