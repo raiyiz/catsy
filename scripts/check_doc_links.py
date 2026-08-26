@@ -138,9 +138,9 @@ def _check(
 def _fix_typst_file(typ_file: Path) -> tuple[str, bool]:
     """Repair uniquely recoverable Typst source links and return new text/state."""
     text = typ_file.read_text()
-    changed = False
+    replacements: list[tuple[int, int, str]] = []
 
-    for match in list(SRC_LINK_RE.finditer(text)):
+    for match in SRC_LINK_RE.finditer(text):
         rest = match.group("rest")
         line_match = LINE_KWARG_RE.search(rest)
         if line_match is None:
@@ -154,15 +154,17 @@ def _fix_typst_file(typ_file: Path) -> tuple[str, bool]:
         old_link = match.group(0)
         new_link = LINE_KWARG_RE.sub(f"line: {replacement_line}", old_link, count=1)
         if new_link != old_link:
-            text = text[: match.start()] + new_link + text[match.end() :]
-            changed = True
-    return text, changed
+            replacements.append((match.start(), match.end(), new_link))
+
+    for start, end, replacement in reversed(replacements):
+        text = text[:start] + replacement + text[end:]
+    return text, bool(replacements)
 
 
 def _fix_readme(text: str) -> tuple[str, bool]:
     """Repair uniquely recoverable Markdown source links and return new text/state."""
-    changed = False
-    for match in list(MD_LINK_RE.finditer(text)):
+    replacements: list[tuple[int, int, str]] = []
+    for match in MD_LINK_RE.finditer(text):
         line_str = match.group("line")
         if line_str is None:
             continue
@@ -175,9 +177,11 @@ def _fix_readme(text: str) -> tuple[str, bool]:
         old_link = match.group(0)
         new_link = old_link.replace(f"#L{line_no}", f"#L{replacement_line}")
         if new_link != old_link:
-            text = text[: match.start()] + new_link + text[match.end() :]
-            changed = True
-    return text, changed
+            replacements.append((match.start(), match.end(), new_link))
+
+    for start, end, replacement in reversed(replacements):
+        text = text[:start] + replacement + text[end:]
+    return text, bool(replacements)
 
 
 def check_typst_docs(fix: bool = False) -> list[str]:
