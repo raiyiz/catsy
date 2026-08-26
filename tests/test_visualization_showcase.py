@@ -1,8 +1,12 @@
 """Curated visualization gallery.
 
-The contract suites test individual plotting APIs. This module instead collects
-richer, physically meaningful examples that are useful as a visual smoke test
-and as a record of the states catsy is intended to make easy to explore.
+The contract suites test individual plotting APIs and their semantic behavior.
+This module instead collects richer, physically meaningful examples that are
+useful as visual smoke tests and as a record of the states catsy is intended
+to make easy to explore.
+
+Gallery tests deliberately keep assertions to figure-level rendering checks.
+Physics-specific and API-specific assertions belong in the contract suites.
 """
 
 import matplotlib.pyplot as plt
@@ -11,9 +15,7 @@ import pytest
 import qutip as qt
 
 from catsy import GaussianState
-from catsy.core import DUAN_SEPARABILITY_BOUND
 from catsy.fock_visualization import plot_fock_dashboard, plot_wigner as plot_fock_wigner
-from catsy.gaussian import LossChannels, compute_duan_inseparability
 from catsy.gaussian.visualization import (
     plot_evolution,
     plot_joint_correlation,
@@ -41,9 +43,6 @@ def test_showcase_gaussian_state_gallery(assert_no_empty_axes, assert_layout_can
     wigner = plot_wigner(state, "a", num_points=60)
 
     figure.suptitle("Two-mode squeezed, rotated, and displaced Gaussian state")
-    assert len(figure.axes) == 7
-    assert len(phase_space.axes) == 1
-    assert len(wigner.axes) == 2
     assert_no_empty_axes(figure)
     assert_no_empty_axes(phase_space)
     assert_no_empty_axes(wigner)
@@ -58,10 +57,15 @@ def test_showcase_gaussian_entanglement_gallery(
 ):
     """Contrast genuine two-mode squeezing with correlated classical noise."""
     tmsv = GaussianState.tmsv("a", "b", r=1.0)
+    classical = GaussianState.vacuum(("a", "b"))
+
+    # The contract suite owns the Duan/separability assertion. The gallery
+    # only presents the two physically distinct correlation patterns together.
+    from catsy.gaussian import LossChannels
+
     classical = LossChannels.correlated_thermal_noise(
         "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
-    ).apply(GaussianState.vacuum(("a", "b")))
-
+    ).apply(classical)
     figure, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
     for (state, quadrature), ax in zip(
         [(tmsv, "x"), (tmsv, "p"), (classical, "x"), (classical, "p")],
@@ -71,9 +75,6 @@ def test_showcase_gaussian_entanglement_gallery(
         plot_joint_correlation(state, "a", "b", quadrature=quadrature, ax=ax)
 
     figure.suptitle("Quantum entanglement versus classical correlation")
-    duan_tmsv = compute_duan_inseparability(tmsv, "a", "b")
-    duan_classical = compute_duan_inseparability(classical, "a", "b")
-    assert duan_tmsv < DUAN_SEPARABILITY_BOUND < duan_classical
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
@@ -98,9 +99,6 @@ def test_showcase_gaussian_evolution_gallery(assert_no_empty_axes, assert_layout
     times = np.linspace(0.0, 4.0, len(states))
 
     figure = plot_evolution(states, "a", times=times, wigner_indices=[0, 8, 16])
-    assert len(figure.axes) >= 4
-    assert figure._suptitle is not None
-    assert "mode a" in figure._suptitle.get_text()
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
@@ -114,7 +112,6 @@ def test_showcase_fock_dashboard_gallery(assert_no_empty_axes, assert_layout_can
 
     figure = plot_fock_dashboard(rho, xlim=(-5, 5), resolution=48)
     figure.suptitle("Even cat state: Fock-space and phase-space views")
-    assert len(figure.axes) >= 7
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
@@ -139,7 +136,6 @@ def test_showcase_fock_number_state_gallery(assert_no_empty_axes, assert_layout_
 
     figure.suptitle("Wigner functions of n-photon states", fontweight="medium")
     figure.canvas.draw()
-    assert len(figure.axes) == len(n_values)
     assert all(ax.collections for ax in figure.axes)
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
