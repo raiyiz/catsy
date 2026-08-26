@@ -372,7 +372,7 @@ def test_native_qutip_wigner_plot_demo(assert_no_empty_axes, assert_layout_can_r
 def test_realistic_vs_ideal_subtraction_wigner_and_photon_stats_demo(
     assert_no_empty_axes, assert_layout_can_render
 ):
-    N_cutoff = 16
+    N_cutoff = 12
     psi = (qt.squeeze(N_cutoff, 0.6) * qt.fock(N_cutoff, 0)).unit()
     rho = qt.ket2dm(psi)
 
@@ -383,7 +383,7 @@ def test_realistic_vs_ideal_subtraction_wigner_and_photon_stats_demo(
         N_cutoff=N_cutoff,
         tap_reflectivity=0.15,
         detector_efficiency=0.55,
-        ancilla_cutoff=8,
+        ancilla_cutoff=6,
     )
 
     xvec = np.linspace(-5, 5, 150)
