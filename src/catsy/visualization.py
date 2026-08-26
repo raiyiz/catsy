@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import cast
 
 import matplotlib.pyplot as plt
+from matplotlib.cm import ScalarMappable
 
 
 def finalize_figure(fig: plt.Figure, show: bool) -> plt.Figure:
@@ -52,17 +53,19 @@ def annotate_box(
         "alpha": 0.84,
         "edgecolor": "none",
     }
-    bbox.update(kwargs.pop("bbox", {}))
+    custom_bbox = kwargs.pop("bbox", None)
+    if isinstance(custom_bbox, dict):
+        bbox.update(custom_bbox)
     ax.text(x, y, text, transform=ax.transAxes, bbox=bbox, **kwargs)
 
 
 def add_colorbar(
     fig: plt.Figure,
-    mappable: object,
+    mappable: ScalarMappable,
     ax: plt.Axes | list[plt.Axes],
     *,
     label: str | None = None,
-) -> object:
+):
     """Add a consistently sized colorbar to one or more axes."""
     colorbar = fig.colorbar(mappable, ax=ax, fraction=0.046, pad=0.04)
     if label is not None:
