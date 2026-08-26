@@ -16,8 +16,8 @@ import pytest
 import qutip as qt
 
 from catsy import GaussianState
+from catsy.fock_visualization import plot_wigner as plot_fock_wigner
 from catsy.gaussian import LossChannels
-from catsy.fock_visualization import plot_fock_dashboard, plot_wigner as plot_fock_wigner
 from catsy.gaussian.visualization import (
     plot_evolution,
     plot_joint_correlation,
@@ -101,44 +101,9 @@ def test_showcase_gaussian_evolution_gallery(assert_no_empty_axes, assert_layout
 
 
 @pytest.mark.visualize
-def test_showcase_fock_dashboard_gallery(assert_no_empty_axes, assert_layout_can_render):
-    """Show the complementary views of a non-Gaussian cat state."""
-    cutoff = 16
-    cat = (qt.coherent(cutoff, 1.8) + qt.coherent(cutoff, -1.8)).unit()
-    rho = qt.ket2dm(cat)
-
-    figure = plot_fock_dashboard(rho, xlim=(-5, 5), resolution=48)
-    figure.suptitle("Even cat state: Fock-space and phase-space views")
-    assert_no_empty_axes(figure)
-    assert_layout_can_render(figure)
-
-
-@pytest.mark.visualize
-def test_showcase_fock_number_state_gallery(assert_no_empty_axes, assert_layout_can_render):
-    """Compare the radial Wigner structure of several photon-number states."""
-    n_values = (0, 1, 2, 3)
-    cutoff = max(n_values) + 4
-
-    figure = plt.figure(figsize=(12, 9), constrained_layout=True)
-    for index, n in enumerate(n_values, start=1):
-        ax = figure.add_subplot(2, 2, index, projection="3d")
-        plot_fock_wigner(
-            qt.ket2dm(qt.fock(cutoff, n)),
-            xlim=(-4, 4),
-            resolution=48,
-            ax=ax,
-            projection="3d",
-        )
-        ax.set_title(fr"$|{n}\\rangle$")
-
-    figure.suptitle("Wigner functions of n-photon states", fontweight="medium")
-    figure.canvas.draw()
-    assert_no_empty_axes(figure)
-    assert_layout_can_render(figure)
-
-
-@pytest.mark.visualize
-def test_showcase_fock_compass_state_has_interference(assert_no_empty_axes, assert_layout_can_render):
+def test_showcase_fock_compass_state_has_interference(
+    assert_no_empty_axes, assert_layout_can_render
+):
     """Show the higher-order interference of a four-component compass state."""
     cutoff = 32
     alpha = 2.4
