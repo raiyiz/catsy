@@ -18,6 +18,8 @@ import qutip as qt
 from catsy import GaussianState
 from catsy.fock_visualization import (
     plot_photon_statistics,
+)
+from catsy.fock_visualization import (
     plot_wigner as plot_fock_wigner,
 )
 from catsy.gaussian import LossChannels
@@ -91,7 +93,9 @@ def test_showcase_gaussian_entanglement_gallery(
 
 
 @pytest.mark.visualize
-def test_showcase_gaussian_evolution_gallery(assert_no_empty_axes, assert_layout_can_render):
+def test_showcase_gaussian_evolution_gallery(
+    assert_no_empty_axes, assert_layout_can_render
+):
     """Show a nontrivial single-mode evolution at several representative times."""
     state = (
         GaussianState.vacuum(("a",))
@@ -155,7 +159,9 @@ def test_showcase_fock_state_diagnostics_gallery(
         fontweight="medium",
     )
 
-    compass_wigner = qt.wigner(states[1][1], np.linspace(-7, 7, 72), np.linspace(-7, 7, 72))
+    compass_wigner = qt.wigner(
+        states[1][1], np.linspace(-7, 7, 72), np.linspace(-7, 7, 72)
+    )
     assert np.min(compass_wigner) < -0.01
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)

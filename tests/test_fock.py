@@ -248,8 +248,12 @@ def test_realistic_subtraction_output_stays_a_valid_density_matrix():
     N_cutoff = 8
     rho = qt.ket2dm(qt.coherent(N_cutoff, 0.8))
     result = FockGates.realistic_photon_subtraction(
-        rho, mode_idx=0, N_cutoff=N_cutoff, tap_reflectivity=0.2,
-        detector_efficiency=0.5, ancilla_cutoff=3,
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.2,
+        detector_efficiency=0.5,
+        ancilla_cutoff=3,
     )
     assert result.tr() == pytest.approx(1.0, abs=1e-8)
     assert np.min(result.eigenenergies()) > -1e-9
@@ -259,8 +263,12 @@ def test_realistic_addition_output_stays_a_valid_density_matrix():
     N_cutoff = 8
     rho = qt.ket2dm(qt.coherent(N_cutoff, 0.8))
     result = FockGates.realistic_photon_addition(
-        rho, mode_idx=0, N_cutoff=N_cutoff, coupling_strength=0.2,
-        detector_efficiency=0.5, ancilla_cutoff=3,
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        coupling_strength=0.2,
+        detector_efficiency=0.5,
+        ancilla_cutoff=3,
     )
     assert result.tr() == pytest.approx(1.0, abs=1e-8)
     assert np.min(result.eigenenergies()) > -1e-9
@@ -273,11 +281,17 @@ def test_lower_detector_efficiency_degrades_fidelity_to_ideal_subtraction():
     ideal = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=N_cutoff)
 
     good_detector = FockGates.realistic_photon_subtraction(
-        rho, N_cutoff=N_cutoff, tap_reflectivity=0.05, detector_efficiency=0.95,
+        rho,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.05,
+        detector_efficiency=0.95,
         ancilla_cutoff=3,
     )
     poor_detector = FockGates.realistic_photon_subtraction(
-        rho, N_cutoff=N_cutoff, tap_reflectivity=0.05, detector_efficiency=0.2,
+        rho,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.05,
+        detector_efficiency=0.2,
         ancilla_cutoff=3,
     )
     assert qt.fidelity(good_detector, ideal) > qt.fidelity(poor_detector, ideal)
@@ -287,11 +301,17 @@ def test_realistic_photon_ops_reject_invalid_parameters():
     N_cutoff = 8
     rho = qt.ket2dm(qt.fock(N_cutoff, 1))
     with pytest.raises(ValueError):
-        FockGates.realistic_photon_subtraction(rho, N_cutoff=N_cutoff, tap_reflectivity=-0.1)
+        FockGates.realistic_photon_subtraction(
+            rho, N_cutoff=N_cutoff, tap_reflectivity=-0.1
+        )
     with pytest.raises(ValueError):
-        FockGates.realistic_photon_subtraction(rho, N_cutoff=N_cutoff, detector_efficiency=1.5)
+        FockGates.realistic_photon_subtraction(
+            rho, N_cutoff=N_cutoff, detector_efficiency=1.5
+        )
     with pytest.raises(ValueError):
-        FockGates.realistic_photon_addition(rho, N_cutoff=N_cutoff, coupling_strength=-0.1)
+        FockGates.realistic_photon_addition(
+            rho, N_cutoff=N_cutoff, coupling_strength=-0.1
+        )
     with pytest.raises(ValueError):
         FockGates.realistic_photon_subtraction(rho, N_cutoff=N_cutoff, ancilla_cutoff=0)
 
@@ -311,7 +331,9 @@ def test_realistic_photon_ops_act_only_on_the_selected_mode():
     )
     mode0 = result.ptrace(0)
     mode1 = result.ptrace(1)
-    assert qt.fidelity(mode0, qt.ket2dm(qt.fock(N_cutoff, 0))) == pytest.approx(1.0, abs=1e-8)
+    assert qt.fidelity(mode0, qt.ket2dm(qt.fock(N_cutoff, 0))) == pytest.approx(
+        1.0, abs=1e-8
+    )
     assert qt.expect(qt.num(N_cutoff), mode1) == pytest.approx(1.0, abs=1e-3)
 
 
@@ -356,8 +378,12 @@ def test_realistic_vs_ideal_subtraction_wigner_and_photon_stats_demo(
 
     ideal = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=N_cutoff)
     realistic = FockGates.realistic_photon_subtraction(
-        rho, mode_idx=0, N_cutoff=N_cutoff, tap_reflectivity=0.15,
-        detector_efficiency=0.55, ancilla_cutoff=8,
+        rho,
+        mode_idx=0,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.15,
+        detector_efficiency=0.55,
+        ancilla_cutoff=8,
     )
 
     xvec = np.linspace(-5, 5, 150)

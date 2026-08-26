@@ -123,9 +123,7 @@ def _apply_kraus_operators(
     rho_new = qt.vector_to_operator(channel * qt.operator_to_vector(rho))
     trace_val = rho_new.tr()
     if abs(trace_val) < TOL_PHYSICALITY:
-        raise ValueError(
-            f"{label}: heralding success probability is numerically zero."
-        )
+        raise ValueError(f"{label}: heralding success probability is numerically zero.")
     return rho_new / trace_val
 
 
@@ -180,14 +178,10 @@ def _click_heralded_operation(
     ancilla_idx = n_modes
 
     a_sys = _expand_operator(qt.destroy(cutoff), dims=dims, mode_idx=mode_idx)
-    a_anc = _expand_operator(
-        qt.destroy(ancilla_cutoff), dims=dims, mode_idx=ancilla_idx
-    )
+    a_anc = _expand_operator(qt.destroy(ancilla_cutoff), dims=dims, mode_idx=ancilla_idx)
 
     if coupling_kind == "subtract":
-        generator = coupling_strength * (
-            a_sys * a_anc.dag() - a_sys.dag() * a_anc
-        )
+        generator = coupling_strength * (a_sys * a_anc.dag() - a_sys.dag() * a_anc)
         coupling_unitary = generator.expm()
     else:
         # QuTiP's generalized two-mode squeezing operator is

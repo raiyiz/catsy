@@ -119,7 +119,7 @@ def test_wigner_surfaces_for_n_photon_states(
             ax=ax,
             projection="3d",
         )
-        ax.set_title(fr"$|{n}\rangle$")
+        ax.set_title(rf"$|{n}\rangle$")
 
     fig.suptitle("Wigner functions of n-photon states", fontweight="medium")
     fig.canvas.draw()

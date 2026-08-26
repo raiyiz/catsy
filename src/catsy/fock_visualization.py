@@ -46,11 +46,7 @@ def _photon_statistics(rho: qt.Qobj) -> tuple[np.ndarray, float, float]:
     n = np.arange(len(probabilities))
     mean = float(np.dot(n, probabilities))
     factorial_second = float(np.dot(n * (n - 1), probabilities))
-    g2 = (
-        factorial_second / mean**2
-        if mean > np.finfo(float).eps
-        else float("nan")
-    )
+    g2 = factorial_second / mean**2 if mean > np.finfo(float).eps else float("nan")
     return probabilities, mean, g2
 
 
@@ -87,13 +83,11 @@ def plot_photon_statistics(
         ls="--",
         lw=1.4,
         alpha=0.65,
-        label=fr"$\langle n\rangle={mean:.2f}$",
+        label=rf"$\langle n\rangle={mean:.2f}$",
     )
     ax.set_title(f"Photon-number statistics — mode {mode_idx}", pad=14)
     annotation = (
-        fr"$g^{{(2)}}(0) = {g2:.3g}$"
-        if np.isfinite(g2)
-        else r"$g^{(2)}(0)$ undefined"
+        rf"$g^{{(2)}}(0) = {g2:.3g}$" if np.isfinite(g2) else r"$g^{(2)}(0)$ undefined"
     )
     ax.text(
         0.98,
