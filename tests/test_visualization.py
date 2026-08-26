@@ -11,9 +11,9 @@ from catsy.gaussian.visualization import (
     plot_joint_correlation,
     plot_multimode_evolution,
     plot_phase_space,
+    plot_phase_space_trajectory_timecoded,
     plot_state_dashboard,
     plot_wigner,
-    plot_phase_space_trajectory_timecoded,
 )
 
 

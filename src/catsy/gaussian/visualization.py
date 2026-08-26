@@ -853,6 +853,7 @@ def plot_multimode_evolution(
                     alpha=0.22,
                 )
             )
+            _add_ellipse(ax, mean, covariance, n_sigma, alpha=0.22)
         limits = [ax.get_xlim(), ax.get_ylim()]
         extent = max(
             abs(limits[0][0]),
