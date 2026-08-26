@@ -17,7 +17,7 @@ import qutip as qt
 from matplotlib.colors import Normalize
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from .visualization import (
+from catsy.visualization import (
     add_colorbar,
     annotate_box,
     figure_and_axes,
