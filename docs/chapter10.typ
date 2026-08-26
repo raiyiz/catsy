@@ -20,7 +20,7 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
   [#src-link("src/catsy/gaussian/__init__.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
   [#src-link("src/catsy/gaussian/visualization.py")], [Gaussian-state plots, composite dashboards (`plot_state_dashboard`, `plot_evolution`, `plot_multimode_evolution`), and animations (Chapter 6).],
-  [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
+  [#src-link("src/catsy/fock/__init__.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
   [#src-link("src/catsy/fock/visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for QuTiP states, including the `plot_fock_dashboard` four-view composite (Chapter 6).],
   [#src-link("src/catsy/visualization.py")], [Plotting primitives (figure lifecycle, phase-space styling, shared annotation and colorbar helpers) shared by the two visualization modules above.],
   [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
