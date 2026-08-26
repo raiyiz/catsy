@@ -105,7 +105,17 @@ The Fock-space counterparts live in the sibling module, #src-link("src/catsy/foc
 
 *Fock dashboard* -- `plot_fock_dashboard(rho, *, mode_idx=0, xlim=(-5, 5), resolution=140, n_max=None, show=False)` combines four complementary views: photon-number statistics, Wigner function, density-matrix magnitude, and density-matrix phase. It uses the same `mode_idx`, `xlim`, `resolution`, and `n_max` conventions as the component plots and returns one composite figure. The plotting functions derive concise state-aware descriptions (for example, Fock, vacuum, Poissonian, parity, or nonclassical descriptions) from the photon statistics, so titles identify the displayed state rather than only a mode index.
 
-Both visualization modules share their figure-lifecycle and phase-space-styling primitives (`finalize_figure`, `style_phase_axes`) from #src-link("src/catsy/visualization.py", label: [`visualization.py`]), which keeps mixed Gaussian/Fock dashboards visually consistent.
+== Shared visualization infrastructure
+
+The Gaussian and Fock plotting modules are separate because they operate on different state representations, but they deliberately share the low-level plotting infrastructure in #src-link("src/catsy/visualization.py", label: [`visualization.py`]):
+
+```text
+Gaussian visualization ─┐
+                        ├─> catsy.visualization
+Fock visualization ─────┘
+```
+
+The shared layer owns presentation mechanics rather than physics-specific plotting logic. In particular, `figure_and_axes` provides consistent figure/axes creation for standalone plots and composition into caller-supplied axes; `finalize_figure` handles common figure finalization and optional display; `style_phase_axes` applies the common phase-space axis conventions; `annotate_box` provides consistent boxed annotations; and `add_colorbar` centralizes colorbar creation and labeling. The Gaussian and Fock modules therefore remain responsible for choosing what physical quantity to plot, while `catsy.visualization` keeps figure lifecycle, phase-axis styling, annotations, and colorbars consistent across both layers.
 
 ---
 
