@@ -20,9 +20,13 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.patches import Ellipse
 
-from catsy.visualization import finalize_figure, style_phase_axes
-
 from . import GaussianState, compute_joint_correlation
+
+
+def _finalize(fig: plt.Figure, show: bool) -> plt.Figure:
+    if show:
+        plt.show()
+    return fig
 
 
 def _states(states: Sequence[GaussianState]) -> tuple[GaussianState, ...]:
@@ -129,6 +133,14 @@ def _set_phase_limits(
     ax.set_ylim(-extent, extent)
 
 
+def _style_phase_axes(ax: plt.Axes) -> None:
+    ax.axhline(0, lw=0.6, ls="--", alpha=0.30, zorder=0)
+    ax.axvline(0, lw=0.6, ls="--", alpha=0.30, zorder=0)
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(alpha=0.10, linewidth=0.5)
+    ax.spines[["top", "right"]].set_visible(False)
+
+
 def _quadrature_labels(state: GaussianState) -> list[str]:
     return [f"{q}$_{{{mode}}}$" for mode in state.modes for q in ("x", "p")]
 
@@ -182,7 +194,7 @@ def plot_covariance_matrix(
                     fontsize=8,
                     color="white" if abs(value) > threshold else "black",
                 )
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_mode_correlation_map(
@@ -230,7 +242,7 @@ def plot_mode_correlation_map(
                     color="white" if abs(value) > 0.55 else "black",
                 )
 
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_phase_space(
@@ -263,11 +275,11 @@ def plot_phase_space(
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
     ax.set_title(f"Phase space — mode {mode_name}", pad=16, fontweight="medium")
-    style_phase_axes(ax)
+    _style_phase_axes(ax)
     _set_phase_limits(ax, np.asarray([mean]), [covariance], n_sigma)
     _state_header(ax, state, mode_name)
     ax.legend(frameon=False, loc="lower right")
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_phase_space_trajectory(
@@ -302,14 +314,14 @@ def plot_phase_space_trajectory(
         indices.append(len(sequence) - 1)
     for i in indices:
         _add_ellipse(ax, means[i], covariances[i], n_sigma, alpha=0.25)
-    style_phase_axes(ax)
+    _style_phase_axes(ax)
     _set_phase_limits(ax, means, covariances, n_sigma)
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
     ax.set_title(f"Phase-space evolution — mode {mode_name}", pad=16, fontweight="medium")
     _state_header(ax, sequence[-1], mode_name)
     ax.legend(frameon=False, loc="lower right")
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def animate_phase_space(
@@ -340,7 +352,7 @@ def animate_phase_space(
         means[:, 0], means[:, 1], ls="--", lw=0.8, alpha=0.20, label="full trajectory"
     )
     _set_phase_limits(ax, means, covariances, n_sigma)
-    style_phase_axes(ax)
+    _style_phase_axes(ax)
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
     ax.set_title(
@@ -432,7 +444,7 @@ def plot_covariance_evolution(
     ax.grid(alpha=0.12, linewidth=0.5)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(frameon=False, ncol=3, loc="upper center", bbox_to_anchor=(0.5, -0.18))
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def _symplectic_eigenvalues(covariance: np.ndarray) -> np.ndarray:
@@ -484,7 +496,7 @@ def plot_diagnostics(
     ax.grid(alpha=0.12, linewidth=0.5)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(frameon=False, loc="best")
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def _wigner_grid(
@@ -533,14 +545,14 @@ def plot_wigner(
     ax.scatter(
         [mean[0]], [mean[1]], marker="+", s=85, linewidths=1.5, color="white", zorder=4
     )
-    style_phase_axes(ax)
+    _style_phase_axes(ax)
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
     ax.set_title(f"Wigner function — mode {mode_name}", pad=16, fontweight="medium")
     _state_header(ax, state, mode_name)
     if colorbar:
         fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label=r"$W(x,p)$")
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_wigner_evolution(
@@ -581,7 +593,7 @@ def plot_wigner_evolution(
         ax.contour(X, P, W, levels=7, colors="white", linewidths=0.45, alpha=0.60)
         mean, _ = _mode_geometry(sequence[index], mode_name)
         ax.scatter([mean[0]], [mean[1]], marker="+", s=75, linewidths=1.4, color="white")
-        style_phase_axes(ax)
+        _style_phase_axes(ax)
         ax.set_xlabel(r"$x$")
         ax.set_ylabel(r"$p$")
         label = f"t = {times[index]:g}" if times is not None else f"step {index}"
@@ -589,7 +601,7 @@ def plot_wigner_evolution(
     assert image is not None
     fig.colorbar(image, ax=list(axes_flat), fraction=0.02, pad=0.03, label=r"$W(x,p)$")
     fig.suptitle(f"Wigner evolution — mode {mode_name}", y=1.02, fontsize=14)
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_evolution(
@@ -638,7 +650,7 @@ def plot_evolution(
     fig.suptitle(
         f"Gaussian-state evolution · mode {mode_name}", fontsize=16, fontweight="medium"
     )
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_joint_correlation(
@@ -665,7 +677,7 @@ def plot_joint_correlation(
     ax.set_xlabel(f"{quadrature}_{mode_a}")
     ax.set_ylabel(f"{quadrature}_{mode_b}")
     ax.set_aspect("equal", adjustable="box")
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_state_dashboard(
@@ -700,7 +712,7 @@ def plot_state_dashboard(
     fig.suptitle(
         f"Gaussian state · {', '.join(state.modes)}", fontsize=15, fontweight="medium"
     )
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def plot_phase_space_trajectory_timecoded(
@@ -769,7 +781,7 @@ def plot_phase_space_trajectory_timecoded(
     for index in indices:
         _add_ellipse(ax, means[index], covariances[index], n_sigma, alpha=0.22)
 
-    style_phase_axes(ax)
+    _style_phase_axes(ax)
     _set_phase_limits(ax, means, covariances, n_sigma)
     ax.set_xlabel(r"$x$ quadrature")
     ax.set_ylabel(r"$p$ quadrature")
@@ -780,7 +792,7 @@ def plot_phase_space_trajectory_timecoded(
     )
     _state_header(ax, sequence[-1], mode_name)
     ax.legend(frameon=False, loc="lower right")
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 def _cross_mode_correlation(state: GaussianState, mode_a: int, mode_b: int) -> float:
@@ -839,20 +851,9 @@ def plot_multimode_evolution(
         ax.scatter(
             [means[-1, 0]], [means[-1, 1]], s=70, marker="*", label="final", zorder=4
         )
-        style_phase_axes(ax)
+        _style_phase_axes(ax)
         stride = max(1, len(sequence) // 6)
         for mean, covariance in zip(means[::stride], covariances[::stride], strict=True):
-            values, _ = np.linalg.eigh(covariance)
-            radius = n_sigma * np.sqrt(np.maximum(values, 0.0))
-            ax.add_patch(
-                Ellipse(
-                    (float(mean[0]), float(mean[1])),
-                    2.0 * float(radius.max()),
-                    2.0 * float(radius.min()),
-                    fill=False,
-                    alpha=0.22,
-                )
-            )
             _add_ellipse(ax, mean, covariance, n_sigma, alpha=0.22)
         limits = [ax.get_xlim(), ax.get_ylim()]
         extent = max(
@@ -893,7 +894,7 @@ def plot_multimode_evolution(
         fontsize=16,
         fontweight="medium",
     )
-    return finalize_figure(fig, show)
+    return _finalize(fig, show)
 
 
 __all__ = [
