@@ -18,7 +18,7 @@ from catsy.gaussian.visualization import (
 
 
 def _complex_state() -> GaussianState:
-    """Representative multimode Gaussian state for showcase plots."""
+    """Representative multimode Gaussian state for visualization tests."""
     return (
         GaussianState.tmsv("a", "b", r=0.9)
         .squeeze("a", r=0.65, theta=0.3)
@@ -59,7 +59,7 @@ def _phase_space_trajectory_states() -> list[GaussianState]:
 
 
 class TestStaticVisualizations:
-    """A small gallery of the richest static Gaussian views."""
+    """Contract tests for static Gaussian visualizations."""
 
     @pytest.mark.visualize
     def test_multimode_dashboard_showcase(
@@ -120,7 +120,7 @@ class TestStaticVisualizations:
 
 
 class TestEvolutionVisualizations:
-    """A few high-information views of nontrivial Gaussian dynamics."""
+    """Contract tests for Gaussian dynamics visualizations."""
 
     @pytest.mark.visualize
     def test_evolution_dashboard_showcase(
