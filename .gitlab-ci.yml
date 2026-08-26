@@ -114,7 +114,6 @@ mypy:
 docs-links:
   stage: test
   image: python:3.13-slim
-  allow_failure: true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
