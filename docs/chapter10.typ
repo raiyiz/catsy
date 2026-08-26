@@ -18,8 +18,11 @@ This closing chapter summarizes the previous nine chapters into a practical over
   stroke: 0.5pt + gray.lighten(40%),
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
-  [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/gaussian/__init__.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/gaussian/visualization.py")], [Gaussian-state plots, composite dashboards (`plot_state_dashboard`, `plot_evolution`, `plot_multimode_evolution`), and animations (Chapter 6).],
   [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
+  [#src-link("src/catsy/fock_visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for QuTiP states (Chapter 6).],
+  [#src-link("src/catsy/visualization.py")], [Plotting primitives (figure lifecycle, phase-space styling) shared by the two visualization modules above.],
   [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
@@ -90,7 +93,7 @@ The test suite emphasizes both physical invariants (uncertainty relation, symple
 uv run pytest
 ```
 
-Plot-generating tests (`plot_covariance`, `plot_wigner`, `plot_joint_correlation`) are deliberately opt-in, to keep the default suite headless-friendly and fast:
+Plot-generating tests (`plot_covariance_matrix`, `plot_wigner`, `plot_joint_correlation`) are deliberately opt-in, to keep the default suite headless-friendly and fast:
 
 ```bash
 uv run pytest --plot
