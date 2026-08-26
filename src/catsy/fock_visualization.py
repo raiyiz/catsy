@@ -280,7 +280,7 @@ def plot_fock_dashboard(
     The dashboard deliberately combines complementary views: number
     statistics, Wigner negativity, coherence magnitude, and coherence phase.
     It is intended for exploratory work and preserves the full information
-    available in the truncated single-mode density matrix.
+    available in the truncated single-mode density matrix..
     """
     state = _mode_state(rho, mode_idx)
     fig = plt.figure(figsize=(13.5, 9.5), constrained_layout=True)
