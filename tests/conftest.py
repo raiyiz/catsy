@@ -47,7 +47,7 @@ def pytest_configure(config):
         "markers", "timing(max_seconds=...): enforce a wall-clock runtime budget"
     )
     if config.getoption("--plot-pause") < 0:
-        raise pytest.UsageError("--plot-pause must be non negative")
+        raise pytest.UsageError("--plot-pause must be non-negative")
     config._catsy_timings = []
 
 
