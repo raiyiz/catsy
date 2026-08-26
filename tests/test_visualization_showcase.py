@@ -19,17 +19,18 @@ from catsy import GaussianState
 from catsy.fock_visualization import plot_wigner as plot_fock_wigner
 from catsy.gaussian import LossChannels
 from catsy.gaussian.visualization import (
+    plot_covariance_matrix,
     plot_evolution,
     plot_joint_correlation,
+    plot_mode_correlation_map,
     plot_phase_space,
-    plot_state_dashboard,
     plot_wigner,
 )
 
 
 @pytest.mark.visualize
 def test_showcase_gaussian_state_gallery(assert_no_empty_axes, assert_layout_can_render):
-    """Show a displaced, squeezed two-mode Gaussian state from several views."""
+    """Show one rich two-mode Gaussian state as a coherent visual gallery."""
     state = (
         GaussianState.tmsv("a", "b", r=0.9)
         .squeeze("a", r=0.65, theta=0.3)
@@ -40,17 +41,27 @@ def test_showcase_gaussian_state_gallery(assert_no_empty_axes, assert_layout_can
         .displace("b", -0.8 + 0.35j)
     )
 
-    figure = plot_state_dashboard(state, mode="b")
-    phase_space = plot_phase_space(state, "a")
-    wigner = plot_wigner(state, "a", num_points=60)
+    figure = plt.figure(figsize=(13.5, 10.5), constrained_layout=True)
+    grid = figure.add_gridspec(2, 2, hspace=0.16, wspace=0.14)
+    axes = [
+        figure.add_subplot(grid[0, 0]),
+        figure.add_subplot(grid[0, 1]),
+        figure.add_subplot(grid[1, 0]),
+        figure.add_subplot(grid[1, 1]),
+    ]
 
-    figure.suptitle("Two-mode squeezed, rotated, and displaced Gaussian state")
+    plot_phase_space(state, "a", ax=axes[0])
+    plot_wigner(state, "a", num_points=72, ax=axes[1])
+    plot_covariance_matrix(state, ax=axes[2], annotate=False)
+    plot_mode_correlation_map(state, ax=axes[3], annotate=False)
+
+    figure.suptitle(
+        "Two-mode Gaussian state · phase space, Wigner function, and correlations",
+        fontsize=16,
+        fontweight="medium",
+    )
     assert_no_empty_axes(figure)
-    assert_no_empty_axes(phase_space)
-    assert_no_empty_axes(wigner)
     assert_layout_can_render(figure)
-    assert_layout_can_render(phase_space)
-    assert_layout_can_render(wigner)
 
 
 @pytest.mark.visualize
