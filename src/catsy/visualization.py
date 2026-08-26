@@ -38,6 +38,38 @@ def figure_and_axes(
     return fig, created_ax
 
 
+def annotate_box(
+    ax: plt.Axes,
+    x: float,
+    y: float,
+    text: str,
+    **kwargs: object,
+) -> None:
+    """Add a shared rounded, translucent annotation box to an axes."""
+    bbox = {
+        "boxstyle": "round,pad=0.32",
+        "facecolor": "white",
+        "alpha": 0.84,
+        "edgecolor": "none",
+    }
+    bbox.update(kwargs.pop("bbox", {}))
+    ax.text(x, y, text, transform=ax.transAxes, bbox=bbox, **kwargs)
+
+
+def add_colorbar(
+    fig: plt.Figure,
+    mappable: object,
+    ax: plt.Axes | list[plt.Axes],
+    *,
+    label: str | None = None,
+) -> object:
+    """Add a consistently sized colorbar to one or more axes."""
+    colorbar = fig.colorbar(mappable, ax=ax, fraction=0.046, pad=0.04)
+    if label is not None:
+        colorbar.set_label(label)
+    return colorbar
+
+
 def style_phase_axes(ax: plt.Axes) -> None:
     """Apply the shared visual treatment for x/p phase-space plots."""
     ax.axhline(0, lw=0.6, ls="--", alpha=0.30, zorder=0)
@@ -47,4 +79,10 @@ def style_phase_axes(ax: plt.Axes) -> None:
     ax.spines[["top", "right"]].set_visible(False)
 
 
-__all__ = ["figure_and_axes", "finalize_figure", "style_phase_axes"]
+__all__ = [
+    "add_colorbar",
+    "annotate_box",
+    "figure_and_axes",
+    "finalize_figure",
+    "style_phase_axes",
+]
