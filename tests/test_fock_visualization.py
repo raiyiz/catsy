@@ -4,11 +4,51 @@ import qutip as qt
 from matplotlib import pyplot as plt
 
 from catsy.fock.visualization import (
+    _state_description,
     plot_fock_dashboard,
     plot_fock_density_matrix,
     plot_photon_statistics,
     plot_wigner,
 )
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        pytest.param(qt.fock(8, 3), r"Fock state $|3\rangle$", id="fock"),
+        pytest.param(qt.fock(8, 0), r"Fock state $|0\rangle$", id="vacuum-fock"),
+        pytest.param(qt.coherent(20, 1.2), "Poissonian state", id="poissonian"),
+        pytest.param(
+            (qt.fock(8, 0) + qt.fock(8, 2)).unit(),
+            "even-parity state",
+            id="even-parity",
+        ),
+        pytest.param(
+            (qt.fock(8, 1) + qt.fock(8, 3)).unit(),
+            "odd-parity state",
+            id="odd-parity",
+        ),
+    ],
+)
+def test_state_description_classifies_representative_fock_states(state, expected):
+    description = _state_description(qt.ket2dm(state))
+    assert description.startswith(expected)
+
+
+def test_state_description_classifies_nonclassical_state():
+    state = (qt.fock(10, 0) + qt.fock(10, 1)).unit()
+    description = _state_description(qt.ket2dm(state))
+
+    assert description.startswith("Nonclassical state")
+    assert "g^{(2)}" in description
+
+
+def test_state_description_falls_back_when_g2_is_undefined():
+    rho = qt.ket2dm(qt.fock(8, 0))
+    rho = rho + 0.0 * qt.ket2dm(qt.fock(8, 1))
+    description = _state_description(rho)
+
+    assert description.startswith("Fock state")
 
 
 @pytest.mark.visualize
