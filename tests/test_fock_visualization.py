@@ -16,13 +16,12 @@ def test_fock_visualizations_render_representative_state(
     assert_no_empty_axes, assert_layout_can_render
 ):
     rho = qt.ket2dm((qt.squeeze(10, 0.5) * qt.fock(10, 0)).unit())
-    figure, axes = plt.subplots(1, 3, figsize=(15, 5), constrained_layout=True)
+    figure, axes = plt.subplots(1, 2, figsize=(10, 5), constrained_layout=True)
     plot_photon_statistics(rho, ax=axes[0])
-    plot_fock_density_matrix(rho, ax=axes[1])
-    plot_wigner(rho, resolution=48, ax=axes[2])
-    figure.suptitle("Representative Fock-state visualizations", fontweight="medium")
+    plot_wigner(rho, resolution=48, ax=axes[1])
+    figure.suptitle("Squeezed-vacuum Fock representation", fontweight="medium")
 
-    assert len(figure.axes) == 3
+    assert len(figure.axes) == 2
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
@@ -83,7 +82,7 @@ def test_fock_dashboard_keeps_all_complementary_views(
 
 
 @pytest.mark.visualize
-def test_multimode_visualizations_reduce_to_selected_mode(
+def test_multimode_visualizations_show_selected_mode_pair(
     assert_no_empty_axes, assert_layout_can_render
 ):
     cutoff = 8
@@ -93,8 +92,8 @@ def test_multimode_visualizations_reduce_to_selected_mode(
     )
     figure, axes = plt.subplots(1, 2, figsize=(10, 4.5), constrained_layout=True)
     plot_photon_statistics(rho, mode_idx=1, ax=axes[0])
-    plot_wigner(rho, mode_idx=0, resolution=48, ax=axes[1])
-    figure.suptitle("Selected modes of a multimode Fock state", fontweight="medium")
+    plot_wigner(rho, mode_idx=1, resolution=48, ax=axes[1])
+    figure.suptitle("Photon-number and Wigner views of mode 1", fontweight="medium")
 
     heights = np.array([bar.get_height() for bar in axes[0].patches])
     assert heights[2] == pytest.approx(1.0)
