@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 from matplotlib.colors import Normalize
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 from .visualization import figure_and_axes, finalize_figure, style_phase_axes
 
@@ -228,7 +229,8 @@ def plot_wigner(
         wigner = qt.wigner(state, grid, grid)
         X, Y = np.meshgrid(grid, grid)
         norm = Normalize(vmin=float(wigner.min()), vmax=float(wigner.max()))
-        ax.plot_surface(
+        ax3d = cast(Axes3D, ax)
+        ax3d.plot_surface(
             X,
             Y,
             wigner,
