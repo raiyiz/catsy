@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from catsy import Circuit, GaussianState, SimulationJournal
+from config import RunConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,15 +33,16 @@ def build_circuit() -> Circuit:
     )
 
 
-def main(output_dir: Path | None = None) -> Path:
+def main(config_path: str | Path = Path("examples/config.toml")) -> Path:
     """Run the demo circuit and return the saved journal entry path."""
+    config = RunConfig.from_toml(config_path)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    root = Path(output_dir) if output_dir is not None else Path("runs") / "complex_circuit"
-    journal = SimulationJournal(root)
+    journal = SimulationJournal(config.output_dir)
     circuit = build_circuit()
     initial = GaussianState.vacuum(circuit.modes)
 
@@ -51,7 +53,10 @@ def main(output_dir: Path | None = None) -> Path:
         "Three-mode Gaussian circuit",
         tags=["example", "gaussian", "three-mode"],
         notes="Representative circuit showing persistence and structured output paths.",
-        metadata={"circuit_name": circuit.name, "output_dir": str(root)},
+        metadata={
+            "circuit_name": circuit.name,
+            "output_dir": str(config.output_dir),
+        },
     )
     run = entry.log_run(
         "demo",
@@ -78,7 +83,7 @@ def main(output_dir: Path | None = None) -> Path:
         },
     )
 
-    saved_path = entry.save(root)
+    saved_path = entry.save(config.output_dir)
     LOGGER.info("Saved journal entry %s (%s)", run.run_id, saved_path)
     return saved_path
 
