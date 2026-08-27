@@ -114,17 +114,17 @@ def plot_experiment(
     heterodyne_reordered = heterodyne_state.reorder_modes(remaining_modes)
 
     figures = {
-        "signal_phase_space": plot_phase_space(final_state, "signal"),
-        "covariance_matrix": plot_covariance_matrix(final_state),
-        "mode_correlations": plot_mode_correlation_map(final_state),
-        "cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150),
-        "cat_dashboard": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120),
-        "subtracted_dashboard": plot_fock_dashboard(subtracted, xlim=(-4.5, 4.5), resolution=120),
-        "added_dashboard": plot_fock_dashboard(added, xlim=(-4.5, 4.5), resolution=120),
-        "homodyne_phase_space": plot_phase_space(homodyne_reordered, "idler"),
-        "heterodyne_phase_space": plot_phase_space(heterodyne_reordered, "idler"),
+        "signal_phase_space": plot_phase_space(final_state, "signal", show=True),
+        "covariance_matrix": plot_covariance_matrix(final_state, show=True),
+        "mode_correlations": plot_mode_correlation_map(final_state, show=True),
+        "cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150, show=True),
+        "cat_dashboard": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120, show=True),
+        "subtracted_dashboard": plot_fock_dashboard(subtracted, xlim=(-4.5, 4.5), resolution=120, show=True),
+        "added_dashboard": plot_fock_dashboard(added, xlim=(-4.5, 4.5), resolution=120, show=True),
+        "homodyne_phase_space": plot_phase_space(homodyne_reordered, "idler", show=True),
+        "heterodyne_phase_space": plot_phase_space(heterodyne_reordered, "idler", show=True),
         "measurement_trajectory": plot_phase_space_trajectory(
-            [homodyne_reordered, heterodyne_reordered], "idler"
+            [homodyne_reordered, heterodyne_reordered], "idler", show=True
         ),
     }
 
