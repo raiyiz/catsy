@@ -107,8 +107,6 @@ def plot_experiment(
     """Create diagnostics using only Catsy's public plotting helpers."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Measurements remove the measured signal mode. Normalize the remaining
-    # states to a common ordering before passing them to the trajectory helper.
     remaining_modes = tuple(mode for mode in final_state.modes if mode != "signal")
     homodyne_reordered = homodyne_state.reorder_modes(remaining_modes)
     heterodyne_reordered = heterodyne_state.reorder_modes(remaining_modes)
@@ -128,9 +126,10 @@ def plot_experiment(
         ),
     }
 
+    # Do not clear/close figures after show=True: interactive backends retain
+    # toolbar callbacks that become invalid when their axes are destroyed.
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)
-        figure.clf()
 
     LOGGER.info(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
