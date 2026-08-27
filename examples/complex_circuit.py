@@ -6,9 +6,9 @@ import logging
 from pathlib import Path
 
 import numpy as np
+from config import RunConfig
 
 from catsy import Circuit, GaussianState, SimulationJournal
-from config import RunConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,8 +21,7 @@ def build_circuit(config: RunConfig) -> Circuit:
     reference = circuit.mode("reference")
 
     return (
-        circuit
-        .squeeze(signal, r=config.signal_squeezing, theta=0.0)
+        circuit.squeeze(signal, r=config.signal_squeezing, theta=0.0)
         .displace(signal, x=0.4, p=0.1)
         .beam_splitter(signal, idler, eta=config.signal_idler_transmissivity)
         .rotate(idler, phi=0.35)

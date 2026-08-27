@@ -48,19 +48,6 @@ class Gate:
     modes: Modes
     kwargs: GateParameters
 
-    def __post_init__(self) -> None:
-        kwargs = dict(self.kwargs)
-        alpha = kwargs.pop("alpha", None)
-        if alpha is not None:
-            if "x" in kwargs or "p" in kwargs:
-                raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
-            if not isinstance(alpha, int | float | complex):
-                raise TypeError(f"alpha must be numeric, got {alpha!r}.")
-            alpha_complex = complex(alpha)
-            kwargs["x"] = float(np.sqrt(2.0) * alpha_complex.real)
-            kwargs["p"] = float(np.sqrt(2.0) * alpha_complex.imag)
-        object.__setattr__(self, "kwargs", kwargs)
-
     def apply(self, state: Any | None) -> GaussianState:
         # `state` is None only when this is (or precedes) an InitialState
         # gate; Circuit.run() enforces that invariant before calling apply()
@@ -415,7 +402,11 @@ def _render_gate_label(gate: Gate) -> tuple[str, int]:
     for key, symbol in (("eta", "η"), ("phi", "φ"), ("r", "r"), ("x", "x"), ("p", "p")):
         if key in gate.kwargs:
             value = gate.kwargs[key]
-            param_str = f" {symbol}={value:.2f}" if isinstance(value, float) else f" {symbol}={value}"
+            param_str = (
+                f" {symbol}={value:.2f}"
+                if isinstance(value, float)
+                else f" {symbol}={value}"
+            )
             break
     type_name = _GATE_LABEL_ABBREVIATIONS.get(gate.name, gate.name[:5])
     label = f" {type_name}{param_str} "

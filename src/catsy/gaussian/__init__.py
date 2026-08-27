@@ -86,6 +86,7 @@ class GaussianState:
     modes: Modes
     displacement: FloatArray
     covariance: FloatArray
+
     @staticmethod
     def _normalize_translation(
         *,
@@ -118,8 +119,8 @@ class GaussianState:
         has_x = x is not None
         has_p = p is not None
 
-        # if has_alpha and (has_x or has_p):
-        #     raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
+        if not (has_alpha or has_x or has_p):
+            raise TypeError("We need some input: `alpha`, `x` and `p` are None.")
 
         if has_alpha:
             if has_x or has_p:
@@ -129,15 +130,11 @@ class GaussianState:
                 raise TypeError(f"alpha must be numeric, got {alpha!r}.")
 
             alpha_value = complex(alpha)
-            if not (
-                np.isfinite(alpha_value.real)
-                and np.isfinite(alpha_value.imag)
-            ):
+            if not (np.isfinite(alpha_value.real) and np.isfinite(alpha_value.imag)):
                 raise ValueError(f"alpha must be finite, got {alpha!r}.")
 
             x_value = float(np.sqrt(2.0) * alpha_value.real)
             p_value = float(np.sqrt(2.0) * alpha_value.imag)
-            # return alpha_value, x_value, p_value
 
         else:
             if has_x != has_p:
@@ -154,9 +151,8 @@ class GaussianState:
             if not np.isfinite(p_value):
                 raise ValueError(f"p must be finite, got {p!r}.")
 
-            alpha_value = complex(
-                (x_value + 1j * p_value) / np.sqrt(2.0)
-            )
+            alpha_value = complex((x_value + 1j * p_value) / np.sqrt(2.0))
+
         return alpha_value, x_value, p_value
 
     def __post_init__(self) -> None:
