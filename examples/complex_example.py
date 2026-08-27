@@ -64,16 +64,10 @@ def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
     """Prepare a cat, herald photon subtraction, then herald photon addition."""
     cat = make_cat_state(N_cutoff=18, alpha=1.1 + 0.15j)
     subtracted = realistic_photon_subtraction(
-        cat,
-        tap_reflectivity=0.08,
-        detector_efficiency=0.75,
-        ancilla_cutoff=6,
+        cat, tap_reflectivity=0.08, detector_efficiency=0.75, ancilla_cutoff=6
     )
     added = realistic_photon_addition(
-        subtracted,
-        coupling_strength=0.045,
-        detector_efficiency=0.75,
-        ancilla_cutoff=6,
+        subtracted, coupling_strength=0.045, detector_efficiency=0.75, ancilla_cutoff=6
     )
     theta = np.linspace(0.0, 2.0 * np.pi, 33)
     interferometer = MachZehnderInterferometer(kappa=0.08, N_cutoff=18, loss_time=0.75)
@@ -106,7 +100,7 @@ def plot_experiment(
     heterodyne_state: GaussianState,
     cat: qt.Qobj,
     subtracted: qt.Qobj,
-    added: qt.QObj,
+    added: qt.Qobj,
     mzi_scan: dict[str, np.ndarray],
     output_dir: Path,
 ) -> None:
@@ -134,9 +128,7 @@ def plot_experiment(
 
     LOGGER.info(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
-        len(figures),
-        output_dir,
-        len(mzi_scan["theta"]),
+        len(figures), output_dir, len(mzi_scan["theta"]),
     )
 
 
