@@ -3,91 +3,141 @@
 
 # catsy
 
-`catsy` is a Python toolkit for continuous-variable quantum optics. It provides a compact set of tools for building, manipulating, simulating, visualizing, and persisting quantum optical states and experiments.
+`catsy` is a Python toolkit for continuous-variable quantum optics. Its primary abstraction is the **quantum state**: states are created, transformed, measured, visualized, and, when necessary, converted between different representations.
 
-The central design choice is to keep calculations in the representation that is most natural for them:
+The main representation is the **Gaussian state**. A `GaussianState` describes a continuous-variable quantum state through its first moments and covariance matrix in phase space. This makes the common operations of Gaussian quantum optics—such as squeezing, displacement, phase shifts, beam splitters, loss, and thermal noise—compact and efficient to represent and manipulate.
 
-* **Gaussian states** are represented directly in phase space by their first moments and covariance matrices.
-* **Circuits** describe a sequence of optical transformations independently of any particular input state.
-* **Fock-space calculations** use QuTiP when a truncated Hilbert-space representation is needed, for example for non-Gaussian states or photon-number observables.
-* **Visualization and journaling** provide common ways to inspect and persist the results of either representation.
+For example:
 
-This means a typical workflow can remain entirely Gaussian until a Fock-space representation is actually useful:
+```python
+from catsy import GaussianState
+
+state = GaussianState.vacuum(("signal",))
+
+state = state.squeeze("signal", r=0.6)
+state = state.displace("signal", alpha=0.4 + 0.2j)
+state = state.rotate("signal", phi=0.3)
+```
+
+A state can also start from a physically meaningful Gaussian construction:
+
+```python
+from catsy import GaussianState
+
+state = GaussianState.coherent("signal", alpha=1.2 + 0.4j)
+state = GaussianState.tmsv("signal", "idler", r=0.7)
+```
+
+The same `GaussianState` interface is used for both single- and multi-mode states. Internally, the state stores its mode ordering, displacement vector, and covariance matrix. Throughout the package, quadratures follow the convention
+
+$$
+\alpha = \frac{x + ip}{\sqrt{2}},
+\qquad
+V_\mathrm{vac} = \frac{I}{2},
+\qquad
+\hbar = 1.
+$$
+
+This phase-space representation is the default because many optical calculations can be performed without introducing a truncated Hilbert space.
+
+## From states to experiments
+
+When several operations should be treated as one reusable experiment, `Circuit` provides an executable sequence of transformations. A circuit describes **what happens** to a state; the `GaussianState` describes **what state is actually being transformed**.
 
 ```python
 from catsy import Circuit, GaussianState
 
-initial = GaussianState.tmsv("a", "b", r=0.7)
+initial = GaussianState.tmsv("signal", "idler", r=0.7)
 
-circuit = (
-    Circuit()
-    .add_mode("a")
-    .add_mode("b")
-)
-circuit.squeeze("a", r=0.5)
-circuit.beam_splitter("a", "b", eta=0.5)
+circuit = Circuit()
+circuit.add_mode("signal").add_mode("idler")
+
+circuit.squeeze("signal", r=0.4)
+circuit.beam_splitter("signal", "idler", eta=0.5)
+circuit.loss("signal", eta=0.9)
 
 final = circuit.run(initial)
 ```
 
-## States, modes, and circuits
+This separation is intentional:
 
-There are two related ideas to keep separate:
+```text
+GaussianState
+     │
+     │  input
+     ▼
+  Circuit
+     │
+     │  sequence of transformations
+     ▼
+GaussianState
+```
 
-**A mode name** is simply a string such as `"a"` or `"signal"`. Mode names are what appear in serialized data and in the state representation.
+A circuit therefore does not replace a state, and a state does not have to be embedded in a circuit. You can manipulate a state directly for one-off calculations, or construct a circuit when the sequence of operations itself is something you want to reuse, inspect, serialize, or run with different initial states.
 
-**A `Mode` object** is a runtime handle belonging to a particular `Circuit`. It lets the circuit API check that a mode is being used with the circuit that owns it.
+## When Gaussian states are not enough
 
-You normally do not need to construct `Mode` objects yourself. A circuit can create one for you:
+Gaussian states are not a universal representation. Some experiments produce or require genuinely non-Gaussian physics, where a covariance matrix alone cannot capture the state.
+
+For these cases, `catsy` can convert a Gaussian state into a **truncated Fock-space representation** backed by QuTiP:
+
+```python
+rho = final.to_qutip(N_cutoff=30)
+```
+
+The resulting density matrix can then be used with Fock-space operations and observables such as photon-number statistics, parity, or non-Gaussian state transformations.
+
+The cutoff is numerical, so it should be increased until the quantity of interest has converged.
+
+This gives the overall workflow:
+
+```text
+construct state
+      │
+      ▼
+Gaussian phase-space operations
+      │
+      ▼
+optional circuit composition
+      │
+      ▼
+Gaussian result
+      │
+      ├──────────────► visualize / measure / journal
+      │
+      ▼
+ optional Fock conversion
+      │
+      ▼
+truncated Hilbert-space calculations
+```
+
+Most users can therefore stay entirely within the Gaussian representation until they actually need Fock-space physics.
+
+## Modes and circuits
+
+A circuit operates on named optical modes such as `"signal"` and `"idler"`. In the simplest code, these names are just strings:
+
+```python
+circuit.squeeze("signal", r=0.5)
+circuit.beam_splitter("signal", "idler", eta=0.5)
+```
+
+For applications where mode ownership matters, `Circuit.mode()` can return a runtime `Mode` handle:
 
 ```python
 circuit = Circuit()
+signal = circuit.mode("signal")
+idler = circuit.mode("idler")
 
-a = circuit.mode("a")
-b = circuit.mode("b")
-
-circuit.squeeze(a, r=0.5)
-circuit.beam_splitter(a, b, eta=0.5)
+circuit.squeeze(signal, r=0.5)
+circuit.beam_splitter(signal, idler, eta=0.5)
 ```
 
-The `mode()` method registers the mode **and returns its `Mode` handle**.
+`add_mode()` is the fluent convenience form: it registers the mode and returns the circuit so that mode registration can be chained. `mode()` registers the mode and returns the `Mode` handle itself.
 
-For fluent construction, `add_mode()` is a convenience method that performs the same registration but returns the **circuit itself**, so calls can be chained:
+Using a `Mode` handle allows the circuit to detect accidental use of a mode belonging to another circuit. Plain strings remain useful when that distinction is unnecessary.
 
-```python
-circuit = (
-    Circuit()
-    .add_mode("a")
-    .add_mode("b")
-    .add_mode("reference")
-)
-```
-
-The two methods therefore have different purposes:
-
-| Method                  | Registers the mode | Returns                    |
-| ----------------------- | ------------------ | -------------------------- |
-| `circuit.mode("a")`     | Yes                | the new `Mode` handle      |
-| `circuit.add_mode("a")` | Yes                | the `Circuit` for chaining |
-
-Gate methods such as `squeeze()`, `rotate()`, `displace()`, and `beam_splitter()` accept either a registered mode name or the corresponding `Mode` handle. Using handles enables ownership checking:
-
-```python
-first = Circuit().add_mode("a")
-second = Circuit().add_mode("a")
-
-a = first.mode("a")
-second.squeeze(a, r=0.5)  # rejected: `a` belongs to another circuit
-```
-
-Plain strings remain convenient when the circuit is small and the mode ownership is obvious:
-
-```python
-circuit.squeeze("a", r=0.5)
-circuit.beam_splitter("a", "b", eta=0.5)
-```
-
-The string identifies a mode by **name**, while `Mode` identifies the particular runtime mode owned by a circuit.
 
 ## Where to start
 | If you want to...                           | Use                               |
