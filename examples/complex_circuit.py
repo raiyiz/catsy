@@ -25,7 +25,7 @@ def build_circuit() -> Circuit:
         .displace(signal, alpha=0.4 + 0.1j)
         .beam_splitter(signal, idler, eta=0.65)
         .rotate(idler, phi=0.35)
-        .thermal_loss(idler, eta=0.9, nbar=0.15)
+        .thermal_loss(idler, eta=0.9, n_thermal=0.15)
         .squeeze(reference, r=0.35, theta=np.pi / 4)
         .beam_splitter(idler, reference, eta=0.5)
         .loss(signal, eta=0.92)
