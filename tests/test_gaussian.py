@@ -198,17 +198,69 @@ def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
 
 
 @pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        (
+            {"alpha": 0.6 - 0.9j},
+            (0.6 - 0.9j, np.sqrt(2) * 0.6, -np.sqrt(2) * 0.9),
+        ),
+        (
+            {"x": 1.2, "p": -1.8},
+            ((1.2 - 1.8j) / np.sqrt(2), 1.2, -1.8),
+        ),
+    ],
+)
+def test_normalize_translation_accepts_supported_forms(kwargs, expected):
+    assert GaussianState._normalize_translation(**kwargs) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "exception", "match"),
+    [
+        (
+            {"alpha": 1.0, "x": 1.0, "p": 1.0},
+            ValueError,
+            "either `alpha` or",
+        ),
+        (
+            {"alpha": 1.0, "x": 1.0},
+            ValueError,
+            "either `alpha` or",
+        ),
+        (
+            {"alpha": 1.0, "p": 1.0},
+            ValueError,
+            "either `alpha` or",
+        ),
+        ({}, TypeError, "need some input"),
+        ({"x": 1.0}, ValueError, "both `x` and `p`"),
+        ({"p": 1.0}, ValueError, "both `x` and `p`"),
+        ({"alpha": np.nan}, ValueError, "finite"),
+        ({"alpha": np.inf}, ValueError, "finite"),
+        ({"alpha": 1.0 + np.inf * 1j}, ValueError, "finite"),
+        ({"x": np.nan, "p": 1.0}, ValueError, "x must be finite"),
+        ({"x": 1.0, "p": np.inf}, ValueError, "p must be finite"),
+        ({"alpha": "bad"}, TypeError, "numeric"),
+        ({"x": "bad", "p": 1.0}, TypeError, "real numbers"),
+        ({"x": 1.0, "p": "bad"}, TypeError, "real numbers"),
+    ],
+)
+def test_normalize_translation_rejects_invalid_inputs(kwargs, exception, match):
+    with pytest.raises(exception, match=match):
+        GaussianState._normalize_translation(**kwargs)
+
+
+@pytest.mark.parametrize(
     ("kwargs", "match"),
     [
-        ({"alpha": 1.0, "x": 1.0}, "not both"),
-        ({}, "alpha"),
-        ({"x": 1.0}, "p"),
+        ({"alpha": 1.0, "x": 1.0}, "either `alpha` or"),
+        ({}, "need some input"),
+        ({"x": 1.0}, "both `x` and `p`"),
     ],
 )
 def test_displacement_rejects_invalid_argument_combinations(kwargs, match):
-    state = GaussianState.vacuum(("a",))
-    with pytest.raises(TypeError, match=match):
-        state.displace("a", **kwargs)
+    with pytest.raises((ValueError, TypeError), match=match):
+        GaussianState.vacuum(("a",)).displace("a", **kwargs)
 
 
 def test_coherent_matches_displaced_vacuum():
@@ -813,7 +865,7 @@ def test_circuit_from_dict_rejects_unknown_gate():
     ("kwargs", "match"),
     [
         ({"alpha": 1.0, "x": 1.0}, "not both"),
-        ({}, "alpha"),
+        ({}, "need some input"),
         ({"x": 1.0}, "p"),
     ],
 )
@@ -827,7 +879,7 @@ def test_circuit_displace_rejects_invalid_argument_combinations(kwargs, match):
     circuit.add_gate(
         Gate(name="Displacer", transform=displace, modes=("a",), kwargs={**kwargs})
     )
-    with pytest.raises((ValueError, KeyError), match=match):
+    with pytest.raises((ValueError, TypeError), match=match):
         circuit.run(GaussianState.vacuum(("a",)))
 
 
