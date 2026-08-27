@@ -24,6 +24,7 @@ The default branch publishes the latest interactive HTML coverage report through
 
 ```python
 from catsy import Circuit, GaussianState, Gate, loss
+from catsy.gaussian.visualization import plot_covariance_matrix
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
 
@@ -38,7 +39,7 @@ circuit = Circuit().add_mode("a").add_mode("b")
 circuit.add_gate(noise)
 
 final = circuit.run(initial)
-final.plot_covariance()
+plot_covariance_matrix(final)
 ```
 
 Here `r` is the squeezing strength and `eta` is the power transmissivity of the loss channel.
@@ -56,14 +57,16 @@ Building gates from these handles instead of bare strings means a mode meant for
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian.py#L85) |
-| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian.py#L85) |
-| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L91), [`Mode`](src/catsy/optics.py#L59) |
-| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian.py#L515), [`GaussianChannel`](src/catsy/gaussian.py#L452) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian.py#L653) |
-| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian.py#L85) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian.py#L780) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian.py#L291) |
+| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian/__init__.py#L83) |
+| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian/__init__.py#L83) |
+| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L123), [`Mode`](src/catsy/optics.py#L66) |
+| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian/__init__.py#L558), [`GaussianChannel`](src/catsy/gaussian/__init__.py#L495) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian/__init__.py#L689) |
+| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian/__init__.py#L83) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L816) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian/__init__.py#L350) |
+| Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L670), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L594) |
+| Visualize a truncated Fock-space state      | [`plot_fock_dashboard()`](src/catsy/fock/visualization.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
 ## Gaussian states
 
@@ -167,8 +170,11 @@ uv run pytest --plot
 | Module                                                                                                       | Contents                                                            |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [`core.py`](src/catsy/core.py)         | conventions, validation, numerical helpers                          |
-| [`gaussian.py`](src/catsy/gaussian.py) | states, operations, channels, measurements                          |
-| [`fock.py`](src/catsy/fock.py)         | Fock-space functionality                                             |
+| [`gaussian/`](src/catsy/gaussian/__init__.py) | states, operations, channels, measurements                   |
+| [`gaussian/visualization.py`](src/catsy/gaussian/visualization.py) | Gaussian-state plots, dashboards, and animations |
+| [`fock.py`](src/catsy/fock/__init__.py)         | Fock-space functionality                                             |
+| [`fock/visualization.py`](src/catsy/fock/visualization.py) | photon-statistics, Fock-coherence, and Wigner plots for QuTiP states |
+| [`visualization.py`](src/catsy/visualization.py) | shared plotting primitives (figure lifecycle, phase-space styling, annotation, and colorbar helpers) used by both visualization modules above |
 | [`optics.py`](src/catsy/optics.py)     | circuits, modes, QuTiP-based cavity/interferometer simulations       |
 | [`journal.py`](src/catsy/journal.py)   | experiment persistence                                               |
 ## Documentation

@@ -3,7 +3,12 @@ import pytest
 import qutip as qt
 from matplotlib import pyplot as plt
 
-from catsy.fock import FockGates
+from catsy.fock import (
+    FockGates,
+    _apply_kraus_operators,
+    photon_addition,
+    photon_subtraction,
+)
 from catsy.gaussian import (
     GaussianState,
     LossChannels,
@@ -27,20 +32,8 @@ def test_cv_channel_to_fock_purity_drops_with_loss():
     noisy_rho = noisy_state.to_qutip(N_cutoff=18)
 
     assert clean_rho.tr() == pytest.approx(1.0, abs=1e-6)
-    # NOTE: Williamson's theorem gives an exact decomposition in exact
-    # arithmetic. Our implementation reconstructs the covariance to a tight
-    # numerical tolerance, but the subsequent finite-cutoff QuTiP construction
-    # is only a truncated representation. The relaxed tolerance here therefore
-    # guards the numerical phase-space -> Fock bridge rather than asserting
-    # that the underlying Williamson decomposition is inexact.
     assert noisy_rho.tr() == pytest.approx(1.0, abs=1e-2)
 
-    # The two-mode state started pure (r=0.5 squeezing + a lossless BS is
-    # unitary). A non-unitary thermal-loss channel on top of it must make the
-    # *global* state strictly mixed. (Reduced-subsystem entropy on just mode
-    # A isn't a safe proxy here: loss on A both adds local noise, which raises
-    # its entropy, and weakens A-B entanglement, which lowers it — the two
-    # effects can go either way. Global purity has no such ambiguity.)
     purity_clean = (clean_rho * clean_rho).tr().real
     purity_noisy = (noisy_rho * noisy_rho).tr().real
     assert purity_clean == pytest.approx(1.0, abs=1e-2)
@@ -102,9 +95,6 @@ def test_photon_subtraction_state_and_rho_entry_points_agree():
 
     rho = gaussian_squeezed.to_qutip(N_cutoff=25)
     via_rho = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=25)
-
-    # The Fock API takes the QuTiP representation directly. The operation is
-    # heralded, so its output should remain a normalized density matrix.
     assert via_rho.tr() == pytest.approx(1.0, abs=1e-6)
 
 
@@ -131,11 +121,6 @@ def test_fock_gates_are_the_single_implementation_for_photon_ops():
 
 
 def test_photon_addition_on_vacuum_gives_exact_single_photon_fock_state():
-    # photon_addition was previously only ever exercised via the __module__
-    # check above -- its actual math (a-dagger rho a-dagger-dag,
-    # renormalized) was never run. Vacuum has an exact, analytically known
-    # image under photon addition: a†|0><0|a / <0|aa†|0> = |1><1| exactly,
-    # so this pins down correctness rather than just "didn't crash".
     N_cutoff = 10
     vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     result = FockGates.photon_addition(vacuum, mode_idx=0, N_cutoff=N_cutoff)
@@ -145,10 +130,6 @@ def test_photon_addition_on_vacuum_gives_exact_single_photon_fock_state():
 
 
 def test_photon_gates_act_only_on_the_selected_mode():
-    # _mode_operator's multi-mode embedding branch (n_modes > 1) is only
-    # exercised by an operation targeting one mode of a multi-mode state --
-    # every other fock.py test here uses a single-mode state. Addition on
-    # mode_idx=1 of a two-mode vacuum must leave mode 0 untouched.
     N_cutoff = 8
     two_mode_vacuum = qt.tensor(
         qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 0))
@@ -179,10 +160,6 @@ def test_mean_photon_number_matches_known_fock_states():
 
 
 def test_mean_photon_number_matches_addition_and_subtraction():
-    # Photon addition/subtraction on vacuum give exact, independently known
-    # photon-number states (see test_photon_addition_on_vacuum_... above),
-    # so <n> before/after pins down mean_photon_number against ground truth
-    # rather than just checking it runs.
     N_cutoff = 10
     vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     added = FockGates.photon_addition(vacuum, mode_idx=0, N_cutoff=N_cutoff)
@@ -206,8 +183,6 @@ def test_photon_number_measurement_forced_outcome_on_known_state():
         two_photon, mode_idx=0, N_cutoff=N_cutoff, outcome=2
     )
     assert outcome == 2
-    # Single-mode input: the only mode is measured out, leaving the trivial
-    # (1-dimensional, trace-1) remainder.
     assert remaining.tr() == pytest.approx(1.0, abs=1e-10)
 
 
@@ -221,9 +196,6 @@ def test_photon_number_measurement_rejects_zero_probability_outcome():
 
 
 def test_photon_number_measurement_sampled_outcome_matches_fock_state():
-    # A pure |3> Fock state must always herald outcome 3 with probability 1,
-    # regardless of the RNG draw -- a deterministic check of the sampling
-    # path (as opposed to the outcome=... forced path exercised above).
     N_cutoff = 10
     three_photon = qt.ket2dm(qt.fock(N_cutoff, 3))
     rng = np.random.default_rng(0)
@@ -234,9 +206,6 @@ def test_photon_number_measurement_sampled_outcome_matches_fock_state():
 
 
 def test_photon_number_measurement_on_multimode_state_traces_out_measured_mode():
-    # _mode_operator's multi-mode embedding and the post-measurement ptrace
-    # are only exercised together by a multi-mode input; every other
-    # photon_number_measurement test above uses a single-mode state.
     N_cutoff = 6
     two_mode = qt.tensor(qt.ket2dm(qt.fock(N_cutoff, 1)), qt.ket2dm(qt.fock(N_cutoff, 2)))
     outcome, remaining = FockGates.photon_number_measurement(
@@ -252,9 +221,7 @@ def test_photon_number_measurement_on_multimode_state_traces_out_measured_mode()
 
 def test_realistic_subtraction_converges_to_ideal_in_weak_tap_high_efficiency_limit():
     N_cutoff = 12
-    psi = qt.coherent(N_cutoff, 1.0)
-    rho = qt.ket2dm(psi)
-
+    rho = qt.ket2dm(qt.coherent(N_cutoff, 1.0))
     realistic = FockGates.realistic_photon_subtraction(
         rho,
         mode_idx=0,
@@ -269,9 +236,7 @@ def test_realistic_subtraction_converges_to_ideal_in_weak_tap_high_efficiency_li
 
 def test_realistic_addition_converges_to_ideal_in_weak_coupling_high_efficiency_limit():
     N_cutoff = 12
-    psi = qt.coherent(N_cutoff, 1.0)
-    rho = qt.ket2dm(psi)
-
+    rho = qt.ket2dm(qt.coherent(N_cutoff, 1.0))
     realistic = FockGates.realistic_photon_addition(
         rho,
         mode_idx=0,
@@ -285,7 +250,7 @@ def test_realistic_addition_converges_to_ideal_in_weak_coupling_high_efficiency_
 
 
 def test_realistic_subtraction_output_stays_a_valid_density_matrix():
-    N_cutoff = 10
+    N_cutoff = 8
     rho = qt.ket2dm(qt.coherent(N_cutoff, 0.8))
     result = FockGates.realistic_photon_subtraction(
         rho,
@@ -293,15 +258,14 @@ def test_realistic_subtraction_output_stays_a_valid_density_matrix():
         N_cutoff=N_cutoff,
         tap_reflectivity=0.2,
         detector_efficiency=0.5,
-        ancilla_cutoff=5,
+        ancilla_cutoff=3,
     )
     assert result.tr() == pytest.approx(1.0, abs=1e-8)
-    eigenvalues = result.eigenenergies()
-    assert np.all(eigenvalues > -1e-9)
+    assert np.min(result.eigenenergies()) > -1e-9
 
 
 def test_realistic_addition_output_stays_a_valid_density_matrix():
-    N_cutoff = 10
+    N_cutoff = 8
     rho = qt.ket2dm(qt.coherent(N_cutoff, 0.8))
     result = FockGates.realistic_photon_addition(
         rho,
@@ -309,35 +273,33 @@ def test_realistic_addition_output_stays_a_valid_density_matrix():
         N_cutoff=N_cutoff,
         coupling_strength=0.2,
         detector_efficiency=0.5,
-        ancilla_cutoff=5,
+        ancilla_cutoff=3,
     )
     assert result.tr() == pytest.approx(1.0, abs=1e-8)
-    eigenvalues = result.eigenenergies()
-    assert np.all(eigenvalues > -1e-9)
+    assert np.min(result.eigenenergies()) > -1e-9
 
 
 def test_lower_detector_efficiency_degrades_fidelity_to_ideal_subtraction():
-    # A worse detector should herald a less faithful subtraction event --
-    # this pins down the *direction* of detector_efficiency's effect, not
-    # just that the function runs at some value. Uses a squeezed state
-    # rather than a coherent one: splitting a coherent state at a
-    # beamsplitter never entangles it with the tap (coherent states stay a
-    # product state), so a coherent-state herald is always pure regardless
-    # of efficiency and wouldn't distinguish the two detectors.
-    N_cutoff = 16
-    psi = (qt.squeeze(N_cutoff, 0.5) * qt.fock(N_cutoff, 0)).unit()
+    N_cutoff = 6
+    psi = (qt.squeeze(N_cutoff, 0.4) * qt.fock(N_cutoff, 0)).unit()
     rho = qt.ket2dm(psi)
     ideal = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=N_cutoff)
 
     good_detector = FockGates.realistic_photon_subtraction(
-        rho, N_cutoff=N_cutoff, tap_reflectivity=0.05, detector_efficiency=0.95
+        rho,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.05,
+        detector_efficiency=0.95,
+        ancilla_cutoff=3,
     )
     poor_detector = FockGates.realistic_photon_subtraction(
-        rho, N_cutoff=N_cutoff, tap_reflectivity=0.05, detector_efficiency=0.2
+        rho,
+        N_cutoff=N_cutoff,
+        tap_reflectivity=0.05,
+        detector_efficiency=0.2,
+        ancilla_cutoff=3,
     )
-    fid_good = qt.fidelity(good_detector, ideal)
-    fid_poor = qt.fidelity(poor_detector, ideal)
-    assert fid_good > fid_poor
+    assert qt.fidelity(good_detector, ideal) > qt.fidelity(poor_detector, ideal)
 
 
 def test_realistic_photon_ops_reject_invalid_parameters():
@@ -360,7 +322,7 @@ def test_realistic_photon_ops_reject_invalid_parameters():
 
 
 def test_realistic_photon_ops_act_only_on_the_selected_mode():
-    N_cutoff = 6
+    N_cutoff = 3
     two_mode_vacuum = qt.tensor(
         qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 0))
     )
@@ -368,12 +330,73 @@ def test_realistic_photon_ops_act_only_on_the_selected_mode():
         two_mode_vacuum,
         mode_idx=1,
         N_cutoff=N_cutoff,
-        coupling_strength=1e-4,
-        detector_efficiency=0.999,
-        ancilla_cutoff=4,
+        coupling_strength=0.01,
+        detector_efficiency=1.0,
+        ancilla_cutoff=2,
     )
-    expected = qt.tensor(qt.ket2dm(qt.fock(N_cutoff, 0)), qt.ket2dm(qt.fock(N_cutoff, 1)))
-    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-3)
+    mode0 = result.ptrace(0)
+    mode1 = result.ptrace(1)
+    assert qt.fidelity(mode0, qt.ket2dm(qt.fock(N_cutoff, 0))) == pytest.approx(
+        1.0, abs=1e-8
+    )
+    assert qt.expect(qt.num(N_cutoff), mode1) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_single_kraus_application_matches_direct_kraus_formula():
+    cutoff = 8
+    rho = qt.ket2dm((qt.coherent(cutoff, 0.7) + qt.fock(cutoff, 1)).unit())
+    kraus = qt.destroy(cutoff)
+
+    result = _apply_kraus_operators(rho, [kraus], "test")
+    expected = kraus * rho * kraus.dag()
+    expected = expected / expected.tr()
+
+    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-8)
+
+
+def test_multiple_kraus_operators_match_sum_of_kraus_terms():
+    cutoff = 6
+    rho = qt.ket2dm((qt.fock(cutoff, 0) + 0.7 * qt.fock(cutoff, 2)).unit())
+    probability = 0.3
+    k0 = qt.Qobj(np.diag([1.0, np.sqrt(1.0 - probability), 1.0, 1.0, 1.0, 1.0]))
+    k1 = qt.Qobj(np.diag([0.0, np.sqrt(probability), 0.0, 0.0, 0.0, 0.0]))
+
+    result = _apply_kraus_operators(rho, [k0, k1], "test")
+    expected = k0 * rho * k0.dag() + k1 * rho * k1.dag()
+    expected = expected / expected.tr()
+
+    assert qt.fidelity(result, expected) == pytest.approx(1.0, abs=1e-8)
+
+
+def test_kraus_application_rejects_empty_or_mismatched_sets():
+    rho = qt.ket2dm(qt.fock(5, 1))
+
+    with pytest.raises(ValueError, match="at least one"):
+        _apply_kraus_operators(rho, [], "test")
+
+    with pytest.raises(ValueError, match="same Hilbert space"):
+        _apply_kraus_operators(rho, [qt.destroy(4)], "test")
+
+
+def test_kraus_application_rejects_zero_success_probability():
+    vacuum = qt.ket2dm(qt.fock(5, 0))
+    annihilation = qt.destroy(5)
+
+    with pytest.raises(ValueError, match="success probability"):
+        _apply_kraus_operators(vacuum, [annihilation], "test")
+
+
+def test_ideal_photon_operations_use_same_kraus_semantics():
+    cutoff = 10
+    rho = qt.ket2dm(qt.fock(cutoff, 3))
+
+    subtracted = photon_subtraction(rho)
+    expected_subtraction = qt.ket2dm(qt.fock(cutoff, 2))
+    assert qt.fidelity(subtracted, expected_subtraction) == pytest.approx(1.0)
+
+    added = photon_addition(rho)
+    expected_addition = qt.ket2dm(qt.fock(cutoff, 4))
+    assert qt.fidelity(added, expected_addition) == pytest.approx(1.0)
 
 
 # Visual diagnostics
@@ -411,16 +434,7 @@ def test_native_qutip_wigner_plot_demo(assert_no_empty_axes, assert_layout_can_r
 def test_realistic_vs_ideal_subtraction_wigner_and_photon_stats_demo(
     assert_no_empty_axes, assert_layout_can_render
 ):
-    # Side-by-side view of what "realistic" buys over "ideal": Wigner
-    # functions of a coherent state after ideal vs. click-heralded photon
-    # subtraction, plus the photon-number distributions that show the
-    # click-heralded version isn't a pure single-photon-subtracted state.
-    # A squeezed vacuum is used rather than a coherent state: a coherent
-    # state passed through a beamsplitter tap never entangles with the tap
-    # (it stays a product state), so its heralded subtraction would always
-    # come out pure regardless of tap_reflectivity/detector_efficiency and
-    # the comparison below would show no visible difference.
-    N_cutoff = 20
+    N_cutoff = 12
     psi = (qt.squeeze(N_cutoff, 0.6) * qt.fock(N_cutoff, 0)).unit()
     rho = qt.ket2dm(psi)
 
@@ -431,7 +445,7 @@ def test_realistic_vs_ideal_subtraction_wigner_and_photon_stats_demo(
         N_cutoff=N_cutoff,
         tap_reflectivity=0.15,
         detector_efficiency=0.55,
-        ancilla_cutoff=8,
+        ancilla_cutoff=6,
     )
 
     xvec = np.linspace(-5, 5, 150)

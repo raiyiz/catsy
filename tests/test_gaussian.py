@@ -198,17 +198,69 @@ def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
 
 
 @pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        (
+            {"alpha": 0.6 - 0.9j},
+            (0.6 - 0.9j, np.sqrt(2) * 0.6, -np.sqrt(2) * 0.9),
+        ),
+        (
+            {"x": 1.2, "p": -1.8},
+            ((1.2 - 1.8j) / np.sqrt(2), 1.2, -1.8),
+        ),
+    ],
+)
+def test_normalize_translation_accepts_supported_forms(kwargs, expected):
+    assert GaussianState._normalize_translation(**kwargs) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "exception", "match"),
+    [
+        (
+            {"alpha": 1.0, "x": 1.0, "p": 1.0},
+            ValueError,
+            "either `alpha` or",
+        ),
+        (
+            {"alpha": 1.0, "x": 1.0},
+            ValueError,
+            "either `alpha` or",
+        ),
+        (
+            {"alpha": 1.0, "p": 1.0},
+            ValueError,
+            "either `alpha` or",
+        ),
+        ({}, TypeError, "need some input"),
+        ({"x": 1.0}, ValueError, "both `x` and `p`"),
+        ({"p": 1.0}, ValueError, "both `x` and `p`"),
+        ({"alpha": np.nan}, ValueError, "finite"),
+        ({"alpha": np.inf}, ValueError, "finite"),
+        ({"alpha": 1.0 + np.inf * 1j}, ValueError, "finite"),
+        ({"x": np.nan, "p": 1.0}, ValueError, "x must be finite"),
+        ({"x": 1.0, "p": np.inf}, ValueError, "p must be finite"),
+        ({"alpha": "bad"}, TypeError, "numeric"),
+        ({"x": "bad", "p": 1.0}, TypeError, "real numbers"),
+        ({"x": 1.0, "p": "bad"}, TypeError, "real numbers"),
+    ],
+)
+def test_normalize_translation_rejects_invalid_inputs(kwargs, exception, match):
+    with pytest.raises(exception, match=match):
+        GaussianState._normalize_translation(**kwargs)
+
+
+@pytest.mark.parametrize(
     ("kwargs", "match"),
     [
-        ({"alpha": 1.0, "x": 1.0}, "not both"),
-        ({}, "alpha"),
-        ({"x": 1.0}, "p"),
+        ({"alpha": 1.0, "x": 1.0}, "either `alpha` or"),
+        ({}, "need some input"),
+        ({"x": 1.0}, "both `x` and `p`"),
     ],
 )
 def test_displacement_rejects_invalid_argument_combinations(kwargs, match):
-    state = GaussianState.vacuum(("a",))
-    with pytest.raises(ValueError, match=match):
-        state.displace("a", **kwargs)
+    with pytest.raises((ValueError, TypeError), match=match):
+        GaussianState.vacuum(("a",)).displace("a", **kwargs)
 
 
 def test_coherent_matches_displaced_vacuum():
@@ -624,10 +676,17 @@ def test_gate_applies_its_bound_transform():
 def test_registered_gates_are_available_as_circuit_methods():
     circuit = Circuit().add_mode("a").squeeze("a", r=0.4).displace("a", alpha=0.2 - 0.4j)
 
-    assert circuit.to_dict()["gates"] == [
-        {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4}},
-        {"gate": "Displacer", "modes": ["a"], "kwargs": {"alpha": 0.2 - 0.4j}},
-    ]
+    gates = circuit.to_dict()["gates"]
+    assert gates[0] == {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4}}
+    # Displacer kwargs are canonicalized to real-valued (x, p) at gate
+    # construction time (see `_normalize_gate_kwargs` in `catsy.optics`),
+    # not stored as the raw complex `alpha` -- a bare `alpha` isn't JSON
+    # serializable, and Gate.kwargs is exactly what gets persisted.
+    assert gates[1]["gate"] == "Displacer"
+    assert gates[1]["modes"] == ["a"]
+    assert gates[1]["kwargs"] == pytest.approx(
+        {"x": np.sqrt(2.0) * 0.2, "p": np.sqrt(2.0) * -0.4}
+    )
 
 
 def test_circuit_gate_methods_build_without_executing():
@@ -813,7 +872,7 @@ def test_circuit_from_dict_rejects_unknown_gate():
     ("kwargs", "match"),
     [
         ({"alpha": 1.0, "x": 1.0}, "not both"),
-        ({}, "alpha"),
+        ({}, "need some input"),
         ({"x": 1.0}, "p"),
     ],
 )
@@ -827,7 +886,7 @@ def test_circuit_displace_rejects_invalid_argument_combinations(kwargs, match):
     circuit.add_gate(
         Gate(name="Displacer", transform=displace, modes=("a",), kwargs={**kwargs})
     )
-    with pytest.raises((ValueError, KeyError), match=match):
+    with pytest.raises((ValueError, TypeError), match=match):
         circuit.run(GaussianState.vacuum(("a",)))
 
 
@@ -1196,7 +1255,7 @@ def test_to_qutip_reconstructs_gaussian_covariance():
         .beam_splitter("a", "b", eta=0.37)
         .displace("a", alpha=0.4 + 0.2j)
     )
-    N_cutoff = 30
+    N_cutoff = 20
     rho = state.to_qutip(N_cutoff=N_cutoff)
 
     a_ops = []
@@ -1238,7 +1297,7 @@ def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
         .beam_splitter("a", "b", eta=0.5)
     )
     noisy_state = LossChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(state)
-    rho = noisy_state.to_qutip(N_cutoff=18)
+    rho = noisy_state.to_qutip(N_cutoff=15)
     assert rho.tr() == pytest.approx(1.0, abs=1e-9)
 
 

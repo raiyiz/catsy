@@ -18,6 +18,10 @@ For each link:
      identifier, optionally ``Class.method`` or ``func()``), that line must
      declare *that* symbol specifically, not just some definition.
 
+With ``--fix``, stale line numbers are repaired automatically when the linked
+symbol can be found uniquely in the same target file. Unresolvable or
+ambiguous links are still reported as errors.
+
 This is a repo-hygiene check, not a Typst or Markdown parser: it uses
 targeted regexes rather than parsing either format fully, so it can produce
 false positives on unusual formatting. It has no false negatives for the
@@ -27,6 +31,7 @@ numbers after a refactor.
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -66,11 +71,34 @@ def _nearby_backticked_symbol(text: str, match_start: int) -> str | None:
     """Best-effort: the last `` `Identifier` `` token before a Typst
     src-link call on the same line, e.g. in
     "`KerrCavity` (in #src-link(...))" this returns "KerrCavity"."""
-    before = text[:match_start]
+    line_start = text.rfind("\n", 0, match_start) + 1
+    before = text[line_start:match_start]
     tokens = re.findall(r"`([A-Za-z_][\w.]*)`", before)
     if not tokens:
         return None
     return _symbol_from_label(tokens[-1])
+
+
+def _definition_lines(path: Path, symbol: str) -> list[int]:
+    """Return all 1-based definition lines declaring ``symbol``."""
+    return [
+        line_no
+        for line_no, line_text in enumerate(path.read_text().splitlines(), start=1)
+        if (match := DEF_RE.match(line_text)) is not None and match.group(1) == symbol
+    ]
+
+
+def _recover_definition_line(
+    path_str: str, line_no: int, symbol: str | None
+) -> int | None:
+    """Return a unique current definition line for ``symbol``, if available."""
+    if symbol is None:
+        return None
+    target = REPO_ROOT / path_str
+    if not target.is_file():
+        return None
+    matches = _definition_lines(target, symbol)
+    return matches[0] if len(matches) == 1 and matches[0] != line_no else None
 
 
 def _check(
@@ -110,9 +138,62 @@ def _check(
     return errors
 
 
-def check_typst_docs() -> list[str]:
+def _fix_typst_file(typ_file: Path) -> tuple[str, bool]:
+    """Repair uniquely recoverable Typst source links and return new text/state."""
+    text = typ_file.read_text()
+    replacements: list[tuple[int, int, str]] = []
+
+    for match in SRC_LINK_RE.finditer(text):
+        rest = match.group("rest")
+        line_match = LINE_KWARG_RE.search(rest)
+        if line_match is None:
+            continue
+        path_str = match.group("path")
+        line_no = int(line_match.group("line"))
+        symbol = _nearby_backticked_symbol(text, match.start())
+        replacement_line = _recover_definition_line(path_str, line_no, symbol)
+        if replacement_line is None:
+            continue
+        old_link = match.group(0)
+        new_link = LINE_KWARG_RE.sub(f"line: {replacement_line}", old_link, count=1)
+        if new_link != old_link:
+            replacements.append((match.start(), match.end(), new_link))
+
+    for start, end, replacement in reversed(replacements):
+        text = text[:start] + replacement + text[end:]
+    return text, bool(replacements)
+
+
+def _fix_readme(text: str) -> tuple[str, bool]:
+    """Repair uniquely recoverable Markdown source links and return new text/state."""
+    replacements: list[tuple[int, int, str]] = []
+    for match in MD_LINK_RE.finditer(text):
+        line_str = match.group("line")
+        if line_str is None:
+            continue
+        path_str = match.group("path")
+        line_no = int(line_str)
+        symbol = _symbol_from_label(match.group("label"))
+        replacement_line = _recover_definition_line(path_str, line_no, symbol)
+        if replacement_line is None:
+            continue
+        old_link = match.group(0)
+        new_link = old_link.replace(f"#L{line_no}", f"#L{replacement_line}")
+        if new_link != old_link:
+            replacements.append((match.start(), match.end(), new_link))
+
+    for start, end, replacement in reversed(replacements):
+        text = text[:start] + replacement + text[end:]
+    return text, bool(replacements)
+
+
+def check_typst_docs(fix: bool = False) -> list[str]:
     errors: list[str] = []
     for typ_file in sorted((REPO_ROOT / "docs").glob("*.typ")):
+        if fix:
+            fixed_text, changed = _fix_typst_file(typ_file)
+            if changed:
+                typ_file.write_text(fixed_text)
         text = typ_file.read_text()
         for match in SRC_LINK_RE.finditer(text):
             path_str = match.group("path")
@@ -128,10 +209,14 @@ def check_typst_docs() -> list[str]:
     return errors
 
 
-def check_readme() -> list[str]:
+def check_readme(fix: bool = False) -> list[str]:
     errors: list[str] = []
     readme = REPO_ROOT / "README.md"
     text = readme.read_text()
+    if fix:
+        text, changed = _fix_readme(text)
+        if changed:
+            readme.write_text(text)
     for match in MD_LINK_RE.finditer(text):
         path_str = match.group("path")
         line_str = match.group("line")
@@ -142,7 +227,15 @@ def check_readme() -> list[str]:
 
 
 def main() -> int:
-    errors = check_typst_docs() + check_readme()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="repair uniquely recoverable stale line numbers in docs and README",
+    )
+    args = parser.parse_args()
+
+    errors = check_typst_docs(fix=args.fix) + check_readme(fix=args.fix)
     if errors:
         print(f"Found {len(errors)} stale/broken source link(s):\n", file=sys.stderr)
         for err in errors:

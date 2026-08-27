@@ -1,11 +1,12 @@
 #import "@preview/physica:0.9.8": *
+#import "links.typ": src-link
 
 // ==========================================
 // CHAPTER 6
 // ==========================================
 = Chapter 6: Phase-Space Diagnostics & Entanglement Witnesses
 
-The free functions at the end of `gaussian.py` (`compute_wigner_analytically`, `compute_joint_correlation`, `compute_duan_inseparability`, and their plotting companions) form the *analysis layer* of the toolkit. They extract directly observable or certifying quantities from $(d, V)$ without needing to go through the Fock space of Chapter 5 — a key efficiency advantage of the Gaussian layer.
+The free functions at the end of #src-link("src/catsy/gaussian/__init__.py", label: [`gaussian/__init__.py`]) (`compute_wigner_analytically`, `compute_joint_correlation`, `compute_duan_inseparability`) form the *analysis layer* of the toolkit. They extract directly observable or certifying quantities from $(d, V)$ without needing to go through the Fock space of Chapter 5 — a key efficiency advantage of the Gaussian layer. Their plotting companions live in a separate module, #src-link("src/catsy/gaussian/visualization.py", label: [`gaussian/visualization.py`]), covered at the end of this chapter.
 
 == Analytical Wigner function
 
@@ -41,7 +42,7 @@ def compute_wigner_analytically(
     return W, X, P, mode_name
 ```
 
-Since only the $2 times 2$ submatrix of the target mode is extracted, this evaluation is $O(1)$ per grid point, independent of the total number of modes — unlike a Wigner function reconstructed from a truncated Fock density matrix. The returned `mode_name` is passed straight through so callers can forward the whole result tuple directly to `plot_wigner(W, X, P, mode_name)`, which visualizes it as a filled contour map with a diverging (red-blue) color scale, symmetric around the zero of the probability density, titled with the mode name.
+Since only the $2 times 2$ submatrix of the target mode is extracted, this evaluation is $O(1)$ per grid point, independent of the total number of modes — unlike a Wigner function reconstructed from a truncated Fock density matrix. Callers rarely need to invoke `compute_wigner_analytically` directly: `plot_wigner(state, mode_name)` in #src-link("src/catsy/gaussian/visualization.py", label: [`gaussian/visualization.py`]) computes this grid internally and renders it as a heatmap (diverging red-blue color scale, symmetric around zero) with white contour lines and the state's mean marked, titled with the mode name.
 
 == Joint quadrature correlations
 
@@ -83,6 +84,38 @@ def compute_duan_inseparability(
 ```
 
 The signs of the cross terms directly mirror the structure of the EPR state: the minus sign in front of $V_(a b)$ in the $q$ term expects *positive* correlation ($q_a approx q_b$), while the plus sign in the $p$ term expects *negative* correlation ($p_a approx -p_b$) — exactly the statistics that `GaussianState.tmsv` constructs.
+
+== Visualizing states and dynamics
+
+Each analysis function above has a plotting companion in #src-link("src/catsy/gaussian/visualization.py", label: [`gaussian/visualization.py`]) that renders it as a Matplotlib figure. All of them return the figure without calling `plt.show()` unless passed `show=True`, and accept an optional `ax` so they can be composed into a larger layout (see the dashboards below).
+
+*Single-state views* -- `plot_phase_space` (mean and $n_sigma$ uncertainty ellipse), `plot_wigner` (the heatmap described above), `plot_covariance_matrix` (the raw quadrature covariance as a heatmap), and `plot_mode_correlation_map` (the same covariance normalized to $[-1, 1]$, with mode boundaries drawn in, so cross-mode structure is visible independent of each mode's absolute variance).
+
+*Dynamics* -- `plot_phase_space_trajectory` traces the mean through phase space over a sequence of states, with sparse uncertainty ellipses along the path; `plot_phase_space_trajectory_timecoded` is the same idea with the trajectory colored by an explicit `times` sequence (or step index) instead of drawn as a single flat line. `plot_covariance_evolution` and `plot_diagnostics` (purity, symplectic eigenvalues) track scalar summaries over the same sequence. `animate_phase_space` produces a `matplotlib.animation.FuncAnimation` rather than a static figure.
+
+*Composite dashboards* -- `plot_state_dashboard` combines the single-state views above into one figure for a state (adding `plot_mode_correlation_map` automatically when the state has more than one mode); `plot_evolution` is the equivalent for a time sequence, combining the trajectory, covariance evolution, diagnostics, and one `plot_wigner` snapshot (the last of `wigner_indices`, default the final state) into one figure -- for several Wigner snapshots side by side instead, use `plot_wigner_evolution` directly. `plot_multimode_evolution` extends the trajectory view to several modes at once, with a shared panel tracking the strongest cross-mode correlation over time.
+
+The Fock-space counterparts live in the sibling module, #src-link("src/catsy/fock/visualization.py", label: [`fock/visualization.py`]), and expose quantities invisible to the Gaussian $(d, V)$ description. The four public plotting functions share a simple contract: each returns a `matplotlib.figure.Figure`, does not display it unless `show=True`, and accepts `mode_idx` for selecting a mode from a multimode QuTiP state. They reduce the selected mode to a single-mode density matrix before plotting.
+
+*Photon statistics* -- `plot_photon_statistics(rho, *, mode_idx=0, ax=None, n_max=None, show=False)` plots the photon-number probabilities and annotates the zero-delay second-order correlation $g^((2))(0)$. If `n_max` is omitted, the displayed cutoff is inferred from the occupied photon-number support; otherwise it selects the requested upper photon-number limit. The function returns the completed figure and can draw into an existing axis through `ax`.
+
+*Fock density matrix* -- `plot_fock_density_matrix(rho, *, mode_idx=0, axes=None, show=False)` renders the magnitude and phase of the selected Fock-basis density matrix. `axes` may supply the pair of Matplotlib axes used for the two views. Near-zero matrix elements are masked in the phase view so that numerical phase noise is not presented as physical phase structure.
+
+*Fock Wigner function* -- `plot_wigner(rho, *, mode_idx=0, xlim=(-5, 5), resolution=180, ax=None, projection="2d", show=False)` computes the Wigner function through QuTiP and renders either a 2D phase-space plot or a 3D surface. `xlim` defines the phase-space interval `[x_min, x_max]` and must contain two finite values in strictly increasing order; it does not need to be symmetric about zero. `resolution` controls the grid density and must be at least 32. `projection` accepts only `"2d"` or `"3d"`. In 3D mode, the surface colors are normalized to the actual minimum and maximum of the computed Wigner function, which preserves the visual distinction between positive and negative regions.
+
+*Fock dashboard* -- `plot_fock_dashboard(rho, *, mode_idx=0, xlim=(-5, 5), resolution=140, n_max=None, show=False)` combines four complementary views: photon-number statistics, Wigner function, density-matrix magnitude, and density-matrix phase. It uses the same `mode_idx`, `xlim`, `resolution`, and `n_max` conventions as the component plots and returns one composite figure. The plotting functions derive concise state-aware descriptions (for example, Fock, vacuum, Poissonian, parity, or nonclassical descriptions) from the photon statistics, so titles identify the displayed state rather than only a mode index.
+
+== Shared visualization infrastructure
+
+The Gaussian and Fock plotting modules are separate because they operate on different state representations, but they deliberately share the low-level plotting infrastructure in #src-link("src/catsy/visualization.py", label: [`visualization.py`]):
+
+```text
+Gaussian visualization ─┐
+                        ├─> catsy.visualization
+Fock visualization ─────┘
+```
+
+The shared layer owns presentation mechanics rather than physics-specific plotting logic. In particular, `figure_and_axes` provides consistent figure/axes creation for standalone plots and composition into caller-supplied axes; `finalize_figure` handles common figure finalization and optional display; `style_phase_axes` applies the common phase-space axis conventions; `annotate_box` provides consistent boxed annotations; and `add_colorbar` centralizes colorbar creation and labeling. The Gaussian and Fock modules therefore remain responsible for choosing what physical quantity to plot, while `catsy.visualization` keeps figure lifecycle, phase-axis styling, annotations, and colorbars consistent across both layers.
 
 ---
 

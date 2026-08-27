@@ -155,6 +155,51 @@ def test_to_dict_matches_schema_and_excludes_array_data():
     assert json.dumps(serialized)
 
 
+def test_journal_serializes_complex_displacements_as_quadratures():
+    circuit = Circuit(name="Alpha serialization").add_mode("signal")
+    circuit.displace("signal", alpha=0.4 + 0.1j)
+
+    serialized = circuit.to_dict()
+    kwargs = serialized["gates"][0]["kwargs"]
+
+    assert kwargs == {
+        "x": pytest.approx(np.sqrt(2.0) * 0.4),
+        "p": pytest.approx(np.sqrt(2.0) * 0.1),
+    }
+    assert "alpha" not in kwargs
+    json.dumps(serialized)
+
+
+def test_journal_roundtrips_circuit_with_complex_displacement(tmp_path):
+    circuit = Circuit(name="Alpha roundtrip").add_mode("signal")
+    circuit.displace("signal", alpha=0.4 + 0.1j)
+
+    path = tmp_path / "circuit.json"
+    circuit.save(path)
+    restored = Circuit.load(path)
+
+    assert restored.to_dict() == circuit.to_dict()
+
+
+def test_journal_serializes_coherent_initial_state_as_quadratures():
+    # Same underlying issue as the Displacer case above: InitialState with
+    # kind="coherent" also takes a complex `alpha`, and Gate.kwargs is what
+    # gets persisted -- so it needs the same (x, p) canonicalization.
+    circuit = Circuit(name="Coherent init").add_mode("signal")
+    circuit.initial_state("signal", kind="coherent", alpha=1.0 + 2.0j)
+
+    serialized = circuit.to_dict()
+    kwargs = serialized["gates"][0]["kwargs"]
+
+    assert kwargs == {
+        "kind": "coherent",
+        "x": pytest.approx(np.sqrt(2.0) * 1.0),
+        "p": pytest.approx(np.sqrt(2.0) * 2.0),
+    }
+    assert "alpha" not in kwargs
+    json.dumps(serialized)
+
+
 def test_save_writes_only_json_when_entry_has_no_array_data(tmp_path):
     entry = JournalEntry(title="No arrays")
     entry.log_run("run", circuit=Circuit(), metrics={"purity": 1.0})

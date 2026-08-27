@@ -81,6 +81,38 @@ def fetch_history_summary(self) -> list[dict[str, Any]]:
 
 Since only the small `.json` files are opened here, browsing (`find`, filterable by tag and/or title substring) and listing (`list_entries`) stay cheap even with very many or very large entries; the corresponding `.npz` files are only touched by an explicit `load_entry`/`get_entry` call followed by `get_array`/`get_final_state` access. Entry IDs (`_make_entry_id`) are UTC timestamps with a short random suffix — so even a plain directory `ls`/`glob` already sorts in creation order, while concurrent entries never collide.
 
+== A worked example
+
+`examples/complex_circuit.py` ties Chapters 3 and 9 together end-to-end: it builds a three-mode circuit (squeezing, a complex-amplitude displacement, a beam splitter, thermal loss, and a second squeezed mode combined in), runs it, and persists both the circuit and its final state through `SimulationJournal`:
+
+```python
+entry = journal.new_entry(
+    "Three-mode Gaussian circuit",
+    tags=["example", "gaussian", "three-mode"],
+    notes="Representative circuit showing persistence and structured output paths.",
+)
+run = entry.log_run(
+    "demo", circuit=circuit, final_state=final_state,
+    metrics={"num_modes": len(final_state.modes), ...},
+    arrays={"displacement": {...}, "covariance": {...}},
+)
+entry.save(config.output_dir)
+```
+
+Run settings (output directory, circuit name, squeezing/transmissivity parameters, log level, RNG seed) come from a small TOML file rather than being hardcoded, loaded through a validated `RunConfig` dataclass in `examples/config.py`:
+
+```toml
+[run]
+output_dir = "runs/complex_circuit"
+circuit_name = "Three-mode Gaussian demo"
+signal_squeezing = 0.6
+signal_idler_transmissivity = 0.65
+log_level = "INFO"
+seed = 42
+```
+
+Run it directly with `uv run python examples/complex_circuit.py`; it writes a fresh, timestamped entry under `output_dir` on every invocation.
+
 ---
 
 

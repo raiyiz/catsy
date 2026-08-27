@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, TypedDict, cast
+from typing import Any, Protocol, TypedDict, cast
 
 import numpy as np
 import qutip as qt
 
 from catsy.gaussian import (
+    GaussianState,
     beam_splitter,
     displace,
     initial_state,
@@ -26,9 +27,6 @@ from catsy.gaussian import (
 
 from .core import _check_non_negative, _check_positive_int, _json_load, _json_save
 from .types import CircuitData, FloatArray, GateParameters, Modes, ParameterValue
-
-if TYPE_CHECKING:
-    from .gaussian import GaussianState
 
 
 class GateTransform(Protocol):
@@ -69,8 +67,8 @@ class Mode:
     """A named mode, optionally owned by the :class:`Circuit` that produced it.
 
     A ``Mode`` obtained from :meth:`Circuit.mode` is owned by that circuit,
-    and can only be used to build gates on that same circuit: passing it to
-    a different circuit, or mixing it into a gate on another circuit, is
+    and can only be used to build gates on that same circuit: passing it to a
+    different circuit, or mixing it into a gate on another circuit, is
     rejected before a :class:`Gate` is even constructed -- so a mode meant
     for one circuit can't accidentally end up wired into a different one.
 
@@ -94,6 +92,31 @@ class Mode:
     def __repr__(self) -> str:
         owned_by = f"owner={self.owner.name!r}" if self.owner is not None else "free"
         return f"Mode({self.name!r}, {owned_by})"
+
+
+def _normalize_gate_kwargs(
+    kwargs: dict[str, ParameterValue],
+) -> dict[str, ParameterValue]:
+    """Canonicalize any `alpha` in gate kwargs into real-valued `x`/`p`.
+
+    `Gate.kwargs` is what `Circuit.to_dict()`/`save()` persists, and a raw
+    complex amplitude isn't JSON serializable -- so this runs at gate
+    *construction* time (in every place a `Gate` gets built from
+    user-supplied kwargs), not just when the gate later runs. Only
+    Displacer and InitialState(kind="coherent") ever pass `alpha`, and both
+    transforms already accept `x`/`p` as an equivalent form (see `displace`
+    and `initial_state` in `catsy.gaussian`), so this is a lossless,
+    format-only substitution. A no-op when `alpha` isn't present.
+    """
+    if "alpha" not in kwargs:
+        return kwargs
+    kwargs = dict(kwargs)
+    _, x, p = GaussianState._normalize_translation(
+        alpha=cast(complex, kwargs.pop("alpha"))
+    )
+    kwargs["x"] = x
+    kwargs["p"] = p
+    return kwargs
 
 
 @dataclass
@@ -152,7 +175,7 @@ class Circuit:
                     name=gate_name,
                     transform=transform,
                     modes=resolved_modes,
-                    kwargs=dict(kwargs),
+                    kwargs=_normalize_gate_kwargs(kwargs),
                 )
             )
 
@@ -247,7 +270,7 @@ class Circuit:
                 name="InitialState",
                 transform=transform,
                 modes=resolved_modes,
-                kwargs={"kind": kind, **kwargs},
+                kwargs=_normalize_gate_kwargs({"kind": kind, **kwargs}),
             )
         )
 
@@ -399,10 +422,14 @@ for _name, _transform in (
 def _render_gate_label(gate: Gate) -> tuple[str, int]:
     """Pick the abbreviated gate type and parameter for one schematic block."""
     param_str = ""
-    for key, symbol in (("eta", "η"), ("phi", "φ"), ("r", "r"), ("alpha", "α")):
+    for key, symbol in (("eta", "η"), ("phi", "φ"), ("r", "r"), ("x", "x"), ("p", "p")):
         if key in gate.kwargs:
             value = gate.kwargs[key]
-            param_str = f" {symbol}={value:.2f}" if key == "phi" else f" {symbol}={value}"
+            param_str = (
+                f" {symbol}={value:.2f}"
+                if isinstance(value, float)
+                else f" {symbol}={value}"
+            )
             break
     type_name = _GATE_LABEL_ABBREVIATIONS.get(gate.name, gate.name[:5])
     label = f" {type_name}{param_str} "

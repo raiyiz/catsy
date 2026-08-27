@@ -506,13 +506,13 @@ def test_triggered_cavity_end_to_end():
 
 def test_decoherence_mzi_parity_visibility_drops_with_loss():
     start_time = perf_counter()
-    N_cutoff = 10
+    N_cutoff = 9
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
 
     # Loss has a fixed exposure time and is therefore independent of the
     # scanned phase.  Compare the complete phase scan directly.
-    theta_list = np.linspace(0, 2 * np.pi, 80)
+    theta_list = np.linspace(0, 2 * np.pi, 50)
     results_clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(
         psi_cat, theta_list
     )

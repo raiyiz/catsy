@@ -18,11 +18,24 @@ This closing chapter summarizes the previous nine chapters into a practical over
   stroke: 0.5pt + gray.lighten(40%),
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
-  [#src-link("src/catsy/gaussian.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
-  [#src-link("src/catsy/fock.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
+  [#src-link("src/catsy/gaussian/__init__.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/gaussian/visualization.py")], [Gaussian-state plots, composite dashboards (`plot_state_dashboard`, `plot_evolution`, `plot_multimode_evolution`), and animations (Chapter 6).],
+  [#src-link("src/catsy/fock/__init__.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
+  [#src-link("src/catsy/fock/visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for QuTiP states, including the `plot_fock_dashboard` four-view composite (Chapter 6).],
+  [#src-link("src/catsy/visualization.py")], [Plotting primitives (figure lifecycle, phase-space styling, shared annotation and colorbar helpers) shared by the two visualization modules above.],
   [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
+
+The two visualization modules deliberately separate physics-specific rendering from shared presentation mechanics. Gaussian plots operate on Gaussian-state representations, while Fock plots operate on QuTiP density matrices; both delegate common figure lifecycle and styling tasks to #src-link("src/catsy/visualization.py", label: [`visualization.py`]):
+
+```text
+Gaussian visualization ─┐
+                        ├─> catsy.visualization
+Fock visualization ─────┘
+```
+
+The shared layer provides consistent figure creation/finalization, phase-axis styling, boxed annotations, and colorbars. This keeps the public plotting modules focused on the physical quantities they render rather than duplicating Matplotlib presentation code.
 
 There is no separate compatibility-shim or simulation-only module: `FockGates` lives in `catsy.fock`, and `KerrCavity`/`MachZehnderInterferometer` live in `catsy.optics`, since both model specific pieces of optical hardware rather than generic phase-space transformations. Imports happen either from the individual modules or from the public names re-exported by `catsy/__init__.py`:
 
@@ -74,7 +87,6 @@ final = circuit.run(initial)
 
 ```python
 from catsy import GaussianState
-
 state = GaussianState.vacuum(("a",))
 state = state.squeeze("a", r=0.5)
 state = state.displace("a", alpha=0.4 + 0.2j)
@@ -90,11 +102,20 @@ The test suite emphasizes both physical invariants (uncertainty relation, symple
 uv run pytest
 ```
 
-Plot-generating tests (`plot_covariance`, `plot_wigner`, `plot_joint_correlation`) are deliberately opt-in, to keep the default suite headless-friendly and fast:
+Plot-generating tests (`plot_covariance_matrix`, `plot_wigner`, `plot_joint_correlation`) are deliberately opt-in, to keep the default suite headless-friendly and fast:
 
 ```bash
 uv run pytest --plot
 ```
+
+For timing diagnostics and plotting demos, two additional pytest options are available:
+
+```bash
+uv run pytest --plot --timings
+uv run pytest --plot --plot-pause 0.5
+```
+
+`--timings` reports the slowest marked plotting tests, while `--plot-pause` adds a short pause after plot-generating tests when interactive inspection is useful. Tests can also use the `timing(max_seconds=...)` marker to enforce an explicit wall-clock budget for a test.
 
 == Scope and boundaries
 

@@ -41,7 +41,7 @@ pytest:
     # --plot runs the @pytest.mark.visualize tests too. matplotlib is
     # headless here (see MPLBACKEND above), so visualization tests render
     # without opening interactive windows.
-    - uv run pytest --plot --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
+    - uv run pytest --plot --timings --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
     when: always
     expose_as: "HTML coverage report"
@@ -104,17 +104,11 @@ mypy:
     - uv sync --group dev --locked
     - uv run mypy
 
-# Checks every #src-link(..., line: N) in docs/*.typ and every
-# [`Symbol`](path#L123) link in README.md against the actual source: the
-# path must exist, the line must be in range, and it must declare the
-# exact class/function the link's label names. Catches doc links going
-# stale after a refactor moves code around -- see scripts/check_doc_links.py
-# for exactly what is and isn't checked. No project dependencies needed
-# (stdlib only), so this runs in a bare Python image rather than the uv one.
+# Checks documentation source links whenever docs, README, source files, or
+# this checker changes. It does not rebuild the documentation artifact.
 docs-links:
   stage: test
   image: python:3.13-slim
-  allow_failure: true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -122,8 +116,12 @@ docs-links:
         - README.md
         - src/**/*
         - scripts/check_doc_links.py
-        - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - docs/**/*
+        - README.md
+        - src/**/*
+        - scripts/check_doc_links.py
   script:
     - python3 scripts/check_doc_links.py
 
@@ -132,7 +130,13 @@ typst:
   image:
     name: ghcr.io/typst/typst:latest
     entrypoint: [""]
-  allow_failure: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - docs/**/*
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - docs/**/*
   script:
     - apk add --no-cache ttf-liberation ttf-dejavu
     - typst compile

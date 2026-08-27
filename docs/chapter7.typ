@@ -6,42 +6,50 @@
 // ==========================================
 = Chapter 7: Non-Gaussian Gates & Physical Simulations
 
-Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require Fock-space structure. These operations consistently live outside `gaussian.py`: #src-link("src/catsy/fock.py") provides primitive photon operations on already-existing QuTiP states, while #src-link("src/catsy/optics.py") implements concrete, time-resolved hardware models (a driven Kerr cavity, a Mach-Zehnder interferometer) -- both describe specific pieces of optical hardware rather than generic phase-space transformations, which is why they share a module. Reusable Gaussian gate layouts (Chapter 8) live on `Circuit` itself rather than in this module.
+Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require Fock-space structure. The Fock-space operations live in `src/catsy/fock/__init__.py`, while `src/catsy/optics.py` implements concrete, time-resolved hardware models (a driven Kerr cavity and a Mach-Zehnder interferometer). Reusable Gaussian gate layouts (Chapter 8) live on `Circuit` itself.
 
-== Primitive photon operations (`FockGates`)
+== Primitive photon operations
 
-`FockGates` deliberately operates *not* on `GaussianState`, but directly on QuTiP density matrices — the conversion is expected to be performed explicitly via `GaussianState.to_qutip()` (Chapter 5). This separation keeps the Fock layer lean and avoids a second, competing convenience layer for conversion.
+The Fock module operates directly on QuTiP density matrices rather than on `GaussianState`. The intended conversion boundary is `GaussianState.to_qutip()` (Chapter 5). The public API is functional: photon operations are exposed as module-level functions, while `FockGates` remains as a backwards-compatible namespace for existing callers.
 
 === Subtraction and addition
 
-Applying the annihilation or creation operator to a density matrix is in general not a trace-preserving process — it models a *heralded*, success-conditioned operation. Photon subtraction is commonly implemented conceptually by a weakly reflecting beam splitter followed by conditional detection in the reflected arm; see #link("https://doi.org/10.1103/PhysRevA.61.032302")[Opatrný, Kurizki, and Welsch (2000)]. The state must therefore be renormalized after application:
-$ rho -->^"subtraction" (hat(a) rho hat(a)^dagger) / "tr"(hat(a) rho hat(a)^dagger), quad rho -->^"addition" (hat(a)^dagger rho hat(a)) / "tr"(hat(a)^dagger rho hat(a)) $
+Applying the annihilation or creation operator to a density matrix is in general not a trace-preserving process — it models a *heralded*, success-conditioned operation. The ideal operations are exposed as `photon_subtraction` and `photon_addition`:
 
 ```python
-@staticmethod
-def _apply_and_renormalize(rho, op, label: str):
-    rho_new = op * rho * op.dag()
-    trace_val = rho_new.tr()
-    if abs(trace_val) < TOL_PHYSICALITY:
-        raise ValueError(
-            f"{label}: heralding success probability is numerically zero."
-        )
-    return rho_new / trace_val
+def photon_subtraction(
+    rho: qt.Qobj,
+    mode_idx: int = 0,
+    N_cutoff: int | None = None,
+) -> qt.Qobj:
+    """Apply textbook photon subtraction ``rho -> a rho a†``."""
 
-@staticmethod
-def photon_subtraction(rho, mode_idx: int = 0, N_cutoff: int = 20):
-    n_modes = FockGates._validate_state(rho, N_cutoff, mode_idx)
-    a_op = FockGates._mode_operator(
-        qt.destroy(N_cutoff), n_modes, mode_idx, N_cutoff
-    )
-    return FockGates._apply_and_renormalize(rho, a_op, "photon_subtraction")
+
+def photon_addition(
+    rho: qt.Qobj,
+    mode_idx: int = 0,
+    N_cutoff: int | None = None,
+) -> qt.Qobj:
+    """Apply textbook photon addition ``rho -> a† rho a``."""
 ```
 
-The denominator $"tr"(hat(a) rho hat(a)^dagger)$ is simultaneously the physical *heralding success probability*: if it drops below the numerical tolerance `TOL_PHYSICALITY`, the renormalization would be singular (e.g. when attempting to subtract a photon from the vacuum), and the method aborts in a controlled way with a `ValueError` rather than silently producing `NaN` values. `_mode_operator` embeds the local $hat(a)$ or $hat(a)^dagger$ operator via `qt.tensor` at the correct mode position, provided `rho` has more than one mode; `_validate_state` checks beforehand that `rho` is indeed an operator whose Fock dimensions match `N_cutoff`.
+Photon subtraction is commonly implemented conceptually by a weakly reflecting beam splitter followed by conditional detection in the reflected arm; see #link("https://doi.org/10.1103/PhysRevA.61.032302")[Opatrný, Kurizki, and Welsch (2000)]. Both ideal operations are normalized after application. The normalization denominator is the physical heralding success probability; if it is numerically zero, the operation raises `ValueError` rather than producing an invalid state.
+
+All Fock operations accept `mode_idx` for multimode states and `N_cutoff` as an optional consistency check. The state validator requires a QuTiP operator and equal Fock dimensions across all modes. The selected mode is acted on locally, with the remaining modes preserved for operations and traced out for single-mode visualization.
+
+=== Realistic heralded operations
+
+The module also provides `realistic_photon_subtraction` and `realistic_photon_addition`. These model a weak coupling to an ancilla mode, followed by an imperfect click detector, rather than replacing the laboratory process by the ideal $hat(a)$ or $hat(a)^dagger$ map. The detector efficiency is therefore an explicit parameter. In the weak-coupling, high-efficiency limit these operations converge toward their ideal counterparts.
+
+=== Photon-number observables
+
+`mean_photon_number` returns the expectation value of the selected mode's number operator. `photon_number_measurement` performs an ideal photon-number-resolving measurement and returns the selected integer outcome together with the collapsed state. For a multimode input, the measured mode is removed from the returned state by partial trace.
+
+For backward compatibility, existing code can continue to call these operations through `FockGates`, for example `FockGates.photon_subtraction(rho)`. New code should prefer the module-level functions directly.
 
 == Driven, dissipative Kerr cavity (`KerrCavity`)
 
-`KerrCavity` (in #src-link("src/catsy/optics.py", line: 394, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
+`KerrCavity` (in #src-link("src/catsy/optics.py", line: 444, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
 $ hat(H)(t) = K hat(a)^(dagger 2) hat(a)^2 + Omega(t)(hat(a) + hat(a)^dagger), quad Omega(t) = A exp(-(t - t_0)^2 / (2 sigma^2)) $
 
 Dissipation is modeled via a single Lindblad collapse operator $sqrt(kappa) hat(a)$, and the full master equation is integrated in time with `qutip.mesolve`:
@@ -66,7 +74,7 @@ The time-dependent part `[a + a.dag(), pulse_shape]` follows QuTiP's standard co
 
 == Mach-Zehnder interferometer with a lossy arm (`MachZehnderInterferometer`)
 
-`MachZehnderInterferometer` (in #src-link("src/catsy/optics.py", line: 462, label: [`optics.py`])) models a two-mode interferometer in which an input state (e.g. a Schrödinger-cat state plus vacuum in the second port) passes through the sequence
+`MachZehnderInterferometer` (in #src-link("src/catsy/optics.py", line: 512, label: [`optics.py`])) models a two-mode interferometer in which an input state (e.g. a Schrödinger-cat state plus vacuum in the second port) passes through the sequence
 $ "50:50 BS" arrow.r "lossy arm (fixed time)" arrow.r "phase shift" theta arrow.r "50:50 BS" $
 and is then read out in a photon-number- and parity-resolved way. The first beam splitter is constructed as an exact QuTiP unitary operator:
 $ hat(U)_"BS" = exp(i pi/4 (hat(a)_1^dagger hat(a)_2 + hat(a)_1 hat(a)_2^dagger)) $
