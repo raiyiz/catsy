@@ -67,7 +67,10 @@ def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
         cat, tap_reflectivity=0.08, detector_efficiency=0.75, ancilla_cutoff=6
     )
     added = realistic_photon_addition(
-        subtracted, coupling_strength=0.045, detector_efficiency=0.75, ancilla_cutoff=6
+        subtracted,
+        coupling_strength=0.045,
+        detector_efficiency=0.75,
+        ancilla_cutoff=6,
     )
     theta = np.linspace(0.0, 2.0 * np.pi, 33)
     interferometer = MachZehnderInterferometer(kappa=0.08, N_cutoff=18, loss_time=0.75)
@@ -112,28 +115,38 @@ def plot_experiment(
     heterodyne_reordered = heterodyne_state.reorder_modes(remaining_modes)
 
     figures = {
-        "signal_phase_space": plot_phase_space(final_state, "signal", show=True),
-        "covariance_matrix": plot_covariance_matrix(final_state, show=True),
-        "mode_correlations": plot_mode_correlation_map(final_state, show=True),
-        "cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150, show=True),
-        "cat_dashboard": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120, show=True),
-        "subtracted_dashboard": plot_fock_dashboard(subtracted, xlim=(-4.5, 4.5), resolution=120, show=True),
-        "added_dashboard": plot_fock_dashboard(added, xlim=(-4.5, 4.5), resolution=120, show=True),
-        "homodyne_phase_space": plot_phase_space(homodyne_reordered, "idler", show=True),
-        "heterodyne_phase_space": plot_phase_space(heterodyne_reordered, "idler", show=True),
+        "signal_phase_space": plot_phase_space(final_state, "signal", show=False),
+        "covariance_matrix": plot_covariance_matrix(final_state, show=False),
+        "mode_correlations": plot_mode_correlation_map(final_state, show=False),
+        "cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150, show=False),
+        "cat_dashboard": plot_fock_dashboard(
+            cat, xlim=(-4.5, 4.5), resolution=120, show=False
+        ),
+        "subtracted_dashboard": plot_fock_dashboard(
+            subtracted, xlim=(-4.5, 4.5), resolution=120, show=False
+        ),
+        "added_dashboard": plot_fock_dashboard(
+            added, xlim=(-4.5, 4.5), resolution=120, show=False
+        ),
+        "homodyne_phase_space": plot_phase_space(
+            homodyne_reordered, "idler", show=False
+        ),
+        "heterodyne_phase_space": plot_phase_space(
+            heterodyne_reordered, "idler", show=False
+        ),
         "measurement_trajectory": plot_phase_space_trajectory(
-            [homodyne_reordered, heterodyne_reordered], "idler", show=True
+            [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
     }
 
-    # Do not clear/close figures after show=True: interactive backends retain
-    # toolbar callbacks that become invalid when their axes are destroyed.
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)
 
     LOGGER.info(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
-        len(figures), output_dir, len(mzi_scan["theta"]),
+        len(figures),
+        output_dir,
+        len(mzi_scan["theta"]),
     )
 
 
@@ -141,13 +154,14 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     """Run the combined Gaussian/Fock experiment and save its journal entry."""
     config = RunConfig.from_toml(config_path)
     rng = np.random.default_rng(config.seed)
+    output_dir = Path(config.output_dir)
 
     logging.basicConfig(
         level=getattr(logging, config.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    journal = SimulationJournal(config.output_dir)
+    journal = SimulationJournal(output_dir)
     circuit = build_circuit(config, rng)
     initial = GaussianState.vacuum(circuit.modes)
     final_state = circuit.run(initial)
@@ -177,7 +191,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         subtracted,
         added,
         mzi_scan,
-        Path(config.output_dir) / "plots",
+        output_dir / "plots",
     )
 
     entry = journal.new_entry(
@@ -188,7 +202,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "and photon-addition chain, a lossy Mach-Zehnder scan, and both "
             "homodyne and heterodyne measurements."
         ),
-        metadata={"circuit_name": circuit.name, "output_dir": str(config.output_dir)},
+        metadata={"circuit_name": circuit.name, "output_dir": str(output_dir)},
     )
     entry.log_run(
         "gaussian_circuit",
@@ -200,13 +214,27 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "covariance_trace": float(np.trace(final_state.covariance)),
         },
         arrays={
-            "displacement": {"data": final_state.displacement, "unit": "quadrature", "dimensions": ["quadrature"], "description": "Final first moments."},
-            "covariance": {"data": final_state.covariance, "unit": "quadrature^2", "dimensions": ["quadrature", "quadrature"], "description": "Final covariance matrix."},
+            "displacement": {
+                "data": final_state.displacement,
+                "unit": "quadrature",
+                "dimensions": ["quadrature"],
+                "description": "Final first moments.",
+            },
+            "covariance": {
+                "data": final_state.covariance,
+                "unit": "quadrature^2",
+                "dimensions": ["quadrature", "quadrature"],
+                "description": "Final covariance matrix.",
+            },
         },
     )
     entry.log_run(
         "fock_chain",
-        metrics={"cat_trace": float(cat.tr()), "subtracted_trace": float(subtracted.tr()), "added_trace": float(added.tr())},
+        metrics={
+            "cat_trace": float(cat.tr()),
+            "subtracted_trace": float(subtracted.tr()),
+            "added_trace": float(added.tr()),
+        },
     )
     entry.log_run(
         "mach_zehnder_scan",
@@ -216,24 +244,52 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "max_parity1": float(np.max(mzi_scan["parity1"])),
         },
         arrays={
-            "theta": {"data": mzi_scan["theta"], "unit": "radians", "dimensions": ["phase"], "description": "Scanned phase in the lossy MZI arm."},
-            "n1": {"data": mzi_scan["n1"], "unit": "photons", "dimensions": ["phase"], "description": "Mean photon number at MZI output port 1."},
-            "n2": {"data": mzi_scan["n2"], "unit": "photons", "dimensions": ["phase"], "description": "Mean photon number at MZI output port 2."},
-            "parity1": {"data": mzi_scan["parity1"], "unit": "dimensionless", "dimensions": ["phase"], "description": "Parity signal at MZI output port 1."},
+            "theta": {
+                "data": mzi_scan["theta"],
+                "unit": "radians",
+                "dimensions": ["phase"],
+                "description": "Scanned phase in the lossy MZI arm.",
+            },
+            "n1": {
+                "data": mzi_scan["n1"],
+                "unit": "photons",
+                "dimensions": ["phase"],
+                "description": "Mean photon number at MZI output port 1.",
+            },
+            "n2": {
+                "data": mzi_scan["n2"],
+                "unit": "photons",
+                "dimensions": ["phase"],
+                "description": "Mean photon number at MZI output port 2.",
+            },
+            "parity1": {
+                "data": mzi_scan["parity1"],
+                "unit": "dimensionless",
+                "dimensions": ["phase"],
+                "description": "Parity signal at MZI output port 1.",
+            },
         },
     )
     entry.log_run(
         "homodyne_measurement",
         final_state=homodyne_state,
-        metrics={"outcome": float(homodyne_outcome), "phase": float(np.pi / 6), "remaining_modes": len(homodyne_state.modes)},
+        metrics={
+            "outcome": float(homodyne_outcome),
+            "phase": float(np.pi / 6),
+            "remaining_modes": len(homodyne_state.modes),
+        },
     )
     entry.log_run(
         "heterodyne_measurement",
         final_state=heterodyne_state,
-        metrics={"outcome_x": float(heterodyne_outcome[0]), "outcome_p": float(heterodyne_outcome[1]), "remaining_modes": len(heterodyne_state.modes)},
+        metrics={
+            "outcome_x": float(heterodyne_outcome[0]),
+            "outcome_p": float(heterodyne_outcome[1]),
+            "remaining_modes": len(heterodyne_state.modes),
+        },
     )
 
-    saved_path = entry.save(config.output_dir)
+    saved_path = entry.save(output_dir)
     LOGGER.info("Saved journal entry to %s", saved_path)
     return saved_path
 
