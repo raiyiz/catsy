@@ -1,6 +1,8 @@
 <sub><sub>cats & states & oha & phos & nothingness, very purr so</sub></sub>
+
 \
 \
+
 # catsy
 
 `catsy` is a Python toolkit for continuous-variable quantum optics. It provides a compact set of tools for building, manipulating, simulating, visualizing, and persisting quantum optical states and experiments.
