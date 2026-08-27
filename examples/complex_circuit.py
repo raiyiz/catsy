@@ -42,8 +42,7 @@ def main(output_dir: Path | None = None) -> Path:
     root = Path(output_dir) if output_dir is not None else Path("runs") / "complex_circuit"
     journal = SimulationJournal(root)
     circuit = build_circuit()
-    initial = GaussianState.tmsv("signal", "idler", r=0.5)
-    initial = initial.add_mode("reference") if hasattr(initial, "add_mode") else initial
+    initial = GaussianState.vacuum(circuit.modes)
 
     LOGGER.info("Running circuit %r on modes %s", circuit.name, circuit.modes)
     final_state = circuit.run(initial)
