@@ -13,18 +13,18 @@ from config import RunConfig
 LOGGER = logging.getLogger(__name__)
 
 
-def build_circuit() -> Circuit:
-    """Construct a small but representative multi-mode Gaussian circuit."""
-    circuit = Circuit(name="Three-mode demo")
+def build_circuit(config: RunConfig) -> Circuit:
+    """Construct a representative multi-mode Gaussian circuit."""
+    circuit = Circuit(name=config.circuit_name)
     signal = circuit.mode("signal")
     idler = circuit.mode("idler")
     reference = circuit.mode("reference")
 
     return (
         circuit
-        .squeeze(signal, r=0.7, theta=0.0)
+        .squeeze(signal, r=config.signal_squeezing, theta=0.0)
         .displace(signal, alpha=0.4 + 0.1j)
-        .beam_splitter(signal, idler, eta=0.65)
+        .beam_splitter(signal, idler, eta=config.signal_idler_transmissivity)
         .rotate(idler, phi=0.35)
         .thermal_loss(idler, eta=0.9, n_thermal=0.15)
         .squeeze(reference, r=0.35, theta=np.pi / 4)
@@ -38,12 +38,12 @@ def main(config_path: str | Path = Path("examples/config.toml")) -> Path:
     config = RunConfig.from_toml(config_path)
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, config.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
     journal = SimulationJournal(config.output_dir)
-    circuit = build_circuit()
+    circuit = build_circuit(config)
     initial = GaussianState.vacuum(circuit.modes)
 
     LOGGER.info("Running circuit %r on modes %s", circuit.name, circuit.modes)
