@@ -36,6 +36,33 @@ jobs:
           name: coverage
           path: coverage/coverage.xml
 
+  complex-example:
+    name: complex example
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Set up Python
+        run: uv python install 3.13
+      - name: Install dependencies
+        run: uv sync --group dev --locked
+      - name: Run complex example
+        run: uv run python examples/complex_example.py
+      - name: Upload complex example artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complex-example
+          path: runs/complex_circuit/
+          if-no-files-found: error
+
   ruff:
     name: ruff
     runs-on: ubuntu-latest
