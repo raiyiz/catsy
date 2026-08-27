@@ -34,7 +34,7 @@ _DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.toml"
 
 
 def build_circuit(config: RunConfig, rng: np.random.Generator) -> Circuit:
-    """Construct a three-mode Gaussian preparation and readout circuit."""
+    """Construct a three-mode Gaussian state-preparation and readout circuit."""
     circuit = Circuit(name=config.circuit_name)
     signal = circuit.mode("signal")
     idler = circuit.mode("idler")
@@ -115,26 +115,16 @@ def plot_experiment(
     heterodyne_reordered = heterodyne_state.reorder_modes(remaining_modes)
 
     figures = {
-        "signal_phase_space": plot_phase_space(final_state, "signal", show=False),
-        "covariance_matrix": plot_covariance_matrix(final_state, show=False),
-        "mode_correlations": plot_mode_correlation_map(final_state, show=False),
-        "cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150, show=False),
-        "cat_dashboard": plot_fock_dashboard(
-            cat, xlim=(-4.5, 4.5), resolution=120, show=False
-        ),
-        "subtracted_dashboard": plot_fock_dashboard(
-            subtracted, xlim=(-4.5, 4.5), resolution=120, show=False
-        ),
-        "added_dashboard": plot_fock_dashboard(
-            added, xlim=(-4.5, 4.5), resolution=120, show=False
-        ),
-        "homodyne_phase_space": plot_phase_space(
-            homodyne_reordered, "idler", show=False
-        ),
-        "heterodyne_phase_space": plot_phase_space(
-            heterodyne_reordered, "idler", show=False
-        ),
-        "measurement_trajectory": plot_phase_space_trajectory(
+        "01_final_signal_phase_space": plot_phase_space(final_state, "signal", show=False),
+        "02_final_covariance_matrix": plot_covariance_matrix(final_state, show=False),
+        "03_final_mode_correlations": plot_mode_correlation_map(final_state, show=False),
+        "04_even_cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150, show=False),
+        "05_even_cat_state": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120, show=False),
+        "06_after_photon_subtraction": plot_fock_dashboard(subtracted, xlim=(-4.5, 4.5), resolution=120, show=False),
+        "07_after_photon_addition": plot_fock_dashboard(added, xlim=(-4.5, 4.5), resolution=120, show=False),
+        "08_after_homodyne_idler": plot_phase_space(homodyne_reordered, "idler", show=False),
+        "09_after_heterodyne_idler": plot_phase_space(heterodyne_reordered, "idler", show=False),
+        "10_measurement_conditioning": plot_phase_space_trajectory(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
     }
@@ -169,7 +159,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     LOGGER.info("Running Gaussian circuit %r on modes %s", circuit.name, circuit.modes)
     cat, subtracted, added, mzi_scan = run_fock_chain()
     LOGGER.info(
-        "Fock chain complete: cat -> realistic subtraction -> realistic addition -> MZI; "
+        "Fock chain complete: even cat -> photon subtraction -> photon addition -> MZI; "
         "max output photon number %.3f",
         float(np.max(mzi_scan["n1"])),
     )
@@ -177,7 +167,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     homodyne_outcome, homodyne_state = run_homodyne(final_state, rng)
     heterodyne_outcome, heterodyne_state = run_heterodyne(final_state, rng)
     LOGGER.info(
-        "Homodyne x_phi=%.4f; heterodyne (x,p)=(%.4f, %.4f)",
+        "Signal readout: homodyne x_phi=%.4f; heterodyne (x,p)=(%.4f, %.4f)",
         homodyne_outcome,
         heterodyne_outcome[0],
         heterodyne_outcome[1],
@@ -195,17 +185,18 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     )
 
     entry = journal.new_entry(
-        "Gaussian, heralded Fock, and Mach-Zehnder experiment",
+        "Three-mode Gaussian preparation, heralded Fock processing, and interferometric readout",
         tags=["example", "gaussian", "fock", "interferometer", "measurement", "plotting"],
         notes=(
-            "Runs a three-mode Gaussian circuit, a heralded photon-subtraction "
-            "and photon-addition chain, a lossy Mach-Zehnder scan, and both "
-            "homodyne and heterodyne measurements."
+            "Prepares a three-mode Gaussian state, independently explores an even cat "
+            "through heralded photon subtraction and addition, scans a lossy Mach-Zehnder "
+            "interferometer, and compares homodyne with heterodyne conditioning of the "
+            "Gaussian signal mode."
         ),
         metadata={"circuit_name": circuit.name, "output_dir": str(output_dir)},
     )
     entry.log_run(
-        "gaussian_circuit",
+        "gaussian_state_preparation",
         circuit=circuit,
         final_state=final_state,
         metrics={
@@ -229,7 +220,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         },
     )
     entry.log_run(
-        "fock_chain",
+        "heralded_fock_processing",
         metrics={
             "cat_trace": float(cat.tr()),
             "subtracted_trace": float(subtracted.tr()),
@@ -237,7 +228,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         },
     )
     entry.log_run(
-        "mach_zehnder_scan",
+        "lossy_mach_zehnder_scan",
         metrics={
             "max_output_n1": float(np.max(mzi_scan["n1"])),
             "max_output_n2": float(np.max(mzi_scan["n2"])),
@@ -271,7 +262,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         },
     )
     entry.log_run(
-        "homodyne_measurement",
+        "homodyne_signal_readout",
         final_state=homodyne_state,
         metrics={
             "outcome": float(homodyne_outcome),
@@ -280,7 +271,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         },
     )
     entry.log_run(
-        "heterodyne_measurement",
+        "heterodyne_signal_readout",
         final_state=heterodyne_state,
         metrics={
             "outcome_x": float(heterodyne_outcome[0]),
