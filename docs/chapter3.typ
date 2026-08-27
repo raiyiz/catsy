@@ -79,6 +79,17 @@ Function objects are intentionally kept out of JSON. A serialized gate contains 
 
 The registry maps serialized Gate names back to their transform functions when loading a circuit. Execution itself uses the transform already stored in each Gate instance.
 
+A complex Python number is not JSON-serializable, but the Displacer gate and `InitialState(kind="coherent")` both accept a complex displacement amplitude `alpha` as a convenience. Rather than reject it at serialization time, `Gate.kwargs` canonicalizes `alpha` into its real-valued quadratures `x`, `p` (via `GaussianState._normalize_translation`,
+$x = sqrt(2) Re(alpha), quad p = sqrt(2) Im(alpha)$) *at gate-construction time* -- before a `Gate` is even built, not only when it later runs:
+
+```python
+circuit.displace("a", alpha=0.2 + 0.1j)
+circuit.to_dict()["gates"][-1]["kwargs"]
+# -> {"x": 0.28284..., "p": 0.14142...}  -- never {"alpha": ...}
+```
+
+This is a lossless, format-only substitution: both transforms accept `x`/`p` directly as an equivalent input, so nothing about the physics changes -- only what's stored on disk. It means a circuit built with `alpha=` round-trips through `save`/`load` and through `SimulationJournal` (Chapter 9) the same as one built with `x=`/`p=` directly.
+
 == Sequential execution
 The `run` method applies the bound Gates in order:
 
