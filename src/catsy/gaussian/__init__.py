@@ -668,7 +668,12 @@ def initial_state(
     if kind == "vacuum":
         return GaussianState.vacuum(modes)
     if kind == "coherent":
-        return GaussianState.coherent(modes, cast(complex, kwargs["alpha"]))
+        alpha, _, _ = GaussianState._normalize_translation(
+            alpha=cast(complex, kwargs["alpha"]) if "alpha" in kwargs else None,
+            x=cast(float, kwargs["x"]) if "x" in kwargs else None,
+            p=cast(float, kwargs["p"]) if "p" in kwargs else None,
+        )
+        return GaussianState.coherent(modes, alpha)
     if kind == "tmsv":
         if len(modes) != 2:
             raise ValueError("tmsv initial state requires exactly two modes.")
