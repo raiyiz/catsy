@@ -23,7 +23,7 @@ def build_circuit(config: RunConfig) -> Circuit:
     return (
         circuit
         .squeeze(signal, r=config.signal_squeezing, theta=0.0)
-        .displace(signal, alpha=0.4 + 0.1j)
+        .displace(signal, x=0.4, p=0.1)
         .beam_splitter(signal, idler, eta=config.signal_idler_transmissivity)
         .rotate(idler, phi=0.35)
         .thermal_loss(idler, eta=0.9, n_thermal=0.15)
