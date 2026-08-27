@@ -78,6 +78,18 @@ def run_homodyne(
     )
 
 
+def run_heterodyne(
+    state: GaussianState, rng: np.random.Generator
+) -> tuple[np.ndarray, GaussianState]:
+    """Measure both signal quadratures and return the conditioned state."""
+    outcome, conditioned = GaussianMeasurements.heterodyne_measurement(
+        state,
+        measured_mode="signal",
+        rng=rng,
+    )
+    return np.asarray(outcome), conditioned
+
+
 def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     """Run the combined Gaussian/Fock experiment and save its journal entry."""
     config = RunConfig.from_toml(config_path)
@@ -107,13 +119,21 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         homodyne_outcome,
         homodyne_state.modes,
     )
+    heterodyne_outcome, heterodyne_state = run_heterodyne(final_state, rng)
+    LOGGER.info(
+        "Heterodyne measurement on signal: (x,p)=(%.4f, %.4f); conditioned modes=%s",
+        heterodyne_outcome[0],
+        heterodyne_outcome[1],
+        heterodyne_state.modes,
+    )
 
     entry = journal.new_entry(
         "Gaussian circuit with Mach-Zehnder interferometry",
         tags=["example", "gaussian", "fock", "interferometer", "measurement"],
         notes=(
             "Combines a three-mode Gaussian circuit with a lossy Mach-Zehnder "
-            "scan driven by an even cat state, followed by a homodyne measurement."
+            "scan driven by an even cat state, then compares homodyne and "
+            "heterodyne readout of the Gaussian signal mode."
         ),
         metadata={
             "circuit_name": circuit.name,
@@ -185,6 +205,15 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "outcome": float(homodyne_outcome),
             "phase": float(np.pi / 6),
             "remaining_modes": len(homodyne_state.modes),
+        },
+    )
+    entry.log_run(
+        "heterodyne_measurement",
+        final_state=heterodyne_state,
+        metrics={
+            "outcome_x": float(heterodyne_outcome[0]),
+            "outcome_p": float(heterodyne_outcome[1]),
+            "remaining_modes": len(heterodyne_state.modes),
         },
     )
 
