@@ -26,7 +26,7 @@ from catsy.gaussian.visualization import (
 
 try:
     from .config import RunConfig
-except ImportError:  # running as a script (`python examples/complex_example.py`)
+except ImportError:
     from config import RunConfig  # type: ignore[no-redef]
 
 LOGGER = logging.getLogger(__name__)
@@ -54,11 +54,10 @@ def build_circuit(config: RunConfig, rng: np.random.Generator) -> Circuit:
 
 
 def make_cat_state(N_cutoff: int, alpha: complex) -> qt.Qobj:
-    """Return an even Schrödinger-cat density matrix in a truncated Fock basis."""
+    """Return an even Schrödinger-cat state in a truncated Fock basis."""
     plus = qt.coherent(N_cutoff, alpha)
     minus = qt.coherent(N_cutoff, -alpha)
-    ket = (plus + minus).unit()
-    return qt.ket2dm(ket)
+    return qt.ket2dm((plus + minus).unit())
 
 
 def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
@@ -108,6 +107,12 @@ def plot_experiment(
     """Create diagnostics using only Catsy's public plotting helpers."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Measurements remove the measured signal mode. Normalize the remaining
+    # states to a common ordering before passing them to the trajectory helper.
+    remaining_modes = tuple(mode for mode in final_state.modes if mode != "signal")
+    homodyne_reordered = homodyne_state.reorder_modes(remaining_modes)
+    heterodyne_reordered = heterodyne_state.reorder_modes(remaining_modes)
+
     figures = {
         "signal_phase_space": plot_phase_space(final_state, "signal"),
         "covariance_matrix": plot_covariance_matrix(final_state),
@@ -116,10 +121,10 @@ def plot_experiment(
         "cat_dashboard": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120),
         "subtracted_dashboard": plot_fock_dashboard(subtracted, xlim=(-4.5, 4.5), resolution=120),
         "added_dashboard": plot_fock_dashboard(added, xlim=(-4.5, 4.5), resolution=120),
-        "homodyne_phase_space": plot_phase_space(homodyne_state, "idler"),
-        "heterodyne_phase_space": plot_phase_space(heterodyne_state, "idler"),
+        "homodyne_phase_space": plot_phase_space(homodyne_reordered, "idler"),
+        "heterodyne_phase_space": plot_phase_space(heterodyne_reordered, "idler"),
         "measurement_trajectory": plot_phase_space_trajectory(
-            [final_state, homodyne_state, heterodyne_state], "idler"
+            [homodyne_reordered, heterodyne_reordered], "idler"
         ),
     }
 
