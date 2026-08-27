@@ -1,59 +1,94 @@
-
+<sub><sub>cats & states & oha & phos & nothingness, very purr so</sub></sub>
+\
+\
 # catsy
 
-`catsy` is a Python toolkit for continuous-variable quantum optics, built around Gaussian states in phase space.
+`catsy` is a Python toolkit for continuous-variable quantum optics. It provides a compact set of tools for building, manipulating, simulating, visualizing, and persisting quantum optical states and experiments.
 
-The main idea is to keep Gaussian calculations in phase space where possible, describe experiments as reusable circuits, and move to a truncated Fock-space representation when needed.
+The central design choice is to keep calculations in the representation that is most natural for them:
 
+* **Gaussian states** are represented directly in phase space by their first moments and covariance matrices.
+* **Circuits** describe a sequence of optical transformations independently of any particular input state.
+* **Fock-space calculations** use QuTiP when a truncated Hilbert-space representation is needed, for example for non-Gaussian states or photon-number observables.
+* **Visualization and journaling** provide common ways to inspect and persist the results of either representation.
 
-### For a more detailed documentation, check the latest build of the [Specifications](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst)
-
-
-### Status
-
-[![Pipeline status](https://gitlab.uni-hannover.de/inl/catsy/badges/main/pipeline.svg)](https://gitlab.uni-hannover.de/inl/catsy/-/pipelines) [![Coverage](https://gitlab.uni-hannover.de/inl/catsy/badges/main/coverage.svg)](https://inl.idmpages.uni-h.de/catsy/)
-
-***⚠ This package was build with heavy use of AI***
-
----
-
-The default branch publishes the latest interactive HTML coverage report through GitLab Pages. Every pipeline (including merge requests) also attaches its own HTML coverage report directly to the `pytest` job -- open the job and use the "HTML coverage report" artifact link if the default-branch Pages link above is ever out of date. The CI pipeline also uploads the Cobertura XML report so GitLab can show the coverage percentage and line-by-line coverage annotations in merge requests.
-
-
-## Quick start
+This means a typical workflow can remain entirely Gaussian until a Fock-space representation is actually useful:
 
 ```python
-from catsy import Circuit, GaussianState, Gate, loss
-from catsy.gaussian.visualization import plot_covariance_matrix
+from catsy import Circuit, GaussianState
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
 
-noise = Gate(
-    name="Noise",
-    transform=loss,
-    modes=("a",),
-    kwargs={"eta": 0.9},
+circuit = (
+    Circuit()
+    .add_mode("a")
+    .add_mode("b")
 )
-
-circuit = Circuit().add_mode("a").add_mode("b")
-circuit.add_gate(noise)
+circuit.squeeze("a", r=0.5)
+circuit.beam_splitter("a", "b", eta=0.5)
 
 final = circuit.run(initial)
-plot_covariance_matrix(final)
 ```
 
-Here `r` is the squeezing strength and `eta` is the power transmissivity of the loss channel.
+## States, modes, and circuits
 
-`add_mode("a")` above is a shorthand for `circuit.mode("a")`, which registers the mode and returns a `Mode` handle owned by that circuit:
+There are two related ideas to keep separate:
+
+**A mode name** is simply a string such as `"a"` or `"signal"`. Mode names are what appear in serialized data and in the state representation.
+
+**A `Mode` object** is a runtime handle belonging to a particular `Circuit`. It lets the circuit API check that a mode is being used with the circuit that owns it.
+
+You normally do not need to construct `Mode` objects yourself. A circuit can create one for you:
 
 ```python
 circuit = Circuit()
+
 a = circuit.mode("a")
 b = circuit.mode("b")
-circuit.squeeze(a, r=0.5).beam_splitter(a, b, eta=0.5)
+
+circuit.squeeze(a, r=0.5)
+circuit.beam_splitter(a, b, eta=0.5)
 ```
 
-Building gates from these handles instead of bare strings means a mode meant for one circuit can't accidentally be wired into a different one -- passing a `Mode` owned by another circuit (or a free `Mode(name)` with no owner) raises immediately. Plain mode-name strings still work anywhere a registered mode is expected, as in the quick start above.
+The `mode()` method registers the mode **and returns its `Mode` handle**.
+
+For fluent construction, `add_mode()` is a convenience method that performs the same registration but returns the **circuit itself**, so calls can be chained:
+
+```python
+circuit = (
+    Circuit()
+    .add_mode("a")
+    .add_mode("b")
+    .add_mode("reference")
+)
+```
+
+The two methods therefore have different purposes:
+
+| Method                  | Registers the mode | Returns                    |
+| ----------------------- | ------------------ | -------------------------- |
+| `circuit.mode("a")`     | Yes                | the new `Mode` handle      |
+| `circuit.add_mode("a")` | Yes                | the `Circuit` for chaining |
+
+Gate methods such as `squeeze()`, `rotate()`, `displace()`, and `beam_splitter()` accept either a registered mode name or the corresponding `Mode` handle. Using handles enables ownership checking:
+
+```python
+first = Circuit().add_mode("a")
+second = Circuit().add_mode("a")
+
+a = first.mode("a")
+second.squeeze(a, r=0.5)  # rejected: `a` belongs to another circuit
+```
+
+Plain strings remain convenient when the circuit is small and the mode ownership is obvious:
+
+```python
+circuit.squeeze("a", r=0.5)
+circuit.beam_splitter("a", "b", eta=0.5)
+```
+
+The string identifies a mode by **name**, while `Mode` identifies the particular runtime mode owned by a circuit.
+
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
@@ -188,7 +223,6 @@ The repository also contains examples and tests that can be useful when explorin
 `catsy` is focused on continuous-variable quantum optics rather than providing a general-purpose quantum-computing framework. The API is still developing, but the core conventions and numerical operations are covered by the test suite.
 
 
-<sub>cats & states & oha & phos & nothingness, very pur so</sub>
 
 ## Test coverage
 
