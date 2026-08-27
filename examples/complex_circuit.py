@@ -6,23 +6,30 @@ import logging
 from pathlib import Path
 
 import numpy as np
-from config import RunConfig
 
 from catsy import Circuit, GaussianState, SimulationJournal
 
+try:
+    from .config import RunConfig
+except ImportError:  # running as a script (`python examples/complex_circuit.py`)
+    from config import RunConfig  # type: ignore[no-redef]
+
 LOGGER = logging.getLogger(__name__)
 
+_DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.toml"
 
-def build_circuit(config: RunConfig) -> Circuit:
+
+def build_circuit(config: RunConfig, rng: np.random.Generator) -> Circuit:
     """Construct a representative multi-mode Gaussian circuit."""
     circuit = Circuit(name=config.circuit_name)
     signal = circuit.mode("signal")
     idler = circuit.mode("idler")
     reference = circuit.mode("reference")
 
+    alpha = complex(rng.normal(scale=0.3), rng.normal(scale=0.3))
     return (
         circuit.squeeze(signal, r=config.signal_squeezing, theta=0.0)
-        .displace(signal, x=0.4, p=0.1)
+        .displace(signal, alpha=alpha)
         .beam_splitter(signal, idler, eta=config.signal_idler_transmissivity)
         .rotate(idler, phi=0.35)
         .thermal_loss(idler, eta=0.9, n_thermal=0.15)
@@ -32,9 +39,10 @@ def build_circuit(config: RunConfig) -> Circuit:
     )
 
 
-def main(config_path: str | Path = Path("examples/config.toml")) -> Path:
+def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     """Run the demo circuit and return the saved journal entry path."""
     config = RunConfig.from_toml(config_path)
+    rng = np.random.default_rng(config.seed)
 
     logging.basicConfig(
         level=getattr(logging, config.log_level),
@@ -42,7 +50,7 @@ def main(config_path: str | Path = Path("examples/config.toml")) -> Path:
     )
 
     journal = SimulationJournal(config.output_dir)
-    circuit = build_circuit(config)
+    circuit = build_circuit(config, rng)
     initial = GaussianState.vacuum(circuit.modes)
 
     LOGGER.info("Running circuit %r on modes %s", circuit.name, circuit.modes)
