@@ -54,10 +54,11 @@ def build_circuit(config: RunConfig, rng: np.random.Generator) -> Circuit:
 
 
 def make_cat_state(N_cutoff: int, alpha: complex) -> qt.Qobj:
-    """Return an even Schrödinger-cat state in a truncated Fock basis."""
+    """Return an even Schrödinger-cat density matrix in a truncated Fock basis."""
     plus = qt.coherent(N_cutoff, alpha)
     minus = qt.coherent(N_cutoff, -alpha)
-    return (plus + minus).unit()
+    ket = (plus + minus).unit()
+    return qt.ket2dm(ket)
 
 
 def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
