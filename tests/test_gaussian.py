@@ -207,7 +207,7 @@ def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
 )
 def test_displacement_rejects_invalid_argument_combinations(kwargs, match):
     state = GaussianState.vacuum(("a",))
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(TypeError, match=match):
         state.displace("a", **kwargs)
 
 

@@ -86,6 +86,78 @@ class GaussianState:
     modes: Modes
     displacement: FloatArray
     covariance: FloatArray
+    @staticmethod
+    def _normalize_translation(
+        *,
+        alpha: complex | None = None,
+        x: float | None = None,
+        p: float | None = None,
+    ) -> tuple[complex, float, float]:
+        """Normalize a displacement specified as ``alpha`` or ``(x, p)``.
+
+        Exactly one representation must be supplied:
+
+        - ``alpha``: complex coherent-state amplitude.
+        - ``x`` and ``p``: phase-space displacement coordinates.
+
+        Returns
+        -------
+        tuple[complex, float, float]
+            ``(alpha, x, p)`` in canonical form, with finite real-valued
+            quadratures.
+
+        Raises
+        ------
+        TypeError
+            If an input has an invalid type.
+        ValueError
+            If the two representations are mixed, only one of ``x``/``p`` is
+            supplied, or any supplied value is non-finite.
+        """
+        has_alpha = alpha is not None
+        has_x = x is not None
+        has_p = p is not None
+
+        # if has_alpha and (has_x or has_p):
+        #     raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
+
+        if has_alpha:
+            if has_x or has_p:
+                raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
+
+            if not isinstance(alpha, int | float | complex):
+                raise TypeError(f"alpha must be numeric, got {alpha!r}.")
+
+            alpha_value = complex(alpha)
+            if not (
+                np.isfinite(alpha_value.real)
+                and np.isfinite(alpha_value.imag)
+            ):
+                raise ValueError(f"alpha must be finite, got {alpha!r}.")
+
+            x_value = float(np.sqrt(2.0) * alpha_value.real)
+            p_value = float(np.sqrt(2.0) * alpha_value.imag)
+            # return alpha_value, x_value, p_value
+
+        else:
+            if has_x != has_p:
+                raise ValueError("Must supply both `x` and `p` together.")
+
+            if not isinstance(x, int | float) or not isinstance(p, int | float):
+                raise TypeError(f"x and p must be real numbers, got x={x!r}, p={p!r}.")
+
+            x_value = float(x)
+            p_value = float(p)
+
+            if not np.isfinite(x_value):
+                raise ValueError(f"x must be finite, got {x!r}.")
+            if not np.isfinite(p_value):
+                raise ValueError(f"p must be finite, got {p!r}.")
+
+            alpha_value = complex(
+                (x_value + 1j * p_value) / np.sqrt(2.0)
+            )
+        return alpha_value, x_value, p_value
 
     def __post_init__(self) -> None:
         self._validate()
@@ -239,14 +311,7 @@ class GaussianState:
         Give either ``alpha`` or both ``x`` and ``p``; supplying both forms is
         rejected.
         """
-        if alpha is not None and (x is not None or p is not None):
-            raise ValueError("Pass either `alpha` or (`x`, `p`), not both.")
-        if alpha is not None:
-            d_x, d_p = np.sqrt(2.0) * np.real(alpha), np.sqrt(2.0) * np.imag(alpha)
-        elif x is not None and p is not None:
-            d_x, d_p = x, p
-        else:
-            raise ValueError("Must supply either `alpha` or both `x` and `p`.")
+        _, d_x, d_p = self._normalize_translation(alpha=alpha, x=x, p=p)
         idx = self.get_mode_index(mode)
         new_d = self.displacement.copy()
         new_d[idx] += d_x
