@@ -15,6 +15,7 @@ from catsy import (
     MachZehnderInterferometer,
     SimulationJournal,
 )
+from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
 from catsy.fock.visualization import plot_fock_dashboard, plot_wigner
 from catsy.gaussian.visualization import (
     plot_covariance_matrix,
@@ -59,13 +60,25 @@ def make_cat_state(N_cutoff: int, alpha: complex) -> qt.Qobj:
     return (plus + minus).unit()
 
 
-def run_mach_zehnder() -> tuple[qt.Qobj, dict[str, np.ndarray]]:
-    """Scan a lossy Mach-Zehnder interferometer with a non-Gaussian input."""
+def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
+    """Prepare a cat, herald photon subtraction, then herald photon addition."""
+    cat = make_cat_state(N_cutoff=18, alpha=1.1 + 0.15j)
+    subtracted = realistic_photon_subtraction(
+        cat,
+        tap_reflectivity=0.08,
+        detector_efficiency=0.75,
+        ancilla_cutoff=6,
+    )
+    added = realistic_photon_addition(
+        subtracted,
+        coupling_strength=0.045,
+        detector_efficiency=0.75,
+        ancilla_cutoff=6,
+    )
     theta = np.linspace(0.0, 2.0 * np.pi, 33)
     interferometer = MachZehnderInterferometer(kappa=0.08, N_cutoff=18, loss_time=0.75)
-    cat = make_cat_state(N_cutoff=18, alpha=1.1 + 0.15j)
-    scan = interferometer.scan(cat, theta)
-    return cat, {key: np.asarray(value) for key, value in scan.items()}
+    scan = interferometer.scan(added, theta)
+    return cat, subtracted, added, {key: np.asarray(value) for key, value in scan.items()}
 
 
 def run_homodyne(
@@ -92,6 +105,8 @@ def plot_experiment(
     homodyne_state: GaussianState,
     heterodyne_state: GaussianState,
     cat: qt.Qobj,
+    subtracted: qt.Qobj,
+    added: qt.QObj,
     mzi_scan: dict[str, np.ndarray],
     output_dir: Path,
 ) -> None:
@@ -104,16 +119,14 @@ def plot_experiment(
         "mode_correlations": plot_mode_correlation_map(final_state),
         "cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150),
         "cat_dashboard": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120),
+        "subtracted_dashboard": plot_fock_dashboard(subtracted, xlim=(-4.5, 4.5), resolution=120),
+        "added_dashboard": plot_fock_dashboard(added, xlim=(-4.5, 4.5), resolution=120),
+        "homodyne_phase_space": plot_phase_space(homodyne_state, "idler"),
+        "heterodyne_phase_space": plot_phase_space(heterodyne_state, "idler"),
+        "measurement_trajectory": plot_phase_space_trajectory(
+            [final_state, homodyne_state, heterodyne_state], "idler"
+        ),
     }
-
-    # The measurement states are deliberately plotted together: this makes
-    # the difference between one-quadrature and two-quadrature conditioning
-    # visible without introducing Matplotlib calls in the example itself.
-    figures["homodyne_phase_space"] = plot_phase_space(homodyne_state, "idler")
-    figures["heterodyne_phase_space"] = plot_phase_space(heterodyne_state, "idler")
-    figures["measurement_trajectory"] = plot_phase_space_trajectory(
-        [final_state, homodyne_state, heterodyne_state], "idler"
-    )
 
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)
@@ -143,10 +156,10 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     final_state = circuit.run(initial)
 
     LOGGER.info("Running Gaussian circuit %r on modes %s", circuit.name, circuit.modes)
-    cat, mzi_scan = run_mach_zehnder()
+    cat, subtracted, added, mzi_scan = run_fock_chain()
     LOGGER.info(
-        "MZI phase scan complete: %d points, max output photon number %.3f",
-        len(mzi_scan["theta"]),
+        "Fock chain complete: cat -> realistic subtraction -> realistic addition -> MZI; "
+        "max output photon number %.3f",
         float(np.max(mzi_scan["n1"])),
     )
 
@@ -164,17 +177,19 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         homodyne_state,
         heterodyne_state,
         cat,
+        subtracted,
+        added,
         mzi_scan,
         Path(config.output_dir) / "plots",
     )
 
     entry = journal.new_entry(
-        "Gaussian circuit with Mach-Zehnder interferometry",
+        "Gaussian, heralded Fock, and Mach-Zehnder experiment",
         tags=["example", "gaussian", "fock", "interferometer", "measurement", "plotting"],
         notes=(
-            "Combines a three-mode Gaussian circuit with a lossy Mach-Zehnder "
-            "scan driven by an even cat state, then compares homodyne and "
-            "heterodyne readout with phase-space and Fock-space diagnostics."
+            "Runs a three-mode Gaussian circuit, a heralded photon-subtraction "
+            "and photon-addition chain, a lossy Mach-Zehnder scan, and both "
+            "homodyne and heterodyne measurements."
         ),
         metadata={"circuit_name": circuit.name, "output_dir": str(config.output_dir)},
     )
@@ -191,6 +206,10 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "displacement": {"data": final_state.displacement, "unit": "quadrature", "dimensions": ["quadrature"], "description": "Final first moments."},
             "covariance": {"data": final_state.covariance, "unit": "quadrature^2", "dimensions": ["quadrature", "quadrature"], "description": "Final covariance matrix."},
         },
+    )
+    entry.log_run(
+        "fock_chain",
+        metrics={"cat_trace": float(cat.tr()), "subtracted_trace": float(subtracted.tr()), "added_trace": float(added.tr())},
     )
     entry.log_run(
         "mach_zehnder_scan",
