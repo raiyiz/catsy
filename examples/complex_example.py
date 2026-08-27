@@ -15,6 +15,13 @@ from catsy import (
     MachZehnderInterferometer,
     SimulationJournal,
 )
+from catsy.fock.visualization import plot_fock_dashboard, plot_wigner
+from catsy.gaussian.visualization import (
+    plot_covariance_matrix,
+    plot_mode_correlation_map,
+    plot_phase_space,
+    plot_phase_space_trajectory,
+)
 
 try:
     from .config import RunConfig
@@ -49,21 +56,16 @@ def make_cat_state(N_cutoff: int, alpha: complex) -> qt.Qobj:
     """Return an even Schrödinger-cat state in a truncated Fock basis."""
     plus = qt.coherent(N_cutoff, alpha)
     minus = qt.coherent(N_cutoff, -alpha)
-    cat = plus + minus
-    return cat.unit()
+    return (plus + minus).unit()
 
 
-def run_mach_zehnder() -> dict[str, np.ndarray]:
+def run_mach_zehnder() -> tuple[qt.Qobj, dict[str, np.ndarray]]:
     """Scan a lossy Mach-Zehnder interferometer with a non-Gaussian input."""
-    theta = np.linspace(0.0, 2.0 * np.pi, 25)
-    interferometer = MachZehnderInterferometer(
-        kappa=0.08,
-        N_cutoff=18,
-        loss_time=0.75,
-    )
+    theta = np.linspace(0.0, 2.0 * np.pi, 33)
+    interferometer = MachZehnderInterferometer(kappa=0.08, N_cutoff=18, loss_time=0.75)
     cat = make_cat_state(N_cutoff=18, alpha=1.1 + 0.15j)
     scan = interferometer.scan(cat, theta)
-    return {key: np.asarray(value) for key, value in scan.items()}
+    return cat, {key: np.asarray(value) for key, value in scan.items()}
 
 
 def run_homodyne(
@@ -71,10 +73,7 @@ def run_homodyne(
 ) -> tuple[float, GaussianState]:
     """Measure the signal mode's quadrature and return the conditioned state."""
     return GaussianMeasurements.homodyne_measurement(
-        state,
-        measured_mode="signal",
-        phi=np.pi / 6,
-        rng=rng,
+        state, measured_mode="signal", phi=np.pi / 6, rng=rng
     )
 
 
@@ -83,11 +82,49 @@ def run_heterodyne(
 ) -> tuple[np.ndarray, GaussianState]:
     """Measure both signal quadratures and return the conditioned state."""
     outcome, conditioned = GaussianMeasurements.heterodyne_measurement(
-        state,
-        measured_mode="signal",
-        rng=rng,
+        state, measured_mode="signal", rng=rng
     )
     return np.asarray(outcome), conditioned
+
+
+def plot_experiment(
+    final_state: GaussianState,
+    homodyne_state: GaussianState,
+    heterodyne_state: GaussianState,
+    cat: qt.Qobj,
+    mzi_scan: dict[str, np.ndarray],
+    output_dir: Path,
+) -> None:
+    """Create diagnostics using only Catsy's public plotting helpers."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    figures = {
+        "signal_phase_space": plot_phase_space(final_state, "signal"),
+        "covariance_matrix": plot_covariance_matrix(final_state),
+        "mode_correlations": plot_mode_correlation_map(final_state),
+        "cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150),
+        "cat_dashboard": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120),
+    }
+
+    # The measurement states are deliberately plotted together: this makes
+    # the difference between one-quadrature and two-quadrature conditioning
+    # visible without introducing Matplotlib calls in the example itself.
+    figures["homodyne_phase_space"] = plot_phase_space(homodyne_state, "idler")
+    figures["heterodyne_phase_space"] = plot_phase_space(heterodyne_state, "idler")
+    figures["measurement_trajectory"] = plot_phase_space_trajectory(
+        [final_state, homodyne_state, heterodyne_state], "idler"
+    )
+
+    for name, figure in figures.items():
+        figure.savefig(output_dir / f"{name}.png", dpi=150)
+        figure.clf()
+
+    LOGGER.info(
+        "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
+        len(figures),
+        output_dir,
+        len(mzi_scan["theta"]),
+    )
 
 
 def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
@@ -106,7 +143,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     final_state = circuit.run(initial)
 
     LOGGER.info("Running Gaussian circuit %r on modes %s", circuit.name, circuit.modes)
-    mzi_scan = run_mach_zehnder()
+    cat, mzi_scan = run_mach_zehnder()
     LOGGER.info(
         "MZI phase scan complete: %d points, max output photon number %.3f",
         len(mzi_scan["theta"]),
@@ -114,31 +151,32 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     )
 
     homodyne_outcome, homodyne_state = run_homodyne(final_state, rng)
-    LOGGER.info(
-        "Homodyne measurement on signal: x_phi=%.4f; conditioned modes=%s",
-        homodyne_outcome,
-        homodyne_state.modes,
-    )
     heterodyne_outcome, heterodyne_state = run_heterodyne(final_state, rng)
     LOGGER.info(
-        "Heterodyne measurement on signal: (x,p)=(%.4f, %.4f); conditioned modes=%s",
+        "Homodyne x_phi=%.4f; heterodyne (x,p)=(%.4f, %.4f)",
+        homodyne_outcome,
         heterodyne_outcome[0],
         heterodyne_outcome[1],
-        heterodyne_state.modes,
+    )
+
+    plot_experiment(
+        final_state,
+        homodyne_state,
+        heterodyne_state,
+        cat,
+        mzi_scan,
+        Path(config.output_dir) / "plots",
     )
 
     entry = journal.new_entry(
         "Gaussian circuit with Mach-Zehnder interferometry",
-        tags=["example", "gaussian", "fock", "interferometer", "measurement"],
+        tags=["example", "gaussian", "fock", "interferometer", "measurement", "plotting"],
         notes=(
             "Combines a three-mode Gaussian circuit with a lossy Mach-Zehnder "
             "scan driven by an even cat state, then compares homodyne and "
-            "heterodyne readout of the Gaussian signal mode."
+            "heterodyne readout with phase-space and Fock-space diagnostics."
         ),
-        metadata={
-            "circuit_name": circuit.name,
-            "output_dir": str(config.output_dir),
-        },
+        metadata={"circuit_name": circuit.name, "output_dir": str(config.output_dir)},
     )
     entry.log_run(
         "gaussian_circuit",
@@ -150,18 +188,8 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "covariance_trace": float(np.trace(final_state.covariance)),
         },
         arrays={
-            "displacement": {
-                "data": final_state.displacement,
-                "unit": "quadrature",
-                "dimensions": ["quadrature"],
-                "description": "Final first moments.",
-            },
-            "covariance": {
-                "data": final_state.covariance,
-                "unit": "quadrature^2",
-                "dimensions": ["quadrature", "quadrature"],
-                "description": "Final covariance matrix.",
-            },
+            "displacement": {"data": final_state.displacement, "unit": "quadrature", "dimensions": ["quadrature"], "description": "Final first moments."},
+            "covariance": {"data": final_state.covariance, "unit": "quadrature^2", "dimensions": ["quadrature", "quadrature"], "description": "Final covariance matrix."},
         },
     )
     entry.log_run(
@@ -172,49 +200,21 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "max_parity1": float(np.max(mzi_scan["parity1"])),
         },
         arrays={
-            "theta": {
-                "data": mzi_scan["theta"],
-                "unit": "radians",
-                "dimensions": ["phase"],
-                "description": "Scanned phase in the lossy MZI arm.",
-            },
-            "n1": {
-                "data": mzi_scan["n1"],
-                "unit": "photons",
-                "dimensions": ["phase"],
-                "description": "Mean photon number at MZI output port 1.",
-            },
-            "n2": {
-                "data": mzi_scan["n2"],
-                "unit": "photons",
-                "dimensions": ["phase"],
-                "description": "Mean photon number at MZI output port 2.",
-            },
-            "parity1": {
-                "data": mzi_scan["parity1"],
-                "unit": "dimensionless",
-                "dimensions": ["phase"],
-                "description": "Parity signal at MZI output port 1.",
-            },
+            "theta": {"data": mzi_scan["theta"], "unit": "radians", "dimensions": ["phase"], "description": "Scanned phase in the lossy MZI arm."},
+            "n1": {"data": mzi_scan["n1"], "unit": "photons", "dimensions": ["phase"], "description": "Mean photon number at MZI output port 1."},
+            "n2": {"data": mzi_scan["n2"], "unit": "photons", "dimensions": ["phase"], "description": "Mean photon number at MZI output port 2."},
+            "parity1": {"data": mzi_scan["parity1"], "unit": "dimensionless", "dimensions": ["phase"], "description": "Parity signal at MZI output port 1."},
         },
     )
     entry.log_run(
         "homodyne_measurement",
         final_state=homodyne_state,
-        metrics={
-            "outcome": float(homodyne_outcome),
-            "phase": float(np.pi / 6),
-            "remaining_modes": len(homodyne_state.modes),
-        },
+        metrics={"outcome": float(homodyne_outcome), "phase": float(np.pi / 6), "remaining_modes": len(homodyne_state.modes)},
     )
     entry.log_run(
         "heterodyne_measurement",
         final_state=heterodyne_state,
-        metrics={
-            "outcome_x": float(heterodyne_outcome[0]),
-            "outcome_p": float(heterodyne_outcome[1]),
-            "remaining_modes": len(heterodyne_state.modes),
-        },
+        metrics={"outcome_x": float(heterodyne_outcome[0]), "outcome_p": float(heterodyne_outcome[1]), "remaining_modes": len(heterodyne_state.modes)},
     )
 
     saved_path = entry.save(config.output_dir)
