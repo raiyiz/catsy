@@ -2,8 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, circuits, pappel]
+    branches: [main, circuits, pappel, exilas, exilas-complex-example]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   pytest:
@@ -62,6 +65,31 @@ jobs:
           name: complex-example
           path: runs/complex_circuit/
           if-no-files-found: error
+      - name: Build Pages report
+        if: success() && github.event_name == 'push'
+        run: uv run python scripts/build_complex_report.py
+      - name: Upload Pages report
+        if: success() && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy-complex-report:
+    name: deploy complex example report
+    if: github.event_name == 'push' && (github.ref_name == 'exilas' || github.ref_name == 'exilas-complex-example')
+    needs: complex-example
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   ruff:
     name: ruff
