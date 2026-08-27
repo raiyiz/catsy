@@ -10,6 +10,7 @@ import qutip as qt
 
 from catsy import (
     Circuit,
+    GaussianMeasurements,
     GaussianState,
     MachZehnderInterferometer,
     SimulationJournal,
@@ -65,6 +66,18 @@ def run_mach_zehnder() -> dict[str, np.ndarray]:
     return {key: np.asarray(value) for key, value in scan.items()}
 
 
+def run_homodyne(
+    state: GaussianState, rng: np.random.Generator
+) -> tuple[float, GaussianState]:
+    """Measure the signal mode's quadrature and return the conditioned state."""
+    return GaussianMeasurements.homodyne_measurement(
+        state,
+        measured_mode="signal",
+        phi=np.pi / 6,
+        rng=rng,
+    )
+
+
 def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     """Run the combined Gaussian/Fock experiment and save its journal entry."""
     config = RunConfig.from_toml(config_path)
@@ -88,12 +101,19 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         float(np.max(mzi_scan["n1"])),
     )
 
+    homodyne_outcome, homodyne_state = run_homodyne(final_state, rng)
+    LOGGER.info(
+        "Homodyne measurement on signal: x_phi=%.4f; conditioned modes=%s",
+        homodyne_outcome,
+        homodyne_state.modes,
+    )
+
     entry = journal.new_entry(
         "Gaussian circuit with Mach-Zehnder interferometry",
-        tags=["example", "gaussian", "fock", "interferometer"],
+        tags=["example", "gaussian", "fock", "interferometer", "measurement"],
         notes=(
             "Combines a three-mode Gaussian circuit with a lossy Mach-Zehnder "
-            "scan driven by an even cat state."
+            "scan driven by an even cat state, followed by a homodyne measurement."
         ),
         metadata={
             "circuit_name": circuit.name,
@@ -156,6 +176,15 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
                 "dimensions": ["phase"],
                 "description": "Parity signal at MZI output port 1.",
             },
+        },
+    )
+    entry.log_run(
+        "homodyne_measurement",
+        final_state=homodyne_state,
+        metrics={
+            "outcome": float(homodyne_outcome),
+            "phase": float(np.pi / 6),
+            "remaining_modes": len(homodyne_state.modes),
         },
     )
 
