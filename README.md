@@ -59,11 +59,11 @@ Building gates from these handles instead of bare strings means a mode meant for
 | ------------------------------------------- | --------------------------------- |
 | Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian/__init__.py#L83) |
 | Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian/__init__.py#L83) |
-| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L100), [`Mode`](src/catsy/optics.py#L68) |
+| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L123), [`Mode`](src/catsy/optics.py#L66) |
 | Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian/__init__.py#L558), [`GaussianChannel`](src/catsy/gaussian/__init__.py#L495) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian/__init__.py#L684) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian/__init__.py#L689) |
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian/__init__.py#L83) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L811) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L816) |
 | Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian/__init__.py#L350) |
 | Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L670), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L594) |
 | Visualize a truncated Fock-space state      | [`plot_fock_dashboard()`](src/catsy/fock/visualization.py) |

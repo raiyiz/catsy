@@ -676,10 +676,17 @@ def test_gate_applies_its_bound_transform():
 def test_registered_gates_are_available_as_circuit_methods():
     circuit = Circuit().add_mode("a").squeeze("a", r=0.4).displace("a", alpha=0.2 - 0.4j)
 
-    assert circuit.to_dict()["gates"] == [
-        {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4}},
-        {"gate": "Displacer", "modes": ["a"], "kwargs": {"alpha": 0.2 - 0.4j}},
-    ]
+    gates = circuit.to_dict()["gates"]
+    assert gates[0] == {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4}}
+    # Displacer kwargs are canonicalized to real-valued (x, p) at gate
+    # construction time (see `_normalize_gate_kwargs` in `catsy.optics`),
+    # not stored as the raw complex `alpha` -- a bare `alpha` isn't JSON
+    # serializable, and Gate.kwargs is exactly what gets persisted.
+    assert gates[1]["gate"] == "Displacer"
+    assert gates[1]["modes"] == ["a"]
+    assert gates[1]["kwargs"] == pytest.approx(
+        {"x": np.sqrt(2.0) * 0.2, "p": np.sqrt(2.0) * -0.4}
+    )
 
 
 def test_circuit_gate_methods_build_without_executing():
