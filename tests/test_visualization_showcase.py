@@ -16,7 +16,7 @@ import pytest
 import qutip as qt
 
 from catsy import GaussianState
-from catsy.fock.visualization import plot_photon_statistics
+from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
 from catsy.fock.visualization import plot_wigner as plot_fock_wigner
 from catsy.gaussian import LossChannels
 from catsy.gaussian.visualization import (
@@ -114,50 +114,138 @@ def test_showcase_gaussian_evolution_gallery(
     assert_layout_can_render(figure)
 
 
+def _even_cat(cutoff: int = 32, alpha: complex = 2.2) -> qt.Qobj:
+    """Create a normalized even cat density matrix for gallery rendering."""
+    state = (qt.coherent(cutoff, alpha) + qt.coherent(cutoff, -alpha)).unit()
+    return qt.ket2dm(state)
+
+
 @pytest.mark.visualize
-def test_showcase_fock_state_diagnostics_gallery(
+def test_showcase_cat_state_evolution_gallery(
     assert_no_empty_axes, assert_layout_can_render
 ):
-    """Compare photon-number statistics with Wigner structure for two states."""
+    """Show a cat state changing under Kerr evolution and photon loss."""
     cutoff = 32
-    alpha = 2.4
-    states = [
-        (
-            "Even cat",
-            (qt.coherent(cutoff, alpha) + qt.coherent(cutoff, -alpha)).unit(),
-        ),
-        (
-            "Four-component compass",
-            (
-                qt.coherent(cutoff, alpha)
-                + qt.coherent(cutoff, 1j * alpha)
-                + qt.coherent(cutoff, -alpha)
-                + qt.coherent(cutoff, -1j * alpha)
-            ).unit(),
-        ),
-    ]
+    cat = _even_cat(cutoff=cutoff, alpha=2.2)
+    a = qt.destroy(cutoff)
+    number = a.dag() * a
+    kerr_strength = 0.08
+    loss_rate = 0.025
+    hamiltonian = kerr_strength * number * number
+    times = np.linspace(0.0, 10.0, 9)
 
-    figure = plt.figure(figsize=(13, 9), constrained_layout=True)
-    grid = figure.add_gridspec(2, 2, hspace=0.18, wspace=0.12)
+    result = qt.mesolve(
+        hamiltonian,
+        cat,
+        times,
+        c_ops=[np.sqrt(loss_rate) * a],
+    )
 
-    for row, (name, state) in enumerate(states):
-        photon_ax = figure.add_subplot(grid[row, 0])
-        wigner_ax = figure.add_subplot(grid[row, 1])
-        rho = qt.ket2dm(state)
-        plot_photon_statistics(rho, ax=photon_ax)
-        plot_fock_wigner(rho, xlim=(-7, 7), resolution=72, ax=wigner_ax)
-        photon_ax.set_title(f"{name} · photon-number statistics")
-        wigner_ax.set_title(f"{name} · Wigner function")
+    indices = [0, 2, 4, 6, 8]
+    figure = plt.figure(figsize=(17, 7), constrained_layout=True)
+    grid = figure.add_gridspec(1, len(indices), wspace=0.08)
+
+    for column, index in enumerate(indices):
+        ax = figure.add_subplot(grid[0, column])
+        plot_fock_wigner(
+            result.states[index],
+            xlim=(-6.5, 6.5),
+            resolution=96,
+            ax=ax,
+        )
+        ax.set_title(f"t = {times[index]:.1f}")
 
     figure.suptitle(
-        "Non-Gaussian states · photon-number structure and phase-space interference",
+        "Even cat evolution · Kerr nonlinearity and photon loss",
         fontsize=16,
         fontweight="medium",
     )
 
-    compass_wigner = qt.wigner(
-        states[1][1], np.linspace(-7, 7, 72), np.linspace(-7, 7, 72)
+    initial_wigner = qt.wigner(
+        result.states[0], np.linspace(-6.5, 6.5, 96), np.linspace(-6.5, 6.5, 96)
     )
-    assert np.min(compass_wigner) < -0.01
+    final_wigner = qt.wigner(
+        result.states[-1], np.linspace(-6.5, 6.5, 96), np.linspace(-6.5, 6.5, 96)
+    )
+    assert np.min(initial_wigner) < -0.01
+    assert np.min(final_wigner) < 0.0
+    assert_no_empty_axes(figure)
+    assert_layout_can_render(figure)
+
+
+@pytest.mark.visualize
+def test_showcase_heralded_cat_processing_gallery(
+    assert_no_empty_axes, assert_layout_can_render
+):
+    """Show an even cat through realistic photon subtraction and addition."""
+    cat = _even_cat(cutoff=32, alpha=1.8 + 0.2j)
+    subtracted = realistic_photon_subtraction(
+        cat,
+        tap_reflectivity=0.08,
+        detector_efficiency=0.75,
+        ancilla_cutoff=6,
+    )
+    added = realistic_photon_addition(
+        subtracted,
+        coupling_strength=0.045,
+        detector_efficiency=0.75,
+        ancilla_cutoff=6,
+    )
+
+    states = [
+        ("Initial even cat", cat),
+        ("After photon subtraction", subtracted),
+        ("After photon addition", added),
+    ]
+
+    figure = plt.figure(figsize=(16, 5.5), constrained_layout=True)
+    grid = figure.add_gridspec(1, 3, wspace=0.08)
+
+    for column, (title, state) in enumerate(states):
+        ax = figure.add_subplot(grid[0, column])
+        plot_fock_wigner(state, xlim=(-6, 6), resolution=96, ax=ax)
+        ax.set_title(title)
+
+    figure.suptitle(
+        "Heralded non-Gaussian processing · cat → subtraction → addition",
+        fontsize=16,
+        fontweight="medium",
+    )
+
+    assert abs(float(cat.tr()) - 1.0) < 1e-10
+    assert float(subtracted.tr()) > 0.0
+    assert float(added.tr()) > 0.0
+    assert_no_empty_axes(figure)
+    assert_layout_can_render(figure)
+
+
+@pytest.mark.visualize
+def test_showcase_compass_state_gallery(
+    assert_no_empty_axes, assert_layout_can_render
+):
+    """Show a four-component compass state and its nonclassical interference."""
+    cutoff = 32
+    alpha = 2.4
+    state = (
+        qt.coherent(cutoff, alpha)
+        + qt.coherent(cutoff, 1j * alpha)
+        + qt.coherent(cutoff, -alpha)
+        + qt.coherent(cutoff, -1j * alpha)
+    ).unit()
+    rho = qt.ket2dm(state)
+
+    figure = plt.figure(figsize=(12, 5.5), constrained_layout=True)
+    grid = figure.add_gridspec(1, 2, wspace=0.12)
+    wigner_ax = figure.add_subplot(grid[0, 0])
+    density_ax = figure.add_subplot(grid[0, 1])
+
+    plot_fock_wigner(rho, xlim=(-7, 7), resolution=96, ax=wigner_ax)
+    plot_fock_wigner(rho, xlim=(-7, 7), resolution=96, ax=density_ax)
+    density_ax.set_title("Phase-space interference")
+
+    figure.suptitle("Four-component compass state · non-Gaussian interference", fontsize=16)
+
+    wigner = qt.wigner(rho, np.linspace(-7, 7, 96), np.linspace(-7, 7, 96))
+    assert np.min(wigner) < -0.01
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
