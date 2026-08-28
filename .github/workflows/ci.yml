@@ -125,19 +125,7 @@ jobs:
 
   deploy-complex-report:
     name: deploy complex example report
-<<<<<<< HEAD
-    if: >-
-      needs.publish-complex-report.result == 'success'
-||||||| parent of 6454d95 (ci: make complex Pages deployment manual only)
-    if: >-
-      needs.publish-complex-report.result == 'success' &&
-      ((github.event_name == 'push' &&
-        (github.ref_name == 'exilas' || github.ref_name == 'exilas-complex-example')) ||
-       (github.event_name == 'workflow_dispatch' &&
-        inputs.publish_complex_report == true))
-=======
     if: needs.publish-complex-report.result == 'success'
->>>>>>> 6454d95 (ci: make complex Pages deployment manual only)
     needs: publish-complex-report
     runs-on: ubuntu-latest
     permissions:
