@@ -201,12 +201,14 @@ complex-circuit-example:
     expire_in: 30 days
 
 # Deploys one persistent GitLab Pages site: the example-run archive at the
-# root, and the pytest coverage report nested under /coverage/. Pages history
-# (every example's accumulated runs) is kept on a dedicated `pages-history`
-# branch and restored before each build, the same way the GitHub Actions
-# pipeline keeps history on `gh-pages` — so this needs the CI job token to be
-# allowed to push to the repository (Settings > CI/CD > Job token permissions,
-# or "Allow the job token to push to this repository" for this project).
+# root, and the pytest coverage report nested under /coverage/. The generated
+# history is kept in a custom Git ref rather than refs/heads, so GitLab does
+# not treat it as a developer branch or offer the usual merge-request prompt.
+# The ref is migrated automatically from the old `pages-history` branch on its
+# first deployment after this change.
+#
+# The CI job token must be allowed to push to the repository (Settings > CI/CD
+# > Job token permissions, or "Allow the job token to push to this repository").
 pages:
   extends: .uv-job
   stage: deploy
@@ -225,13 +227,19 @@ pages:
     REPORT_RUN_ID: "${CI_PIPELINE_ID}"
     REPORT_COMMIT_URL: "${CI_PROJECT_URL}/-/commit/${CI_COMMIT_SHA}"
     REPORT_CI_URL: "${CI_PIPELINE_URL}"
+    PAGES_HISTORY_REF: "refs/catsy/pages-history"
+    PAGES_HISTORY_BRANCH: "pages-history"
   script:
     - test -f coverage/html/index.html
     - uv sync --group dev --locked
     - |
-      if git ls-remote --exit-code origin pages-history >/dev/null 2>&1; then
-        git fetch origin pages-history
-        git worktree add _site origin/pages-history
+      if git ls-remote --exit-code origin "${PAGES_HISTORY_REF}" >/dev/null 2>&1; then
+        git fetch origin "${PAGES_HISTORY_REF}"
+        git worktree add _site FETCH_HEAD
+      elif git ls-remote --exit-code origin "refs/heads/${PAGES_HISTORY_BRANCH}" >/dev/null 2>&1; then
+        # One-time migration from the old visible branch to the custom ref.
+        git fetch origin "refs/heads/${PAGES_HISTORY_BRANCH}"
+        git worktree add _site FETCH_HEAD
       else
         # Older Git versions do not support `git worktree add --orphan`.
         # Create a detached worktree first, then create the orphan branch
@@ -248,7 +256,10 @@ pages:
       git -C _site config user.email "gitlab-ci@${CI_SERVER_HOST}"
       git -C _site add --all
       git -C _site commit -m "ci: publish pages for ${CI_COMMIT_SHA}"
-      git -C _site push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:pages-history
+      git -C _site push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:"${PAGES_HISTORY_REF}"
+      if git ls-remote --exit-code origin "refs/heads/${PAGES_HISTORY_BRANCH}" >/dev/null 2>&1; then
+        git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" ":refs/heads/${PAGES_HISTORY_BRANCH}"
+      fi
     - rm -rf public
     - cp -a _site public
   artifacts:
