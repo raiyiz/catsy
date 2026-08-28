@@ -189,6 +189,8 @@ complex-pages:
     # The report is deployed as a one-segment GitLab Pages parallel deployment,
     # so its link back to the project root needs one .. rather than ../../.
     - sed -i 's|href="../../"|href="../"|g' _site/index.html
+    - sed -i "s|https://github.com/raiyiz/catsy/commit/${CI_COMMIT_SHA}|${CI_PROJECT_URL}/-/commit/${CI_COMMIT_SHA}|g" _site/index.html
+    - sed -i "s|https://github.com/raiyiz/catsy/actions|${CI_PIPELINE_URL}|g" _site/index.html
     - cp -a _site public
   pages:
     path_prefix: "complex-${CI_COMMIT_SHORT_SHA}"
