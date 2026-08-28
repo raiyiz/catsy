@@ -11,17 +11,83 @@ OUTPUT_ROOT = Path("_site")
 RUN_ROOT = Path("runs/complex_circuit")
 
 STAGES = [
-    ("01", "Gaussian preparation", "Prepare and couple the three-mode Gaussian state.", "01_final_signal_phase_space", "gaussian"),
-    ("02", "Gaussian diagnostics", "Inspect covariance and inter-mode correlations.", "02_final_covariance_matrix", "gaussian"),
-    ("03", "Mode correlations", "Visualize correlations created by the Gaussian circuit.", "03_final_mode_correlations", "gaussian"),
-    ("04", "Even cat state", "Prepare the non-Gaussian even Schrödinger cat.", "04_even_cat_wigner", "fock"),
-    ("05", "Cat-state diagnostics", "Inspect the cat in Fock space and phase space.", "05_even_cat_state", "fock"),
-    ("06", "Heralded photon subtraction", "Apply a lossy, detector-limited subtraction event.", "06_after_photon_subtraction", "fock"),
-    ("07", "Heralded photon addition", "Follow subtraction with realistic photon addition.", "07_after_photon_addition", "fock"),
-    ("08", "Mach–Zehnder interferometer", "Probe the processed state across a lossy phase scan.", None, "interferometer"),
-    ("09", "Homodyne readout", "Condition the Gaussian state on a signal quadrature measurement.", "08_after_homodyne_idler", "measurement"),
-    ("10", "Heterodyne readout", "Condition the Gaussian state on simultaneous x/p detection.", "09_after_heterodyne_idler", "measurement"),
-    ("11", "Measurement comparison", "Compare the conditioned phase-space states.", "10_measurement_conditioning", "measurement"),
+    (
+        "01",
+        "Gaussian preparation",
+        "Prepare and couple the three-mode Gaussian state.",
+        "01_final_signal_phase_space",
+        "gaussian",
+    ),
+    (
+        "02",
+        "Gaussian diagnostics",
+        "Inspect covariance and inter-mode correlations.",
+        "02_final_covariance_matrix",
+        "gaussian",
+    ),
+    (
+        "03",
+        "Mode correlations",
+        "Visualize correlations created by the Gaussian circuit.",
+        "03_final_mode_correlations",
+        "gaussian",
+    ),
+    (
+        "04",
+        "Even cat state",
+        "Prepare the non-Gaussian even Schrödinger cat.",
+        "04_even_cat_wigner",
+        "fock",
+    ),
+    (
+        "05",
+        "Cat-state diagnostics",
+        "Inspect the cat in Fock space and phase space.",
+        "05_even_cat_state",
+        "fock",
+    ),
+    (
+        "06",
+        "Heralded photon subtraction",
+        "Apply a lossy, detector-limited subtraction event.",
+        "06_after_photon_subtraction",
+        "fock",
+    ),
+    (
+        "07",
+        "Heralded photon addition",
+        "Follow subtraction with realistic photon addition.",
+        "07_after_photon_addition",
+        "fock",
+    ),
+    (
+        "08",
+        "Mach–Zehnder interferometer",
+        "Probe the processed state across a lossy phase scan.",
+        None,
+        "interferometer",
+    ),
+    (
+        "09",
+        "Homodyne readout",
+        "Condition the Gaussian state on a signal quadrature measurement.",
+        "08_after_homodyne_idler",
+        "measurement",
+    ),
+    (
+        "10",
+        "Heterodyne readout",
+        "Condition the Gaussian state on simultaneous x/p detection.",
+        "09_after_heterodyne_idler",
+        "measurement",
+    ),
+    (
+        "11",
+        "Measurement comparison",
+        "Compare the conditioned phase-space states.",
+        "10_measurement_conditioning",
+        "measurement",
+    ),
 ]
 
 
@@ -34,7 +100,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
     plots = sorted((site_run_root / "plots").glob("*.png"))
     by_stem = {plot.stem: plot for plot in plots}
     journals = sorted(
-        path for path in site_run_root.rglob("*") if path.suffix.lower() in {".json", ".jsonl"}
+        path
+        for path in site_run_root.rglob("*")
+        if path.suffix.lower() in {".json", ".jsonl"}
     )
 
     gallery = []
@@ -44,9 +112,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
         gallery.append(
             '<button class="gallery-card" data-src="__SRC__" data-title="__TITLE__" type="button">'
             '<span class="gallery-image"><img src="__SRC__" alt="__TITLE__" loading="lazy"></span>'
-            '<span class="gallery-caption"><strong>__TITLE__</strong><small>inspect ↗</small></span></button>'
-            .replace("__SRC__", esc(relative))
-            .replace("__TITLE__", esc(title))
+            '<span class="gallery-caption"><strong>__TITLE__</strong><small>inspect ↗</small></span></button>'.replace(
+                "__SRC__", esc(relative)
+            ).replace("__TITLE__", esc(title))
         )
 
     stage_cards = []
@@ -54,8 +122,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
     for number, title, description, plot_stem, category in STAGES:
         pipeline_steps.append(
             '<a class="pipeline-step" href="#stage-__N__"><span class="num">__N__</span>'
-            '<strong>__TITLE__</strong><small>__CATEGORY__</small></a>'
-            .replace("__N__", esc(number))
+            "<strong>__TITLE__</strong><small>__CATEGORY__</small></a>".replace(
+                "__N__", esc(number)
+            )
             .replace("__TITLE__", esc(title))
             .replace("__CATEGORY__", esc(category))
         )
@@ -65,9 +134,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
             relative = plot.relative_to(site_run_root).as_posix()
             visual = (
                 '<button class="stage-image" data-src="__SRC__" data-title="__TITLE__" type="button">'
-                '<img src="__SRC__" alt="__TITLE__" loading="lazy"></button>'
-                .replace("__SRC__", esc(relative))
-                .replace("__TITLE__", esc(title))
+                '<img src="__SRC__" alt="__TITLE__" loading="lazy"></button>'.replace(
+                    "__SRC__", esc(relative)
+                ).replace("__TITLE__", esc(title))
             )
         elif category == "interferometer":
             visual = '<div class="stage-image empty"><span>◌</span><small>33-point phase scan recorded in journal</small></div>'
@@ -78,8 +147,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
             '<article class="stage" data-category="__CATEGORY__" id="stage-__N__">'
             '<div class="stage-index">__N__</div>__VISUAL__'
             '<div class="stage-body"><div class="stage-kicker">__CATEGORY__</div>'
-            '<h3>__TITLE__</h3><p>__DESCRIPTION__</p></div></article>'
-            .replace("__CATEGORY__", esc(category))
+            "<h3>__TITLE__</h3><p>__DESCRIPTION__</p></div></article>".replace(
+                "__CATEGORY__", esc(category)
+            )
             .replace("__N__", esc(number))
             .replace("__VISUAL__", visual)
             .replace("__TITLE__", esc(title))
@@ -92,8 +162,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
         journal_links.append(
             '<a class="journal-file" href="__PATH__" target="_blank" rel="noopener">'
             '<span class="file-icon">__EXT__</span><span><strong>__PATH__</strong>'
-            '<small>__SIZE__ bytes · open raw file ↗</small></span></a>'
-            .replace("__PATH__", esc(relative))
+            "<small>__SIZE__ bytes · open raw file ↗</small></span></a>".replace(
+                "__PATH__", esc(relative)
+            )
             .replace("__EXT__", esc(journal.suffix[1:].upper()))
             .replace("__SIZE__", f"{journal.stat().st_size:,}")
         )
@@ -154,7 +225,10 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
         .replace("__PIPELINE__", "".join(pipeline_steps))
         .replace("__STAGES__", "".join(stage_cards))
         .replace("__GALLERY__", "".join(gallery) or "<p>No plots were generated.</p>")
-        .replace("__JOURNAL__", "".join(journal_links) or "<p>No journal files were generated.</p>")
+        .replace(
+            "__JOURNAL__",
+            "".join(journal_links) or "<p>No journal files were generated.</p>",
+        )
     )
     (site_run_root / "index.html").write_text(report, encoding="utf-8")
 
@@ -170,22 +244,25 @@ def main() -> None:
 
     runs_root = OUTPUT_ROOT / "runs"
     run_dirs = (
-        sorted((p for p in runs_root.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+        sorted(
+            (p for p in runs_root.iterdir() if p.is_dir()),
+            key=lambda p: p.name,
+            reverse=True,
+        )
         if runs_root.exists()
         else []
     )
     cards = "".join(
         '<a class="run" href="runs/__RUN__/">'
         '<span class="dot"></span><span><strong>__RUN_SHORT__</strong>'
-        '<small>open simulation explorer →</small></span></a>'
-        .replace("__RUN__", esc(p.name))
-        .replace("__RUN_SHORT__", esc(p.name[:12]))
+        "<small>open simulation explorer →</small></span></a>".replace(
+            "__RUN__", esc(p.name)
+        ).replace("__RUN_SHORT__", esc(p.name[:12]))
         for p in run_dirs
     )
-    index = (
-        """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Catsy Lab · Simulation archive</title><style>:root{color-scheme:dark;--bg:#070b12;--panel:#111827;--line:#263244;--text:#edf2f7;--muted:#94a3b8;--accent:#67e8f9}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0%,#0d2940,transparent 34rem),radial-gradient(circle at 90% 20%,#211a3c,transparent 36rem),var(--bg);color:var(--text);font:15px/1.6 system-ui,sans-serif}main{width:min(960px,calc(100% - 32px));margin:auto;padding:90px 0}.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:800}h1{font-size:clamp(42px,7vw,72px);line-height:.98;letter-spacing:-.05em;margin:8px 0 18px}p{color:var(--muted);max-width:70ch}.run{display:flex;align-items:center;gap:15px;border:1px solid var(--line);background:rgba(17,24,39,.78);padding:17px;border-radius:15px;margin:10px 0;transition:.2s}.run:hover{border-color:#4b637c;transform:translateX(3px)}.run strong,.run small{display:block}.run strong{font:800 14px ui-monospace,monospace}.run small{color:var(--muted);font-size:11px}.dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px rgba(103,232,249,.8)}</style></head><body><main><div class="eyebrow">Catsy · commit-addressed simulation archive</div><h1>Complex experiment runs</h1><p>Browse the visual history of the Gaussian → Fock → interferometric workflow. Every run keeps its plots and journal output together and is tied to the exact source commit that produced it.</p><div style="margin-top:34px">__CARDS__</div></main></body></html>"""
-        .replace("__CARDS__", cards or "<p>No reports yet.</p>")
+    index = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Catsy Lab · Simulation archive</title><style>:root{color-scheme:dark;--bg:#070b12;--panel:#111827;--line:#263244;--text:#edf2f7;--muted:#94a3b8;--accent:#67e8f9}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0%,#0d2940,transparent 34rem),radial-gradient(circle at 90% 20%,#211a3c,transparent 36rem),var(--bg);color:var(--text);font:15px/1.6 system-ui,sans-serif}main{width:min(960px,calc(100% - 32px));margin:auto;padding:90px 0}.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:800}h1{font-size:clamp(42px,7vw,72px);line-height:.98;letter-spacing:-.05em;margin:8px 0 18px}p{color:var(--muted);max-width:70ch}.run{display:flex;align-items:center;gap:15px;border:1px solid var(--line);background:rgba(17,24,39,.78);padding:17px;border-radius:15px;margin:10px 0;transition:.2s}.run:hover{border-color:#4b637c;transform:translateX(3px)}.run strong,.run small{display:block}.run strong{font:800 14px ui-monospace,monospace}.run small{color:var(--muted);font-size:11px}.dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px rgba(103,232,249,.8)}</style></head><body><main><div class="eyebrow">Catsy · commit-addressed simulation archive</div><h1>Complex experiment runs</h1><p>Browse the visual history of the Gaussian → Fock → interferometric workflow. Every run keeps its plots and journal output together and is tied to the exact source commit that produced it.</p><div style="margin-top:34px">__CARDS__</div></main></body></html>""".replace(
+        "__CARDS__", cards or "<p>No reports yet.</p>"
     )
     (OUTPUT_ROOT / "index.html").write_text(index, encoding="utf-8")
 
