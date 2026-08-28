@@ -218,9 +218,7 @@ def test_showcase_heralded_cat_processing_gallery(
 
 
 @pytest.mark.visualize
-def test_showcase_compass_state_gallery(
-    assert_no_empty_axes, assert_layout_can_render
-):
+def test_showcase_compass_state_gallery(assert_no_empty_axes, assert_layout_can_render):
     """Show a four-component compass state and its nonclassical interference."""
     cutoff = 32
     alpha = 2.4
