@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import html
 import os
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
-import shutil
 
 OUTPUT_ROOT = Path("_site")
 RUN_ROOT = Path("runs/complex_circuit")
@@ -251,6 +251,7 @@ def render_circuit_diagram() -> str:
         + "".join(parts)
         + "</svg>"
     )
+
 
 PAGE_STYLE = """
 :root{
