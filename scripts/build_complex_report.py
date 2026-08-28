@@ -1,17 +1,84 @@
-"""Build a restrained, commit-addressed static report for the complex example."""
+"""Build the Pages site: one section per example script, each keeping its
+own history of runs. Reads REPORT_COMMIT/REPORT_REF/REPORT_RUN_ID and the
+platform-specific REPORT_COMMIT_URL/REPORT_CI_URL from the environment, so
+the same script produces correct links on both GitHub and GitLab without
+any post-generation text patching.
+"""
 
 from __future__ import annotations
 
 import html
+import json
 import os
 import shutil
+import tomllib
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 OUTPUT_ROOT = Path("_site")
-RUN_ROOT = Path("runs/complex_circuit")
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# number, title, category, description, plot stem, what to look for, diagnostic label
+
+def esc(value: object) -> str:
+    return html.escape(str(value), quote=True)
+
+
+def _read_run_config(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    with path.open("rb") as file:
+        data = tomllib.load(file)
+    run = data.get("run", {})
+    return run if isinstance(run, dict) else {}
+
+
+# ---------------------------------------------------------------------------
+# Example registry — add an entry here (plus a matching CI job) to give a
+# new example script its own Pages section.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ExampleSpec:
+    id: str
+    title: str
+    tagline: str
+    run_root: Path
+    config_path: Path
+    kind: str  # "rich" (stage diagnostics + plots) | "journal_only"
+
+
+EXAMPLES: tuple[ExampleSpec, ...] = (
+    ExampleSpec(
+        id="complex-example",
+        title="Complex simulation",
+        tagline=(
+            "Gaussian preparation, non-Gaussian processing, interferometry, "
+            "and dual readout."
+        ),
+        run_root=Path("runs/complex_circuit"),
+        config_path=REPO_ROOT / "examples" / "config.toml",
+        kind="rich",
+    ),
+    ExampleSpec(
+        id="complex-circuit",
+        title="Three-mode circuit",
+        tagline=(
+            "The minimal three-mode Gaussian circuit and journal-persistence "
+            "example from the docs."
+        ),
+        run_root=Path("runs/complex_circuit_basic"),
+        config_path=REPO_ROOT / "examples" / "config_circuit.toml",
+        kind="journal_only",
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
+# Stage diagnostics (the "rich" example only)
+# ---------------------------------------------------------------------------
+
 STAGES = [
     (
         "01",
@@ -114,9 +181,6 @@ STAGES = [
     ),
 ]
 
-# One line of physical insight per stage, shown as a highlighted callout on the
-# card. Kept next to STAGES (not injected later) so the page is correct the
-# moment it is generated.
 INSIGHTS = {
     "01": "The phase-space ellipse is the state's uncertainty region before anything non-Gaussian happens to it.",
     "02": "Read the diagonal as single-mode variances and the off-diagonal blocks as inter-mode covariance.",
@@ -138,27 +202,34 @@ CATEGORY_LABELS = {
     "measurement": "Measurement",
 }
 
-# The real topology built by examples/complex_example.py:build_circuit(), with
-# the parameter values from examples/config.toml. Kept here as data (rather
-# than introspecting a live Circuit object) because this script runs in the
-# Pages-publishing job, which never installs catsy.
-CIRCUIT_NAME = "Three-mode Gaussian demo"
+
+# ---------------------------------------------------------------------------
+# Circuit diagram — shared by both examples, since build_circuit() in
+# complex_example.py and complex_circuit.py is the same eight-operation
+# sequence. r/eta come from each example's own config so the diagram can
+# never drift out of sync with the numbers it's showing.
+# ---------------------------------------------------------------------------
+
 CIRCUIT_ROWS = ["signal", "idler", "reference"]
-# column, kind ("box" | "link"), row(s), label, sub-label
-CIRCUIT_OPS = [
-    (1, "box", "signal", "Squeeze", "r = 0.60"),
-    (2, "box", "signal", "Displace", "α"),
-    (3, "link", ("signal", "idler"), "Beam splitter", "η = 0.65"),
-    (4, "box", "idler", "Rotate", "φ = 0.35"),
-    (5, "box", "idler", "Thermal loss", "η = 0.90, n̄ = 0.15"),
-    (6, "box", "reference", "Squeeze", "r = 0.35, θ = π/4"),
-    (7, "link", ("idler", "reference"), "Beam splitter", "η = 0.50"),
-    (8, "box", "signal", "Loss", "η = 0.92"),
-]
-CIRCUIT_LAST_COL = 9  # measurement / readout column
+CIRCUIT_LAST_COL = 9
 
 
-def render_circuit_diagram() -> str:
+def circuit_ops_for(config: dict[str, object]) -> list[tuple]:
+    r = float(config.get("signal_squeezing", 0.6))  # type: ignore[arg-type]
+    eta = float(config.get("signal_idler_transmissivity", 0.65))  # type: ignore[arg-type]
+    return [
+        (1, "box", "signal", "Squeeze", f"r = {r:.2f}"),
+        (2, "box", "signal", "Displace", "α"),
+        (3, "link", ("signal", "idler"), "Beam splitter", f"η = {eta:.2f}"),
+        (4, "box", "idler", "Rotate", "φ = 0.35"),
+        (5, "box", "idler", "Thermal loss", "η = 0.90, n̄ = 0.15"),
+        (6, "box", "reference", "Squeeze", "r = 0.35, θ = π/4"),
+        (7, "link", ("idler", "reference"), "Beam splitter", "η = 0.50"),
+        (8, "box", "signal", "Loss", "η = 0.92"),
+    ]
+
+
+def render_circuit_diagram(ops: list[tuple], *, with_readout: bool) -> str:
     col_w, x0 = 108, 60
     row_y = {"signal": 56, "idler": 156, "reference": 256}
     box_w, box_h = 96, 46
@@ -166,23 +237,18 @@ def render_circuit_diagram() -> str:
     def x_of(col: int) -> float:
         return x0 + col * col_w
 
-    width = x_of(CIRCUIT_LAST_COL) + 150
     height = 320
-
     parts: list[str] = []
 
-    # wires span the full timeline for every mode - all three start in vacuum
     for row in CIRCUIT_ROWS:
         y = row_y[row]
         parts.append(
             f'<line class="c-wire" x1="{x0 - 20}" y1="{y}" x2="{x_of(CIRCUIT_LAST_COL) + 60}" y2="{y}"></line>'
         )
-        parts.append(
-            f'<text class="c-row-label" x="{x0 - 20}" y="{y - 16}">{esc(row)}</text>'
-        )
+        parts.append(f'<text class="c-row-label" x="{x0 - 20}" y="{y - 16}">{esc(row)}</text>')
         parts.append(f'<text class="c-vac" x="{x0 - 20}" y="{y + 4}">|0⟩</text>')
 
-    for col, kind, row, label, sub in CIRCUIT_OPS:
+    for col, kind, row, label, sub in ops:
         cx = x_of(col)
         if kind == "box":
             y = row_y[row]
@@ -190,68 +256,70 @@ def render_circuit_diagram() -> str:
                 f'<rect class="c-box" x="{cx - box_w / 2:.1f}" y="{y - box_h / 2:.1f}" '
                 f'width="{box_w}" height="{box_h}" rx="8"></rect>'
             )
-            parts.append(
-                f'<text class="c-label" x="{cx}" y="{y - 3}" text-anchor="middle">{esc(label)}</text>'
-            )
-            parts.append(
-                f'<text class="c-sub" x="{cx}" y="{y + 13}" text-anchor="middle">{esc(sub)}</text>'
-            )
+            parts.append(f'<text class="c-label" x="{cx}" y="{y - 3}" text-anchor="middle">{esc(label)}</text>')
+            parts.append(f'<text class="c-sub" x="{cx}" y="{y + 13}" text-anchor="middle">{esc(sub)}</text>')
         else:
             row_a, row_b = row
             y_a, y_b = row_y[row_a], row_y[row_b]
-            parts.append(
-                f'<line class="c-wire c-link" x1="{cx}" y1="{y_a}" x2="{cx}" y2="{y_b}"></line>'
-            )
+            parts.append(f'<line class="c-wire c-link" x1="{cx}" y1="{y_a}" x2="{cx}" y2="{y_b}"></line>')
             mid_y = (y_a + y_b) / 2
             parts.append(
                 f'<rect class="c-box" x="{cx - box_w / 2:.1f}" y="{mid_y - box_h / 2:.1f}" '
                 f'width="{box_w}" height="{box_h}" rx="8"></rect>'
             )
+            parts.append(f'<text class="c-label" x="{cx}" y="{mid_y - 3}" text-anchor="middle">{esc(label)}</text>')
+            parts.append(f'<text class="c-sub" x="{cx}" y="{mid_y + 13}" text-anchor="middle">{esc(sub)}</text>')
+
+    if with_readout:
+        for row in ("idler", "reference"):
+            y = row_y[row]
+            end_x = x_of(CIRCUIT_LAST_COL) - 10
+            parts.append(f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ readout</text>')
+
+        sig_y = row_y["signal"]
+        fork_x = x_of(8) + box_w / 2 + 26
+        for dy, label, sub in ((-52, "Homodyne", "φ = π/6"), (52, "Heterodyne", "x, p")):
+            end_y = sig_y + dy
             parts.append(
-                f'<text class="c-label" x="{cx}" y="{mid_y - 3}" text-anchor="middle">{esc(label)}</text>'
+                f'<path class="c-wire" d="M {fork_x - 26} {sig_y} '
+                f'C {fork_x + 10} {sig_y}, {fork_x + 10} {end_y}, {fork_x + 46} {end_y}" fill="none"></path>'
             )
             parts.append(
-                f'<text class="c-sub" x="{cx}" y="{mid_y + 13}" text-anchor="middle">{esc(sub)}</text>'
+                f'<rect class="c-box meas" x="{fork_x + 46:.1f}" y="{end_y - box_h / 2:.1f}" '
+                f'width="{box_w}" height="{box_h}" rx="8"></rect>'
             )
+            parts.append(
+                f'<text class="c-label" x="{fork_x + 46 + box_w / 2}" y="{end_y - 3}" text-anchor="middle">{esc(label)}</text>'
+            )
+            parts.append(
+                f'<text class="c-sub" x="{fork_x + 46 + box_w / 2}" y="{end_y + 13}" text-anchor="middle">{esc(sub)}</text>'
+            )
+        width = fork_x + 46 + box_w + 30
+    else:
+        for row in CIRCUIT_ROWS:
+            y = row_y[row]
+            end_x = x_of(CIRCUIT_LAST_COL) - 10
+            parts.append(f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ journal</text>')
+        width = x_of(CIRCUIT_LAST_COL) + 90
 
-    # idler and reference simply continue on to the diagnostics already shown
-    # in the stage cards (mode correlations, conditioned readout)
-    for row in ("idler", "reference"):
-        y = row_y[row]
-        end_x = x_of(CIRCUIT_LAST_COL) - 10
-        parts.append(
-            f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ readout</text>'
-        )
-
-    # signal forks into the two independent measurement schemes
-    sig_y = row_y["signal"]
-    fork_x = x_of(8) + box_w / 2 + 26
-    for dy, label, sub in ((-52, "Homodyne", "φ = π/6"), (52, "Heterodyne", "x, p")):
-        end_y = sig_y + dy
-        parts.append(
-            f'<path class="c-wire" d="M {fork_x - 26} {sig_y} '
-            f'C {fork_x + 10} {sig_y}, {fork_x + 10} {end_y}, {fork_x + 46} {end_y}" fill="none"></path>'
-        )
-        parts.append(
-            f'<rect class="c-box meas" x="{fork_x + 46:.1f}" y="{end_y - box_h / 2:.1f}" '
-            f'width="{box_w}" height="{box_h}" rx="8"></rect>'
-        )
-        parts.append(
-            f'<text class="c-label" x="{fork_x + 46 + box_w / 2}" y="{end_y - 3}" text-anchor="middle">{esc(label)}</text>'
-        )
-        parts.append(
-            f'<text class="c-sub" x="{fork_x + 46 + box_w / 2}" y="{end_y + 13}" text-anchor="middle">{esc(sub)}</text>'
-        )
-
-    width = fork_x + 46 + box_w + 30
     return (
         f'<svg class="circuit" viewBox="0 0 {width:.0f} {height}" role="img" '
-        f'aria-label="Signal, idler, and reference mode wires through squeezing, a beam splitter, '
-        f'rotation, thermal loss, a second beam splitter, loss, and finally homodyne and heterodyne readout on the signal mode.">'
+        f'aria-label="Signal, idler, and reference mode wires through the Gaussian circuit.">'
         + "".join(parts)
         + "</svg>"
     )
 
+
+# ---------------------------------------------------------------------------
+# Shared page chrome
+# ---------------------------------------------------------------------------
+
+FONT_LINK = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&'
+    'family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">'
+)
 
 PAGE_STYLE = """
 :root{
@@ -272,11 +340,13 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.02em;mar
 
 .topbar{position:sticky;top:0;z-index:20;background:rgba(10,13,19,.92);
   backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.topbar-inner{min-height:56px;display:flex;align-items:center;justify-content:space-between}
+.topbar-inner{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:14px}
 .brand{font-family:'Fraunces',serif;font-weight:600;font-size:16px;display:flex;align-items:center;gap:8px}
 .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--gaussian);box-shadow:0 0 8px var(--gaussian)}
-.nav{display:flex;gap:20px;color:var(--muted);font-size:12.5px}
-.nav a{transition:color .15s}
+.crumbs{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumbs a:hover{color:var(--text)}
+.crumbs .sep{opacity:.5}
+.nav{display:flex;gap:20px;color:var(--muted);font-size:12.5px;flex:none}
 .nav a:hover{color:var(--text)}
 
 .hero{padding:60px 0 44px;border-bottom:1px solid var(--line);
@@ -293,10 +363,6 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.02em;mar
 .button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);
   border-radius:7px;padding:8px 13px;font-size:12.5px;transition:border-color .15s,color .15s}
 .button:hover{border-color:#3a4257;color:var(--text)}
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:26px}
-.metric{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-.metric .value{font-family:'Fraunces',serif;font-size:24px;font-weight:600}
-.metric .label{margin-top:3px;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;font-family:'IBM Plex Mono',monospace}
 
 .section{padding:48px 0}
 .section.alt{background:var(--surface);border-block:1px solid var(--line)}
@@ -359,6 +425,12 @@ svg.circuit{width:100%;min-width:640px;height:auto;display:block}
 .insight strong{color:var(--stage-color);font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;
   letter-spacing:.08em;display:block;margin-bottom:4px}
 
+.metrics-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;max-width:820px}
+.metric{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.section.alt .metric{background:var(--surface-2)}
+.metric .value{font-family:'Fraunces',serif;font-size:22px;font-weight:600}
+.metric .label{margin-top:3px;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;font-family:'IBM Plex Mono',monospace}
+
 .journal{display:grid;gap:8px;max-width:820px}
 .journal-file{display:flex;align-items:center;gap:13px;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--bg)}
 .section.alt .journal-file{background:var(--surface-2)}
@@ -380,20 +452,44 @@ svg.circuit{width:100%;min-width:640px;height:auto;display:block}
 
 .footer{padding:32px 0 56px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px}
 
-@media(max-width:950px){.pipeline{grid-template-columns:repeat(4,1fr)}.metrics{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:950px){.pipeline{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:680px){.container{width:calc(100% - 24px)}.nav{display:none}
-  .metrics{grid-template-columns:1fr 1fr}
   .stage{grid-template-columns:30px 1fr}
   .stage-index .cat{display:none}
   .stage-plot{grid-column:2;min-height:190px}
   .stage-copy{grid-column:2}
   .pipeline{grid-template-columns:repeat(2,1fr)}}
+
+/* archive / index pages */
+.archive-list{margin-top:30px;display:grid;gap:10px}
+.run-card{display:grid;grid-template-columns:12px 1fr;gap:15px;border:1px solid var(--line);
+  background:linear-gradient(135deg,rgba(17,24,39,.5),rgba(10,16,27,.35));
+  padding:18px 20px;border-radius:14px;transition:.2s}
+.run-card:hover{border-color:rgba(95,211,232,.5);transform:translateX(4px)}
+.run-dot{width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--gaussian);box-shadow:0 0 16px rgba(95,211,232,.7)}
+.run-copy{display:grid;gap:2px}
+.run-time{color:var(--gaussian);font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.03em}
+.run-card strong{font:600 16px 'IBM Plex Mono',monospace}
+.run-detail{color:var(--muted);font-size:11.5px}
+.empty-state{margin-top:24px;padding:20px 22px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px}
+
+.example-grid{margin-top:34px;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.example-card{display:block;border:1px solid var(--line);border-radius:16px;padding:24px 22px;
+  background:linear-gradient(160deg,rgba(17,24,39,.6),rgba(10,16,27,.4));transition:.2s}
+.example-card:hover{border-color:rgba(95,211,232,.5);transform:translateY(-3px)}
+.example-card .kind{font:600 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--gaussian)}
+.example-card h2{margin-top:8px;font-size:21px}
+.example-card p{margin-top:8px;color:var(--muted);font-size:13px}
+.example-card .stat-row{margin-top:16px;display:flex;gap:16px;font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.example-card .stat-row strong{color:var(--text)}
 """
 
 RUN_SCRIPT = """
 (function(){
-  const modal=document.getElementById('viewer'),img=document.getElementById('viewer-image'),
-        title=document.getElementById('viewer-title'),openLink=document.getElementById('viewer-open');
+  const modal=document.getElementById('viewer');
+  if(!modal) return;
+  const img=document.getElementById('viewer-image'),title=document.getElementById('viewer-title'),
+        openLink=document.getElementById('viewer-open');
   function close(){modal.classList.remove('open');img.src='';document.body.style.overflow='';}
   document.querySelectorAll('[data-src]').forEach(function(el){
     el.addEventListener('click',function(){
@@ -401,7 +497,8 @@ RUN_SCRIPT = """
       openLink.href=el.dataset.src;modal.classList.add('open');document.body.style.overflow='hidden';
     });
   });
-  document.getElementById('viewer-close').addEventListener('click',close);
+  const closeBtn=document.getElementById('viewer-close');
+  if(closeBtn) closeBtn.addEventListener('click',close);
   modal.addEventListener('click',function(e){if(e.target===modal)close();});
   document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
   document.querySelectorAll('.filter').forEach(function(btn){
@@ -417,36 +514,66 @@ RUN_SCRIPT = """
 })();
 """
 
-FONT_LINK = (
-    '<link rel="preconnect" href="https://fonts.googleapis.com">'
-    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&'
-    'family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">'
-)
 
-
-def esc(value: object) -> str:
-    return html.escape(str(value), quote=True)
-
-
-def build_run_page(
-    site_run_root: Path, commit: str, ref: str, run_id: str, generated_at: str
-) -> None:
-    short_commit = commit[:12]
-    plots = sorted((site_run_root / "plots").glob("*.png"))
-    by_stem = {plot.stem: plot for plot in plots}
-    journals = sorted(
-        path
-        for path in site_run_root.rglob("*")
-        if path.suffix.lower() in {".json", ".jsonl"}
+def _topbar(crumbs: list[tuple[str, str]], nav_links: list[tuple[str, str]]) -> str:
+    """crumbs: list of (label, href); last crumb has no href (current page)."""
+    crumb_html = []
+    for i, (label, href) in enumerate(crumbs):
+        if i:
+            crumb_html.append('<span class="sep">/</span>')
+        crumb_html.append(f'<a href="{esc(href)}">{esc(label)}</a>' if href else f"<span>{esc(label)}</span>")
+    nav_html = "".join(f'<a href="{esc(href)}">{esc(label)}</a>' for label, href in nav_links)
+    return (
+        '<header class="topbar"><div class="container topbar-inner">'
+        '<div class="crumbs">' + "".join(crumb_html) + "</div>"
+        f'<nav class="nav">{nav_html}</nav>'
+        "</div></header>"
     )
 
-    pipeline = []
-    stages = []
+
+def _page(title: str, description: str, body: str) -> str:
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="{esc(description)}">
+<title>{esc(title)}</title>
+{FONT_LINK}
+<style>{PAGE_STYLE}</style></head><body>
+{body}
+<script>{RUN_SCRIPT}</script>
+</body></html>"""
+
+
+# ---------------------------------------------------------------------------
+# Per-run pages
+# ---------------------------------------------------------------------------
+
+
+def _run_links(commit: str, run_id: str) -> tuple[str, str]:
+    commit_url = os.environ.get("REPORT_COMMIT_URL") or f"https://github.com/raiyiz/catsy/commit/{commit}"
+    ci_url = os.environ.get("REPORT_CI_URL") or "https://github.com/raiyiz/catsy/actions"
+    return commit_url, ci_url
+
+
+def build_rich_run_page(
+    site_run_root: Path,
+    spec: ExampleSpec,
+    config: dict[str, object],
+    commit: str,
+    ref: str,
+    run_id: str,
+    generated_at: str,
+) -> None:
+    short_commit = commit[:12]
+    plots = sorted((site_run_root / "plots").glob("*.png")) if (site_run_root / "plots").exists() else []
+    by_stem = {plot.stem: plot for plot in plots}
+    journals = sorted(
+        path for path in site_run_root.rglob("*") if path.suffix.lower() in {".json", ".jsonl"}
+    )
+
+    pipeline, stages = [], []
     for number, title, category, description, plot_stem, inspect, result in STAGES:
         pipeline.append(
-            f'<a class="pipeline-step" href="#stage-{esc(number)}" '
-            f'style="--step-color:var(--{esc(category)})">'
+            f'<a class="pipeline-step" href="#stage-{esc(number)}" style="--step-color:var(--{esc(category)})">'
             f'<span class="n">{esc(number)}</span><strong>{esc(title)}</strong>'
             f"<small>{esc(CATEGORY_LABELS[category])}</small></a>"
         )
@@ -459,101 +586,74 @@ def build_run_page(
                 f'<img src="{relative}" alt="{esc(title)}" loading="lazy"></button>'
             )
         else:
-            visual = (
-                '<div class="stage-plot empty"><span>—</span>'
-                "<small>response recorded in journal, not plotted</small></div>"
-            )
+            visual = '<div class="stage-plot empty"><span>—</span><small>response recorded in journal, not plotted</small></div>'
         insight = INSIGHTS.get(number, "")
         insight_html = (
-            f'<div class="insight"><strong>Why it matters</strong>{esc(insight)}</div>'
-            if insight
-            else ""
+            f'<div class="insight"><strong>Why it matters</strong>{esc(insight)}</div>' if insight else ""
         )
         stages.append(
             f'<article class="stage" data-category="{esc(category)}" id="stage-{esc(number)}">'
             f'<div class="stage-index" style="--stage-color:var(--{esc(category)})">'
-            f'<span class="num">{esc(number)}</span>'
-            f'<span class="cat">{esc(CATEGORY_LABELS[category])}</span></div>'
+            f'<span class="num">{esc(number)}</span><span class="cat">{esc(CATEGORY_LABELS[category])}</span></div>'
             f"{visual}"
             f'<div class="stage-copy" style="--stage-color:var(--{esc(category)})">'
             f"<h3>{esc(title)}</h3><p>{esc(description)}</p>"
             f'<div class="callout"><span class="lbl">Look for</span><span>{esc(inspect)}</span></div>'
             f'<div class="callout"><span class="lbl">Diagnostic</span><span>{esc(result)}</span></div>'
-            f"{insight_html}"
-            f"</div></article>"
+            f"{insight_html}</div></article>"
         )
 
-    journal_links = []
-    for journal in journals:
-        relative = esc(journal.relative_to(site_run_root).as_posix())
-        journal_links.append(
-            f'<a class="journal-file" href="{relative}" target="_blank" rel="noopener">'
-            f'<span class="file-type">{esc(journal.suffix[1:].upper())}</span>'
-            f"<span><strong>{relative}</strong>"
-            f"<small>{journal.stat().st_size:,} bytes · open raw file ↗</small></span></a>"
-        )
-
+    journal_links = _journal_links(journals, site_run_root)
     filters = "".join(
         f'<button class="filter" data-filter="{esc(key)}" type="button">{esc(label)}</button>'
         for key, label in CATEGORY_LABELS.items()
     )
+    commit_url, ci_url = _run_links(commit, run_id)
+    circuit_svg = render_circuit_diagram(circuit_ops_for(config), with_readout=True)
 
-    page = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Catsy complex simulation report for {short_commit}">
-<title>catsy · complex simulation · {short_commit}</title>
-{FONT_LINK}
-<style>{PAGE_STYLE}</style></head><body>
-<header class="topbar"><div class="container topbar-inner">
-  <a class="brand" href="../.."><span class="dot"></span>catsy · lab</a>
-  <nav class="nav"><a href="../..">all runs</a><a href="#circuit">circuit</a><a href="#pipeline">pipeline</a><a href="#stages">stages</a><a href="#journal">journal</a></nav>
-</div></header>
+    body = f"""
+{_topbar([("catsy · lab", "../../../"), (spec.title, "../../"), (short_commit, "")],
+         [("all examples", "../../../"), ("this example", "../../"), ("pipeline", "#pipeline"),
+          ("stages", "#stages"), ("journal", "#journal")])}
 <main>
 <section class="hero"><div class="container">
-  <div class="eyebrow">Complex simulation · {esc(generated_at)}</div>
+  <div class="eyebrow">{esc(spec.title)} · {esc(generated_at)}</div>
   <h1>Gaussian preparation, non-Gaussian processing, interferometry and readout.</h1>
-  <p class="lead">A compact visual record of the three-mode experiment. Each diagnostic sits beside the physical
-  stage it documents, with enough context to read the result without turning the report into a plot catalogue.</p>
+  <p class="lead">{esc(spec.tagline)} Each diagnostic sits beside the physical stage it documents.</p>
   <div class="meta">
-    <span class="badge">commit <strong>{short_commit}</strong></span>
+    <span class="badge">commit <strong>{esc(short_commit)}</strong></span>
     <span class="badge">ref <strong>{esc(ref)}</strong></span>
     <span class="badge"><strong>{len(plots)}</strong> diagnostics</span>
     <span class="badge"><strong>{len(journals)}</strong> journal files</span>
   </div>
   <div class="links">
-    <a class="button" href="https://github.com/raiyiz/catsy/commit/{esc(commit)}" target="_blank" rel="noopener">source commit ↗</a>
-    <a class="button" href="https://github.com/raiyiz/catsy/actions/runs/{esc(run_id)}" target="_blank" rel="noopener">CI run ↗</a>
-    <a class="button" href="../..">all runs</a>
-  </div>
-  <div class="metrics">
-    <div class="metric"><div class="value">3</div><div class="label">Gaussian modes</div></div>
-    <div class="metric"><div class="value">2</div><div class="label">readout schemes</div></div>
-    <div class="metric"><div class="value">33</div><div class="label">MZI phase points</div></div>
-    <div class="metric"><div class="value">{len(plots)}</div><div class="label">saved diagnostics</div></div>
+    <a class="button" href="{esc(commit_url)}" target="_blank" rel="noopener">source commit ↗</a>
+    <a class="button" href="{esc(ci_url)}" target="_blank" rel="noopener">CI run ↗</a>
+    <a class="button" href="../../">this example's runs</a>
+    <a class="button" href="../../../">all examples</a>
   </div>
 </div></section>
 
-<section class="section" id="circuit"><div class="container">
+<section class="section alt" id="circuit"><div class="container">
   <div class="section-head"><div class="eyebrow">Circuit topology</div>
   <h2>What the three modes actually go through</h2>
-  <p>The Gaussian half of the experiment, as built by <span class="mono">build_circuit()</span> — each wire is a
-  mode starting in vacuum; each box is the operation applied to it, in the order it runs.</p></div>
-  <div class="circuit-card">{render_circuit_diagram()}</div>
+  <p>Sourced from <span class="mono">build_circuit()</span> and this run's own config values —
+  each wire is a mode starting in vacuum; each box is the operation applied to it, in execution order.</p></div>
+  <div class="circuit-card">{circuit_svg}</div>
   <div class="circuit-legend">
     <span><span class="sw" style="background:var(--gaussian)"></span>Gaussian operation</span>
     <span><span class="sw" style="background:var(--measurement)"></span>measurement</span>
-    <span class="mono">circuit name: “{esc(CIRCUIT_NAME)}”</span>
   </div>
 </div></section>
 
-<section class="section alt" id="pipeline"><div class="container">
+<section class="section" id="pipeline"><div class="container">
   <div class="section-head"><div class="eyebrow">Experiment map</div>
   <h2>From state preparation to measurement</h2>
   <p>Each step links to the diagnostic and its physical interpretation below.</p></div>
   <div class="pipeline">{"".join(pipeline)}</div>
 </div></section>
 
-<section class="section" id="stages"><div class="container">
+<section class="section alt" id="stages"><div class="container">
   <div class="section-head"><div class="eyebrow">Stage diagnostics</div>
   <h2>What happened at each step</h2>
   <p>Plots are shown once, beside the operation they document.</p></div>
@@ -561,11 +661,11 @@ def build_run_page(
   <div class="stages">{"".join(stages)}</div>
 </div></section>
 
-<section class="section alt" id="journal"><div class="container">
+<section class="section" id="journal"><div class="container">
   <div class="section-head"><div class="eyebrow">Reproducibility</div>
   <h2>Experiment journal</h2>
   <p>Machine-readable records remain beside the visual diagnostics.</p></div>
-  <div class="journal">{"".join(journal_links) or "<p>No journal files were generated.</p>"}</div>
+  <div class="journal">{journal_links}</div>
 </div></section>
 </main>
 
@@ -580,13 +680,137 @@ def build_run_page(
 </div>
 
 <footer class="footer"><div class="container">
-  catsy · complex simulation · commit <span class="mono">{esc(commit)}</span><br>
+  {esc(spec.title)} · commit <span class="mono">{esc(commit)}</span><br>
   Static report generated by CI. Visualizations are produced through catsy's plotting helpers.
-</div></footer>
-<script>{RUN_SCRIPT}</script>
-</body></html>"""
+</div></footer>"""
 
-    (site_run_root / "index.html").write_text(page, encoding="utf-8")
+    (site_run_root / "index.html").write_text(
+        _page(f"{spec.title} · {short_commit}", f"Catsy {spec.title} report for {short_commit}", body),
+        encoding="utf-8",
+    )
+
+
+def build_journal_only_run_page(
+    site_run_root: Path,
+    spec: ExampleSpec,
+    config: dict[str, object],
+    commit: str,
+    ref: str,
+    run_id: str,
+    generated_at: str,
+) -> None:
+    short_commit = commit[:12]
+    journals = sorted(
+        path for path in site_run_root.rglob("*") if path.suffix.lower() in {".json", ".jsonl"}
+    )
+    journal_links = _journal_links(journals, site_run_root)
+    commit_url, ci_url = _run_links(commit, run_id)
+    circuit_svg = render_circuit_diagram(circuit_ops_for(config), with_readout=False)
+
+    metrics = _scalar_results_from_journal(journals)
+    metrics_html = "".join(
+        f'<div class="metric"><div class="value">{esc(_format_metric(value))}</div>'
+        f'<div class="label">{esc(key.replace("_", " "))}</div></div>'
+        for key, value in metrics.items()
+    ) or '<div class="empty-state">No scalar results were logged for this run.</div>'
+
+    body = f"""
+{_topbar([("catsy · lab", "../../../"), (spec.title, "../../"), (short_commit, "")],
+         [("all examples", "../../../"), ("this example", "../../"), ("circuit", "#circuit"),
+          ("results", "#results"), ("journal", "#journal")])}
+<main>
+<section class="hero"><div class="container">
+  <div class="eyebrow">{esc(spec.title)} · {esc(generated_at)}</div>
+  <h1>The minimal three-mode Gaussian circuit.</h1>
+  <p class="lead">{esc(spec.tagline)}</p>
+  <div class="meta">
+    <span class="badge">commit <strong>{esc(short_commit)}</strong></span>
+    <span class="badge">ref <strong>{esc(ref)}</strong></span>
+    <span class="badge"><strong>{len(journals)}</strong> journal files</span>
+  </div>
+  <div class="links">
+    <a class="button" href="{esc(commit_url)}" target="_blank" rel="noopener">source commit ↗</a>
+    <a class="button" href="{esc(ci_url)}" target="_blank" rel="noopener">CI run ↗</a>
+    <a class="button" href="../../">this example's runs</a>
+    <a class="button" href="../../../">all examples</a>
+  </div>
+</div></section>
+
+<section class="section alt" id="circuit"><div class="container">
+  <div class="section-head"><div class="eyebrow">Circuit topology</div>
+  <h2>Build, run, persist</h2>
+  <p>The same three-mode circuit as the complex simulation example, without the Fock-space
+  processing or measurement stages that follow it there — it stops after the Gaussian circuit
+  and logs the result to the journal.</p></div>
+  <div class="circuit-card">{circuit_svg}</div>
+  <div class="circuit-legend">
+    <span><span class="sw" style="background:var(--gaussian)"></span>Gaussian operation</span>
+  </div>
+</div></section>
+
+<section class="section" id="results"><div class="container">
+  <div class="section-head"><div class="eyebrow">Logged metrics</div>
+  <h2>Scalar results from this run</h2></div>
+  <div class="metrics-strip">{metrics_html}</div>
+</div></section>
+
+<section class="section alt" id="journal"><div class="container">
+  <div class="section-head"><div class="eyebrow">Reproducibility</div>
+  <h2>Experiment journal</h2>
+  <p>The circuit, final state, and metrics above are all recorded here.</p></div>
+  <div class="journal">{journal_links}</div>
+</div></section>
+</main>
+
+<footer class="footer"><div class="container">
+  {esc(spec.title)} · commit <span class="mono">{esc(commit)}</span><br>
+  Static report generated by CI.
+</div></footer>"""
+
+    (site_run_root / "index.html").write_text(
+        _page(f"{spec.title} · {short_commit}", f"Catsy {spec.title} report for {short_commit}", body),
+        encoding="utf-8",
+    )
+
+
+def _journal_links(journals: list[Path], site_run_root: Path) -> str:
+    if not journals:
+        return '<div class="empty-state">No journal files were generated.</div>'
+    links = []
+    for journal in journals:
+        relative = esc(journal.relative_to(site_run_root).as_posix())
+        links.append(
+            f'<a class="journal-file" href="{relative}" target="_blank" rel="noopener">'
+            f'<span class="file-type">{esc(journal.suffix[1:].upper())}</span>'
+            f"<span><strong>{relative}</strong><small>{journal.stat().st_size:,} bytes · open raw file ↗</small></span></a>"
+        )
+    return "".join(links)
+
+
+def _scalar_results_from_journal(journals: list[Path]) -> dict[str, object]:
+    for journal in journals:
+        if journal.suffix.lower() != ".json":
+            continue
+        try:
+            data = json.loads(journal.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for run in data.get("runs", []):
+            results = run.get("scalar_results")
+            if results:
+                return dict(results)
+    return {}
+
+
+def _format_metric(value: object) -> str:
+    if isinstance(value, float):
+        return f"{value:.4g}"
+    return str(value)
+
+
+# ---------------------------------------------------------------------------
+# Per-example archive page
+# ---------------------------------------------------------------------------
 
 
 def _read_metadata(run_dir: Path) -> dict[str, str]:
@@ -600,103 +824,149 @@ def _read_metadata(run_dir: Path) -> dict[str, str]:
     return values
 
 
-def run_datetime(path: Path) -> str:
-    """Prefer the recorded build timestamp; a checkout resets file mtimes."""
-    timestamp = _read_metadata(path).get("timestamp")
+def _run_datetime(run_dir: Path) -> str:
+    timestamp = _read_metadata(run_dir).get("timestamp")
     if timestamp:
         try:
-            return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime(
-                "%Y-%m-%d · %H:%M UTC"
-            )
+            return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime("%Y-%m-%d · %H:%M UTC")
         except ValueError:
             pass
     try:
-        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).strftime(
-            "%Y-%m-%d · %H:%M UTC"
-        )
+        return datetime.fromtimestamp(run_dir.stat().st_mtime, tz=UTC).strftime("%Y-%m-%d · %H:%M UTC")
     except OSError:
         return "time unavailable"
 
 
-def build_archive_page(runs_root: Path) -> None:
+def _example_meta(site_example_root: Path) -> dict[str, str]:
+    meta_file = site_example_root / "example_meta.json"
+    if meta_file.exists():
+        try:
+            return json.loads(meta_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    humanized = site_example_root.name.replace("-", " ").title()
+    return {"title": humanized, "tagline": "", "kind": "rich"}
+
+
+def build_example_archive_page(site_example_root: Path) -> None:
+    meta = _example_meta(site_example_root)
+    runs_root = site_example_root / "runs"
     run_dirs = (
-        sorted(
-            (p for p in runs_root.iterdir() if p.is_dir()),
-            key=lambda p: _read_metadata(p).get("timestamp", p.name),
-            reverse=True,
-        )
+        sorted((p for p in runs_root.iterdir() if p.is_dir()), key=lambda p: _read_metadata(p).get("timestamp", p.name), reverse=True)
         if runs_root.exists()
         else []
     )
     cards = "".join(
-        f'<a class="run" href="runs/{esc(p.name)}/"><span class="dot"></span>'
-        f'<span class="run-copy"><small class="run-time">{esc(run_datetime(p))}</small>'
+        f'<a class="run-card" href="runs/{esc(p.name)}/"><span class="run-dot"></span>'
+        f'<span class="run-copy"><small class="run-time">{esc(_run_datetime(p))}</small>'
         f"<strong>{esc(p.name[:12])}</strong>"
-        f'<span class="run-detail">complex simulation · open explorer →</span></span></a>'
+        f'<span class="run-detail">open run explorer →</span></span></a>'
         for p in run_dirs
     )
-    index = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>catsy lab · simulation archive</title>
-{FONT_LINK}
-<style>
-:root{{color-scheme:dark;--bg:#070b12;--panel:#111827;--line:#242b39;--text:#edf2f7;--muted:#8a91a6;
-  --gaussian:#5fd3e8;--fock:#f0568e}}
-*{{box-sizing:border-box}}
-body{{margin:0;background:radial-gradient(circle at 15% 0%,#0d2940,transparent 34rem),
-  radial-gradient(circle at 90% 20%,#2b1730,transparent 36rem),var(--bg);
-  color:var(--text);font:15px/1.6 'IBM Plex Sans',system-ui,sans-serif}}
-main{{width:min(1040px,calc(100% - 32px));margin:auto;padding:88px 0}}
-.eyebrow{{color:var(--gaussian);text-transform:uppercase;letter-spacing:.14em;font-size:11px;font-weight:600;
-  font-family:'IBM Plex Mono',monospace}}
-h1{{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(38px,6vw,62px);line-height:1.02;
-  letter-spacing:-.03em;margin:10px 0 16px}}
-p{{color:var(--muted);max-width:70ch}}
-.archive{{margin-top:34px;display:grid;gap:10px}}
-.run{{display:grid;grid-template-columns:12px 1fr;gap:15px;border:1px solid var(--line);
-  background:linear-gradient(135deg,rgba(17,24,39,.88),rgba(10,16,27,.8));
-  padding:18px 20px;border-radius:14px;transition:.2s}}
-.run:hover{{border-color:rgba(95,211,232,.5);transform:translateX(4px);box-shadow:0 14px 45px rgba(0,0,0,.25)}}
-.dot{{width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--gaussian);
-  box-shadow:0 0 16px rgba(95,211,232,.7)}}
-.run-copy{{display:grid;gap:2px}}
-.run-time{{color:var(--gaussian);font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.03em}}
-.run strong{{font:600 16px 'IBM Plex Mono',monospace}}
-.run-detail{{color:var(--muted);font-size:11.5px}}
-.hint{{margin-top:28px;padding:15px 17px;border:1px solid var(--line);border-radius:12px;
-  background:rgba(15,23,42,.55);color:var(--muted);font-size:12.5px}}
-</style></head><body><main>
-<div class="eyebrow">catsy · commit-addressed simulation archive</div>
-<h1>Complex experiment runs</h1>
-<p>Browse the visual history of the Gaussian → Fock → interferometric workflow. Each run keeps its stage
-diagnostics and machine-readable journal together for reproducibility.</p>
-<div class="archive">{cards or "<p>No reports yet.</p>"}</div>
-<div class="hint">Tip: open a run to follow the state transformation stage by stage — diagnostics are attached
-to the physical step they explain, not duplicated in a separate gallery.</div>
-</main></body></html>"""
-    (OUTPUT_ROOT / "index.html").write_text(index, encoding="utf-8")
+    body = f"""
+{_topbar([("catsy · lab", "../"), (meta["title"], "")], [("all examples", "../")])}
+<main><div class="container" style="padding:64px 0 80px">
+  <div class="eyebrow">catsy · commit-addressed run history</div>
+  <h1 style="font-size:clamp(32px,5vw,48px);margin-top:10px">{esc(meta["title"])}</h1>
+  <p class="lead" style="margin-top:14px">{esc(meta.get("tagline", ""))}</p>
+  <div class="archive-list">{cards or '<div class="empty-state">No runs yet.</div>'}</div>
+</div></main>"""
+    (site_example_root / "index.html").write_text(
+        _page(f"{meta['title']} · runs", f"Run history for {meta['title']}", body), encoding="utf-8"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Top-level index
+# ---------------------------------------------------------------------------
+
+
+def build_top_level_index(output_root: Path) -> None:
+    example_dirs = sorted(
+        p for p in output_root.iterdir() if p.is_dir() and (p / "runs").exists()
+    )
+    cards = []
+    for example_dir in example_dirs:
+        meta = _example_meta(example_dir)
+        runs_root = example_dir / "runs"
+        run_dirs = [p for p in runs_root.iterdir() if p.is_dir()]
+        latest = max((_run_datetime(p) for p in run_dirs), default="no runs yet")
+        cards.append(
+            f'<a class="example-card" href="{esc(example_dir.name)}/">'
+            f'<div class="kind">{esc(meta.get("kind", "rich")).replace("_", " ")}</div>'
+            f'<h2>{esc(meta["title"])}</h2><p>{esc(meta.get("tagline", ""))}</p>'
+            f'<div class="stat-row"><span><strong>{len(run_dirs)}</strong> run(s)</span>'
+            f"<span>latest: <strong>{esc(latest)}</strong></span></div></a>"
+        )
+
+    body = f"""
+{_topbar([("catsy · lab", "")], [])}
+<main><div class="container" style="padding:64px 0 80px">
+  <div class="eyebrow">catsy · commit-addressed simulation archive</div>
+  <h1 style="font-size:clamp(36px,6vw,58px);margin-top:10px">Example runs</h1>
+  <p class="lead" style="margin-top:14px">Each example script gets its own section and keeps its own
+  run history. Open a section to browse its runs; open a run to follow the state transformation
+  stage by stage.</p>
+  <div class="example-grid">{"".join(cards) or '<div class="empty-state">No example output has been published yet.</div>'}</div>
+</div></main>"""
+    (output_root / "index.html").write_text(
+        _page("catsy · lab", "Catsy example run archive", body), encoding="utf-8"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:
-    if not RUN_ROOT.exists():
-        raise SystemExit(f"Missing complex-example output: {RUN_ROOT}")
     commit = os.environ.get("REPORT_COMMIT", os.environ.get("GITHUB_SHA", "unknown"))
     ref = os.environ.get("REPORT_REF", "unknown")
     run_id = os.environ.get("REPORT_RUN_ID", "")
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d · %H:%M UTC")
+    timestamp = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
-    site_run_root = OUTPUT_ROOT / "runs" / commit
-    site_run_root.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(RUN_ROOT, site_run_root, dirs_exist_ok=True)
+    built_any = False
+    for spec in EXAMPLES:
+        if not spec.run_root.exists():
+            continue
+        built_any = True
 
-    (site_run_root / "run_metadata.txt").write_text(
-        f"timestamp={datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')}\n"
-        f"commit={commit}\nref={ref}\nrun_id={run_id}\n",
-        encoding="utf-8",
-    )
+        site_example_root = OUTPUT_ROOT / spec.id
+        site_run_root = site_example_root / "runs" / commit
+        if site_run_root.exists():
+            shutil.rmtree(site_run_root)
+        site_run_root.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(spec.run_root, site_run_root)
 
-    build_run_page(site_run_root, commit, ref, run_id, generated_at)
-    build_archive_page(OUTPUT_ROOT / "runs")
+        (site_run_root / "run_metadata.txt").write_text(
+            f"timestamp={timestamp}\ncommit={commit}\nref={ref}\nrun_id={run_id}\n", encoding="utf-8"
+        )
+
+        config = _read_run_config(spec.config_path)
+        if spec.kind == "rich":
+            build_rich_run_page(site_run_root, spec, config, commit, ref, run_id, generated_at)
+        else:
+            build_journal_only_run_page(site_run_root, spec, config, commit, ref, run_id, generated_at)
+
+        site_example_root.mkdir(parents=True, exist_ok=True)
+        (site_example_root / "example_meta.json").write_text(
+            json.dumps({"title": spec.title, "tagline": spec.tagline, "kind": spec.kind}), encoding="utf-8"
+        )
+
+    if not built_any:
+        raise SystemExit(
+            "No example output directories found (expected one of: "
+            + ", ".join(str(spec.run_root) for spec in EXAMPLES)
+            + ")."
+        )
+
+    if OUTPUT_ROOT.exists():
+        for entry in sorted(OUTPUT_ROOT.iterdir()):
+            if entry.is_dir() and (entry / "runs").exists():
+                build_example_archive_page(entry)
+
+    build_top_level_index(OUTPUT_ROOT)
 
 
 if __name__ == "__main__":
