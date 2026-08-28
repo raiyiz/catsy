@@ -195,7 +195,7 @@ complex-circuit-example:
     - test -d runs/complex_circuit_basic
   artifacts:
     when: always
-    expose_as: "Complex circuit example experiment output"
+    expose_as: "Complex circuit experiment output"
     paths:
       - runs/complex_circuit_basic/
     expire_in: 30 days
@@ -233,7 +233,12 @@ pages:
         git fetch origin pages-history
         git worktree add _site origin/pages-history
       else
-        git worktree add --orphan pages-history _site
+        # Older Git versions do not support `git worktree add --orphan`.
+        # Create a detached worktree first, then create the orphan branch
+        # inside it using the long-supported `git checkout --orphan` form.
+        git worktree add --detach _site HEAD
+        git -C _site checkout --orphan pages-history
+        git -C _site rm -rf .
       fi
     - uv run python scripts/build_complex_report.py
     - rm -rf _site/coverage
