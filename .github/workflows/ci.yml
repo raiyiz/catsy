@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [main, circuits, pappel, exilas, exilas-complex-example]
   pull_request:
   workflow_dispatch:
 
@@ -149,6 +147,14 @@ jobs:
           REPORT_REF: ${{ github.ref_name }}
           REPORT_RUN_ID: ${{ github.run_id }}
         run: python scripts/build_complex_report.py
+      - name: Refine Pages report
+        env:
+          REPORT_COMMIT: ${{ github.sha }}
+          REPORT_TIMESTAMP: ${{ github.run_id }}
+        run: |
+          REPORT_TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          export REPORT_TIMESTAMP
+          python scripts/enhance_complex_report.py
       - name: Publish Pages history
         run: |
           git -C _site config user.name "github-actions[bot]"
