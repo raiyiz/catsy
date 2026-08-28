@@ -1,7 +1,7 @@
 [run]
 output_dir = "runs/complex_circuit"
 circuit_name = "Three-mode Gaussian demo"
-signal_squeezing = 0.6
-signal_idler_transmissivity = 0.65
-log_level = "INFO"
-seed = 42
+signal_squeezing = 0.8
+signal_idler_transmissivity = 0.75
+log_level = "DEBUG"
+seed = 471
