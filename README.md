@@ -199,7 +199,7 @@ Every published run is tied to its exact source commit and keeps its **plots + m
 - raw journal files alongside the figures;
 - a persistent archive of earlier commit-addressed runs.
 
-**[Open the Catsy simulation explorer →](https://raiyiz.github.io/catsy/)**
+**[Open the Catsy simulation explorer →](https://catsy-1d3a5f.idmpages.uni-h.de/)**  -  <sub>also on [GitHub](https://raiyiz.github.io/catsy/)</sub>
 
 The explorer is deliberately static: no server or Python environment is required to browse the results. The plots themselves are generated exclusively through Catsy's visualization helpers.
 
