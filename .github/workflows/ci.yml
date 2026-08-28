@@ -2,8 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, circuits, pappel]
+    branches: [main, circuits, pappel, exilas, exilas-complex-example]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   pytest:
@@ -35,6 +38,89 @@ jobs:
         with:
           name: coverage
           path: coverage/coverage.xml
+
+  complex-example:
+    name: complex example
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Set up Python
+        run: uv python install 3.13
+      - name: Install dependencies
+        run: uv sync --group dev --locked
+      - name: Run complex example
+        run: uv run python examples/complex_example.py
+      - name: Upload complex example artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complex-example
+          path: runs/complex_circuit/
+          if-no-files-found: error
+
+  publish-complex-report:
+    name: publish complex example report
+    if: github.event_name == 'push' && github.ref_name == 'exilas-complex-example'
+    needs: complex-example
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Download complex example output
+        uses: actions/download-artifact@v4
+        with:
+          name: complex-example
+          path: runs/complex_circuit
+      - name: Restore Pages history
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add _site origin/gh-pages
+          else
+            git worktree add --orphan gh-pages _site
+          fi
+      - name: Build Pages report
+        run: python scripts/build_complex_report.py
+      - name: Publish Pages history
+        run: |
+          git -C _site config user.name "github-actions[bot]"
+          git -C _site config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C _site add --all
+          git -C _site commit -m "ci: publish complex example $GITHUB_SHA" || exit 0
+          git -C _site push origin HEAD:gh-pages
+      - name: Upload Pages report
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy-complex-report:
+    name: deploy complex example report
+    if: github.event_name == 'push' && github.ref_name == 'exilas-complex-example'
+    needs: publish-complex-report
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   ruff:
     name: ruff
