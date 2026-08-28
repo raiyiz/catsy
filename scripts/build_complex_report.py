@@ -245,7 +245,9 @@ def render_circuit_diagram(ops: list[tuple], *, with_readout: bool) -> str:
         parts.append(
             f'<line class="c-wire" x1="{x0 - 20}" y1="{y}" x2="{x_of(CIRCUIT_LAST_COL) + 60}" y2="{y}"></line>'
         )
-        parts.append(f'<text class="c-row-label" x="{x0 - 20}" y="{y - 16}">{esc(row)}</text>')
+        parts.append(
+            f'<text class="c-row-label" x="{x0 - 20}" y="{y - 16}">{esc(row)}</text>'
+        )
         parts.append(f'<text class="c-vac" x="{x0 - 20}" y="{y + 4}">|0⟩</text>')
 
     for col, kind, row, label, sub in ops:
@@ -256,25 +258,37 @@ def render_circuit_diagram(ops: list[tuple], *, with_readout: bool) -> str:
                 f'<rect class="c-box" x="{cx - box_w / 2:.1f}" y="{y - box_h / 2:.1f}" '
                 f'width="{box_w}" height="{box_h}" rx="8"></rect>'
             )
-            parts.append(f'<text class="c-label" x="{cx}" y="{y - 3}" text-anchor="middle">{esc(label)}</text>')
-            parts.append(f'<text class="c-sub" x="{cx}" y="{y + 13}" text-anchor="middle">{esc(sub)}</text>')
+            parts.append(
+                f'<text class="c-label" x="{cx}" y="{y - 3}" text-anchor="middle">{esc(label)}</text>'
+            )
+            parts.append(
+                f'<text class="c-sub" x="{cx}" y="{y + 13}" text-anchor="middle">{esc(sub)}</text>'
+            )
         else:
             row_a, row_b = row
             y_a, y_b = row_y[row_a], row_y[row_b]
-            parts.append(f'<line class="c-wire c-link" x1="{cx}" y1="{y_a}" x2="{cx}" y2="{y_b}"></line>')
+            parts.append(
+                f'<line class="c-wire c-link" x1="{cx}" y1="{y_a}" x2="{cx}" y2="{y_b}"></line>'
+            )
             mid_y = (y_a + y_b) / 2
             parts.append(
                 f'<rect class="c-box" x="{cx - box_w / 2:.1f}" y="{mid_y - box_h / 2:.1f}" '
                 f'width="{box_w}" height="{box_h}" rx="8"></rect>'
             )
-            parts.append(f'<text class="c-label" x="{cx}" y="{mid_y - 3}" text-anchor="middle">{esc(label)}</text>')
-            parts.append(f'<text class="c-sub" x="{cx}" y="{mid_y + 13}" text-anchor="middle">{esc(sub)}</text>')
+            parts.append(
+                f'<text class="c-label" x="{cx}" y="{mid_y - 3}" text-anchor="middle">{esc(label)}</text>'
+            )
+            parts.append(
+                f'<text class="c-sub" x="{cx}" y="{mid_y + 13}" text-anchor="middle">{esc(sub)}</text>'
+            )
 
     if with_readout:
         for row in ("idler", "reference"):
             y = row_y[row]
             end_x = x_of(CIRCUIT_LAST_COL) - 10
-            parts.append(f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ readout</text>')
+            parts.append(
+                f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ readout</text>'
+            )
 
         sig_y = row_y["signal"]
         fork_x = x_of(8) + box_w / 2 + 26
@@ -299,7 +313,9 @@ def render_circuit_diagram(ops: list[tuple], *, with_readout: bool) -> str:
         for row in CIRCUIT_ROWS:
             y = row_y[row]
             end_x = x_of(CIRCUIT_LAST_COL) - 10
-            parts.append(f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ journal</text>')
+            parts.append(
+                f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ journal</text>'
+            )
         width = x_of(CIRCUIT_LAST_COL) + 90
 
     return (
@@ -521,8 +537,14 @@ def _topbar(crumbs: list[tuple[str, str]], nav_links: list[tuple[str, str]]) -> 
     for i, (label, href) in enumerate(crumbs):
         if i:
             crumb_html.append('<span class="sep">/</span>')
-        crumb_html.append(f'<a href="{esc(href)}">{esc(label)}</a>' if href else f"<span>{esc(label)}</span>")
-    nav_html = "".join(f'<a href="{esc(href)}">{esc(label)}</a>' for label, href in nav_links)
+        crumb_html.append(
+            f'<a href="{esc(href)}">{esc(label)}</a>'
+            if href
+            else f"<span>{esc(label)}</span>"
+        )
+    nav_html = "".join(
+        f'<a href="{esc(href)}">{esc(label)}</a>' for label, href in nav_links
+    )
     return (
         '<header class="topbar"><div class="container topbar-inner">'
         '<div class="crumbs">' + "".join(crumb_html) + "</div>"
@@ -549,7 +571,10 @@ def _page(title: str, description: str, body: str) -> str:
 
 
 def _run_links(commit: str, run_id: str) -> tuple[str, str]:
-    commit_url = os.environ.get("REPORT_COMMIT_URL") or f"https://github.com/raiyiz/catsy/commit/{commit}"
+    commit_url = (
+        os.environ.get("REPORT_COMMIT_URL")
+        or f"https://github.com/raiyiz/catsy/commit/{commit}"
+    )
     ci_url = os.environ.get("REPORT_CI_URL") or "https://github.com/raiyiz/catsy/actions"
     return commit_url, ci_url
 
@@ -564,10 +589,16 @@ def build_rich_run_page(
     generated_at: str,
 ) -> None:
     short_commit = commit[:12]
-    plots = sorted((site_run_root / "plots").glob("*.png")) if (site_run_root / "plots").exists() else []
+    plots = (
+        sorted((site_run_root / "plots").glob("*.png"))
+        if (site_run_root / "plots").exists()
+        else []
+    )
     by_stem = {plot.stem: plot for plot in plots}
     journals = sorted(
-        path for path in site_run_root.rglob("*") if path.suffix.lower() in {".json", ".jsonl"}
+        path
+        for path in site_run_root.rglob("*")
+        if path.suffix.lower() in {".json", ".jsonl"}
     )
 
     pipeline, stages = [], []
@@ -589,7 +620,9 @@ def build_rich_run_page(
             visual = '<div class="stage-plot empty"><span>—</span><small>response recorded in journal, not plotted</small></div>'
         insight = INSIGHTS.get(number, "")
         insight_html = (
-            f'<div class="insight"><strong>Why it matters</strong>{esc(insight)}</div>' if insight else ""
+            f'<div class="insight"><strong>Why it matters</strong>{esc(insight)}</div>'
+            if insight
+            else ""
         )
         stages.append(
             f'<article class="stage" data-category="{esc(category)}" id="stage-{esc(number)}">'
@@ -612,14 +645,25 @@ def build_rich_run_page(
     circuit_svg = render_circuit_diagram(circuit_ops_for(config), with_readout=True)
 
     body = f"""
-{_topbar([("catsy · lab", "../../../"), (spec.title, "../../"), (short_commit, "")],
-         [("all examples", "../../../"), ("this example", "../../"), ("pipeline", "#pipeline"),
-          ("stages", "#stages"), ("journal", "#journal")])}
+{
+        _topbar(
+            [("catsy · lab", "../../../"), (spec.title, "../../"), (short_commit, "")],
+            [
+                ("all examples", "../../../"),
+                ("this example", "../../"),
+                ("pipeline", "#pipeline"),
+                ("stages", "#stages"),
+                ("journal", "#journal"),
+            ],
+        )
+    }
 <main>
 <section class="hero"><div class="container">
   <div class="eyebrow">{esc(spec.title)} · {esc(generated_at)}</div>
   <h1>Gaussian preparation, non-Gaussian processing, interferometry and readout.</h1>
-  <p class="lead">{esc(spec.tagline)} Each diagnostic sits beside the physical stage it documents.</p>
+  <p class="lead">{
+        esc(spec.tagline)
+    } Each diagnostic sits beside the physical stage it documents.</p>
   <div class="meta">
     <span class="badge">commit <strong>{esc(short_commit)}</strong></span>
     <span class="badge">ref <strong>{esc(ref)}</strong></span>
@@ -627,7 +671,9 @@ def build_rich_run_page(
     <span class="badge"><strong>{len(journals)}</strong> journal files</span>
   </div>
   <div class="links">
-    <a class="button" href="{esc(commit_url)}" target="_blank" rel="noopener">source commit ↗</a>
+    <a class="button" href="{
+        esc(commit_url)
+    }" target="_blank" rel="noopener">source commit ↗</a>
     <a class="button" href="{esc(ci_url)}" target="_blank" rel="noopener">CI run ↗</a>
     <a class="button" href="../../">this example's runs</a>
     <a class="button" href="../../../">all examples</a>
@@ -657,7 +703,9 @@ def build_rich_run_page(
   <div class="section-head"><div class="eyebrow">Stage diagnostics</div>
   <h2>What happened at each step</h2>
   <p>Plots are shown once, beside the operation they document.</p></div>
-  <div class="filters"><button class="filter active" data-filter="all" type="button">all</button>{filters}</div>
+  <div class="filters"><button class="filter active" data-filter="all" type="button">all</button>{
+        filters
+    }</div>
   <div class="stages">{"".join(stages)}</div>
 </div></section>
 
@@ -685,7 +733,11 @@ def build_rich_run_page(
 </div></footer>"""
 
     (site_run_root / "index.html").write_text(
-        _page(f"{spec.title} · {short_commit}", f"Catsy {spec.title} report for {short_commit}", body),
+        _page(
+            f"{spec.title} · {short_commit}",
+            f"Catsy {spec.title} report for {short_commit}",
+            body,
+        ),
         encoding="utf-8",
     )
 
@@ -701,23 +753,37 @@ def build_journal_only_run_page(
 ) -> None:
     short_commit = commit[:12]
     journals = sorted(
-        path for path in site_run_root.rglob("*") if path.suffix.lower() in {".json", ".jsonl"}
+        path
+        for path in site_run_root.rglob("*")
+        if path.suffix.lower() in {".json", ".jsonl"}
     )
     journal_links = _journal_links(journals, site_run_root)
     commit_url, ci_url = _run_links(commit, run_id)
     circuit_svg = render_circuit_diagram(circuit_ops_for(config), with_readout=False)
 
     metrics = _scalar_results_from_journal(journals)
-    metrics_html = "".join(
-        f'<div class="metric"><div class="value">{esc(_format_metric(value))}</div>'
-        f'<div class="label">{esc(key.replace("_", " "))}</div></div>'
-        for key, value in metrics.items()
-    ) or '<div class="empty-state">No scalar results were logged for this run.</div>'
+    metrics_html = (
+        "".join(
+            f'<div class="metric"><div class="value">{esc(_format_metric(value))}</div>'
+            f'<div class="label">{esc(key.replace("_", " "))}</div></div>'
+            for key, value in metrics.items()
+        )
+        or '<div class="empty-state">No scalar results were logged for this run.</div>'
+    )
 
     body = f"""
-{_topbar([("catsy · lab", "../../../"), (spec.title, "../../"), (short_commit, "")],
-         [("all examples", "../../../"), ("this example", "../../"), ("circuit", "#circuit"),
-          ("results", "#results"), ("journal", "#journal")])}
+{
+        _topbar(
+            [("catsy · lab", "../../../"), (spec.title, "../../"), (short_commit, "")],
+            [
+                ("all examples", "../../../"),
+                ("this example", "../../"),
+                ("circuit", "#circuit"),
+                ("results", "#results"),
+                ("journal", "#journal"),
+            ],
+        )
+    }
 <main>
 <section class="hero"><div class="container">
   <div class="eyebrow">{esc(spec.title)} · {esc(generated_at)}</div>
@@ -729,7 +795,9 @@ def build_journal_only_run_page(
     <span class="badge"><strong>{len(journals)}</strong> journal files</span>
   </div>
   <div class="links">
-    <a class="button" href="{esc(commit_url)}" target="_blank" rel="noopener">source commit ↗</a>
+    <a class="button" href="{
+        esc(commit_url)
+    }" target="_blank" rel="noopener">source commit ↗</a>
     <a class="button" href="{esc(ci_url)}" target="_blank" rel="noopener">CI run ↗</a>
     <a class="button" href="../../">this example's runs</a>
     <a class="button" href="../../../">all examples</a>
@@ -768,7 +836,11 @@ def build_journal_only_run_page(
 </div></footer>"""
 
     (site_run_root / "index.html").write_text(
-        _page(f"{spec.title} · {short_commit}", f"Catsy {spec.title} report for {short_commit}", body),
+        _page(
+            f"{spec.title} · {short_commit}",
+            f"Catsy {spec.title} report for {short_commit}",
+            body,
+        ),
         encoding="utf-8",
     )
 
@@ -828,11 +900,15 @@ def _run_datetime(run_dir: Path) -> str:
     timestamp = _read_metadata(run_dir).get("timestamp")
     if timestamp:
         try:
-            return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime("%Y-%m-%d · %H:%M UTC")
+            return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime(
+                "%Y-%m-%d · %H:%M UTC"
+            )
         except ValueError:
             pass
     try:
-        return datetime.fromtimestamp(run_dir.stat().st_mtime, tz=UTC).strftime("%Y-%m-%d · %H:%M UTC")
+        return datetime.fromtimestamp(run_dir.stat().st_mtime, tz=UTC).strftime(
+            "%Y-%m-%d · %H:%M UTC"
+        )
     except OSError:
         return "time unavailable"
 
@@ -852,7 +928,11 @@ def build_example_archive_page(site_example_root: Path) -> None:
     meta = _example_meta(site_example_root)
     runs_root = site_example_root / "runs"
     run_dirs = (
-        sorted((p for p in runs_root.iterdir() if p.is_dir()), key=lambda p: _read_metadata(p).get("timestamp", p.name), reverse=True)
+        sorted(
+            (p for p in runs_root.iterdir() if p.is_dir()),
+            key=lambda p: _read_metadata(p).get("timestamp", p.name),
+            reverse=True,
+        )
         if runs_root.exists()
         else []
     )
@@ -872,7 +952,8 @@ def build_example_archive_page(site_example_root: Path) -> None:
   <div class="archive-list">{cards or '<div class="empty-state">No runs yet.</div>'}</div>
 </div></main>"""
     (site_example_root / "index.html").write_text(
-        _page(f"{meta['title']} · runs", f"Run history for {meta['title']}", body), encoding="utf-8"
+        _page(f"{meta['title']} · runs", f"Run history for {meta['title']}", body),
+        encoding="utf-8",
     )
 
 
@@ -894,7 +975,7 @@ def build_top_level_index(output_root: Path) -> None:
         cards.append(
             f'<a class="example-card" href="{esc(example_dir.name)}/">'
             f'<div class="kind">{esc(meta.get("kind", "rich")).replace("_", " ")}</div>'
-            f'<h2>{esc(meta["title"])}</h2><p>{esc(meta.get("tagline", ""))}</p>'
+            f"<h2>{esc(meta['title'])}</h2><p>{esc(meta.get('tagline', ''))}</p>"
             f'<div class="stat-row"><span><strong>{len(run_dirs)}</strong> run(s)</span>'
             f"<span>latest: <strong>{esc(latest)}</strong></span></div></a>"
         )
@@ -940,18 +1021,24 @@ def main() -> None:
         shutil.copytree(spec.run_root, site_run_root)
 
         (site_run_root / "run_metadata.txt").write_text(
-            f"timestamp={timestamp}\ncommit={commit}\nref={ref}\nrun_id={run_id}\n", encoding="utf-8"
+            f"timestamp={timestamp}\ncommit={commit}\nref={ref}\nrun_id={run_id}\n",
+            encoding="utf-8",
         )
 
         config = _read_run_config(spec.config_path)
         if spec.kind == "rich":
-            build_rich_run_page(site_run_root, spec, config, commit, ref, run_id, generated_at)
+            build_rich_run_page(
+                site_run_root, spec, config, commit, ref, run_id, generated_at
+            )
         else:
-            build_journal_only_run_page(site_run_root, spec, config, commit, ref, run_id, generated_at)
+            build_journal_only_run_page(
+                site_run_root, spec, config, commit, ref, run_id, generated_at
+            )
 
         site_example_root.mkdir(parents=True, exist_ok=True)
         (site_example_root / "example_meta.json").write_text(
-            json.dumps({"title": spec.title, "tagline": spec.tagline, "kind": spec.kind}), encoding="utf-8"
+            json.dumps({"title": spec.title, "tagline": spec.tagline, "kind": spec.kind}),
+            encoding="utf-8",
         )
 
     if not built_any:
