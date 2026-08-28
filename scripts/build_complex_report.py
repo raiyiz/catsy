@@ -609,7 +609,6 @@ def build_rich_run_page(
             f"<small>{esc(CATEGORY_LABELS[category])}</small></a>"
         )
         plot = by_stem.get(plot_stem) if plot_stem else None
-        image = ""
         if plot:
             relative = esc(plot.relative_to(site_run_root).as_posix())
             visual = (
