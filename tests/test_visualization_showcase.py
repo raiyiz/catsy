@@ -115,8 +115,8 @@ def test_showcase_gaussian_evolution_gallery(
     assert_layout_can_render(figure)
 
 
-def _even_cat(cutoff: int = 32, alpha: complex = 2.2) -> qt.Qobj:
-    """Create a normalized even cat density matrix for gallery rendering."""
+def _even_cat(cutoff: int = 20, alpha: complex = 1.7) -> qt.Qobj:
+    """Create a compact normalized even cat for a fast gallery test."""
     state = (qt.coherent(cutoff, alpha) + qt.coherent(cutoff, -alpha)).unit()
     return qt.ket2dm(state)
 
@@ -126,32 +126,30 @@ def test_showcase_cat_state_evolution_gallery(
     assert_no_empty_axes, assert_layout_can_render
 ):
     """Show a cat state changing under Kerr evolution and photon loss."""
-    cutoff = 32
-    cat = _even_cat(cutoff=cutoff, alpha=2.2)
+    cutoff = 20
+    cat = _even_cat(cutoff=cutoff, alpha=1.7)
     a = qt.destroy(cutoff)
     number = a.dag() * a
-    kerr_strength = 0.08
-    loss_rate = 0.025
-    hamiltonian = kerr_strength * number * number
-    times = np.linspace(0.0, 10.0, 9)
+    hamiltonian = 0.08 * number * number
+    times = np.linspace(0.0, 8.0, 7)
 
     result = qt.mesolve(
         hamiltonian,
         cat,
         times,
-        c_ops=[np.sqrt(loss_rate) * a],
+        c_ops=[np.sqrt(0.025) * a],
     )
 
-    indices = [0, 2, 4, 6, 8]
-    figure = plt.figure(figsize=(17, 7), constrained_layout=True)
+    indices = [0, 2, 4, 6]
+    figure = plt.figure(figsize=(14, 5.5), constrained_layout=True)
     grid = figure.add_gridspec(1, len(indices), wspace=0.08)
 
     for column, index in enumerate(indices):
         ax = figure.add_subplot(grid[0, column])
         plot_fock_wigner(
             result.states[index],
-            xlim=(-6.5, 6.5),
-            resolution=96,
+            xlim=(-5.5, 5.5),
+            resolution=64,
             ax=ax,
         )
         ax.set_title(f"t = {times[index]:.1f}")
@@ -162,9 +160,9 @@ def test_showcase_cat_state_evolution_gallery(
         fontweight="medium",
     )
 
-    grid = np.linspace(-6.5, 6.5, 96)
-    initial_wigner = qt.wigner(result.states[0], grid, grid)
-    final_wigner = qt.wigner(result.states[-1], grid, grid)
+    grid_values = np.linspace(-5.5, 5.5, 64)
+    initial_wigner = qt.wigner(result.states[0], grid_values, grid_values)
+    final_wigner = qt.wigner(result.states[-1], grid_values, grid_values)
     assert np.min(initial_wigner) < -0.01
     assert np.min(final_wigner) < 0.0
     assert_no_empty_axes(figure)
@@ -176,18 +174,21 @@ def test_showcase_heralded_cat_processing_gallery(
     assert_no_empty_axes, assert_layout_can_render
 ):
     """Show an even cat through realistic photon subtraction and addition."""
-    cat = _even_cat(cutoff=32, alpha=1.8 + 0.2j)
+    # Keep this as a gallery smoke test rather than a high-cutoff physics
+    # benchmark. The realistic operations scale quickly with Hilbert-space
+    # dimension, while the visual point is already clear at this cutoff.
+    cat = _even_cat(cutoff=16, alpha=1.45 + 0.15j)
     subtracted = realistic_photon_subtraction(
         cat,
         tap_reflectivity=0.08,
         detector_efficiency=0.75,
-        ancilla_cutoff=6,
+        ancilla_cutoff=3,
     )
     added = realistic_photon_addition(
         subtracted,
         coupling_strength=0.045,
         detector_efficiency=0.75,
-        ancilla_cutoff=6,
+        ancilla_cutoff=3,
     )
 
     states = [
@@ -196,12 +197,12 @@ def test_showcase_heralded_cat_processing_gallery(
         ("After photon addition", added),
     ]
 
-    figure = plt.figure(figsize=(16, 5.5), constrained_layout=True)
+    figure = plt.figure(figsize=(15, 5), constrained_layout=True)
     grid = figure.add_gridspec(1, 3, wspace=0.08)
 
     for column, (title, state) in enumerate(states):
         ax = figure.add_subplot(grid[0, column])
-        plot_fock_wigner(state, xlim=(-6, 6), resolution=96, ax=ax)
+        plot_fock_wigner(state, xlim=(-5, 5), resolution=64, ax=ax)
         ax.set_title(title)
 
     figure.suptitle(
