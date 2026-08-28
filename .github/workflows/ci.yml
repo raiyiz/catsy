@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, circuits, pappel, exilas, exilas-complex-example]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -68,7 +69,10 @@ jobs:
 
   publish-complex-report:
     name: publish complex example report
-    if: github.event_name == 'push' && github.ref_name == 'exilas-complex-example'
+    if: >-
+      needs.complex-example.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref_name == 'exilas-complex-example'))
     needs: complex-example
     runs-on: ubuntu-latest
     permissions:
@@ -93,6 +97,9 @@ jobs:
             git worktree add --orphan gh-pages _site
           fi
       - name: Build Pages report
+        env:
+          REPORT_SHA: ${{ github.sha }}
+          REPORT_REF: ${{ github.ref_name }}
         run: python scripts/build_complex_report.py
       - name: Publish Pages history
         run: |
@@ -108,7 +115,10 @@ jobs:
 
   deploy-complex-report:
     name: deploy complex example report
-    if: github.event_name == 'push' && github.ref_name == 'exilas-complex-example'
+    if: >-
+      needs.publish-complex-report.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref_name == 'exilas-complex-example'))
     needs: publish-complex-report
     runs-on: ubuntu-latest
     permissions:
