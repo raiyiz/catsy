@@ -10,17 +10,72 @@ OUTPUT_ROOT = Path("_site")
 RUN_ROOT = Path("runs/complex_circuit")
 
 STAGES = [
-    ("01", "Gaussian preparation", "Prepare and couple the three-mode Gaussian state.", "01_final_signal_phase_space"),
-    ("02", "Gaussian diagnostics", "Inspect covariance and inter-mode correlations.", "02_final_covariance_matrix"),
-    ("03", "Mode correlations", "Visualize the correlations created by the Gaussian circuit.", "03_final_mode_correlations"),
-    ("04", "Even cat state", "Prepare the non-Gaussian even Schrödinger cat.", "04_even_cat_wigner"),
-    ("05", "Cat-state diagnostics", "Inspect the cat in the Fock basis and phase space.", "05_even_cat_state"),
-    ("06", "Heralded photon subtraction", "Apply a lossy, detector-limited subtraction event.", "06_after_photon_subtraction"),
-    ("07", "Heralded photon addition", "Follow subtraction with realistic photon addition.", "07_after_photon_addition"),
-    ("08", "Mach–Zehnder interferometer", "Probe the processed state across a lossy phase scan.", None),
-    ("09", "Homodyne readout", "Condition the Gaussian state on a signal quadrature measurement.", "08_after_homodyne_idler"),
-    ("10", "Heterodyne readout", "Condition the Gaussian state on simultaneous x/p detection.", "09_after_heterodyne_idler"),
-    ("11", "Measurement comparison", "Compare the conditioned phase-space states.", "10_measurement_conditioning"),
+    (
+        "01",
+        "Gaussian preparation",
+        "Prepare and couple the three-mode Gaussian state.",
+        "01_final_signal_phase_space",
+    ),
+    (
+        "02",
+        "Gaussian diagnostics",
+        "Inspect covariance and inter-mode correlations.",
+        "02_final_covariance_matrix",
+    ),
+    (
+        "03",
+        "Mode correlations",
+        "Visualize the correlations created by the Gaussian circuit.",
+        "03_final_mode_correlations",
+    ),
+    (
+        "04",
+        "Even cat state",
+        "Prepare the non-Gaussian even Schrödinger cat.",
+        "04_even_cat_wigner",
+    ),
+    (
+        "05",
+        "Cat-state diagnostics",
+        "Inspect the cat in the Fock basis and phase space.",
+        "05_even_cat_state",
+    ),
+    (
+        "06",
+        "Heralded photon subtraction",
+        "Apply a lossy, detector-limited subtraction event.",
+        "06_after_photon_subtraction",
+    ),
+    (
+        "07",
+        "Heralded photon addition",
+        "Follow subtraction with realistic photon addition.",
+        "07_after_photon_addition",
+    ),
+    (
+        "08",
+        "Mach–Zehnder interferometer",
+        "Probe the processed state across a lossy phase scan.",
+        None,
+    ),
+    (
+        "09",
+        "Homodyne readout",
+        "Condition the Gaussian state on a signal quadrature measurement.",
+        "08_after_homodyne_idler",
+    ),
+    (
+        "10",
+        "Heterodyne readout",
+        "Condition the Gaussian state on simultaneous x/p detection.",
+        "09_after_heterodyne_idler",
+    ),
+    (
+        "11",
+        "Measurement comparison",
+        "Compare the conditioned phase-space states.",
+        "10_measurement_conditioning",
+    ),
 ]
 
 
@@ -49,7 +104,7 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
         gallery.append(
             f'''<a class="gallery-card" href="{esc(relative)}" target="_blank">'''
             f'''<div class="gallery-image"><img src="{esc(relative)}" alt="{esc(title)}" loading="lazy"></div>'''
-            f'''<div class="gallery-caption"><span>{esc(title)}</span><small>open full resolution ↗</small></div></a>'''
+            f"""<div class="gallery-caption"><span>{esc(title)}</span><small>open full resolution ↗</small></div></a>"""
         )
 
     stage_cards = []
@@ -67,9 +122,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
         else:
             image = '<div class="stage-image empty"><span>∿</span><small>journal-only stage</small></div>'
         stage_cards.append(
-            f'''<article class="stage">'''
-            f'''<div class="stage-index">{esc(number)}</div>'''
-            f'''{image}<div class="stage-body"><h3>{esc(title)}</h3><p>{esc(description)}</p></div></article>'''
+            f"""<article class="stage">"""
+            f"""<div class="stage-index">{esc(number)}</div>"""
+            f"""{image}<div class="stage-body"><h3>{esc(title)}</h3><p>{esc(description)}</p></div></article>"""
         )
 
     journal_links = []
@@ -78,13 +133,13 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
         size = journal.stat().st_size
         journal_links.append(
             f'''<a class="journal-file" href="{esc(relative)}" target="_blank">'''
-            f'''<span class="file-icon">{journal.suffix[1:].upper()}</span>'''
-            f'''<span><strong>{esc(relative)}</strong><small>{size:,} bytes · open raw file ↗</small></span></a>'''
+            f"""<span class="file-icon">{journal.suffix[1:].upper()}</span>"""
+            f"""<span><strong>{esc(relative)}</strong><small>{size:,} bytes · open raw file ↗</small></span></a>"""
         )
 
     plot_count = len(plots)
     journal_count = len(journals)
-    report = f'''<!doctype html>
+    report = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -177,20 +232,20 @@ h2 {{ margin:0; font-size:30px; letter-spacing:-.03em; }}
 </div></section>
 
 <section class="section" id="pipeline"><div class="container"><div class="section-head"><div><h2>The experiment pipeline</h2><p>From Gaussian preparation to two independent signal readouts.</p></div></div>
-<div class="pipeline">{''.join(f'<div class="pipeline-step"><span class="num">{esc(n)}</span><strong>{esc(t)}</strong><small>{esc(d)}</small></div>' for n,t,d,_ in STAGES)}</div>
+<div class="pipeline">{"".join(f'<div class="pipeline-step"><span class="num">{esc(n)}</span><strong>{esc(t)}</strong><small>{esc(d)}</small></div>' for n, t, d, _ in STAGES)}</div>
 </div></section>
 
 <section class="section"><div class="container"><div class="section-head"><div><h2>Stage-by-stage</h2><p>Each card links directly to the diagnostic produced at that point in the experiment.</p></div></div>
-<div class="stages">{''.join(stage_cards)}</div></div></section>
+<div class="stages">{"".join(stage_cards)}</div></div></section>
 
 <section class="section" id="gallery"><div class="container"><div class="section-head"><div><h2>Visual gallery</h2><p>Full-resolution Catsy diagnostics. Click any image to inspect it without leaving the report.</p></div></div>
-<div class="gallery">{''.join(gallery) or '<p>No plots were generated.</p>'}</div></div></section>
+<div class="gallery">{"".join(gallery) or "<p>No plots were generated.</p>"}</div></div></section>
 
 <section class="section" id="journal"><div class="container"><div class="section-head"><div><h2>Experiment journal</h2><p>Raw journal output is preserved beside the plots for reproducibility.</p></div></div>
-<div class="journal">{''.join(journal_links) or '<p>No journal files were generated.</p>'}</div></div></section>
+<div class="journal">{"".join(journal_links) or "<p>No journal files were generated.</p>"}</div></div></section>
 </main>
 <footer class="footer"><div class="container"><strong>Catsy Lab</strong> · complex example · commit <code>{esc(commit)}</code><br><span>Static report generated by CI; plots are produced exclusively through Catsy's plotting helpers.</span></div></footer>
-</body></html>'''
+</body></html>"""
     (site_run_root / "index.html").write_text(report, encoding="utf-8")
 
 
@@ -209,19 +264,23 @@ def main() -> None:
 
     runs_root = OUTPUT_ROOT / "runs"
     run_dirs = (
-        sorted((path for path in runs_root.iterdir() if path.is_dir()), key=lambda path: path.name, reverse=True)
+        sorted(
+            (path for path in runs_root.iterdir() if path.is_dir()),
+            key=lambda path: path.name,
+            reverse=True,
+        )
         if runs_root.exists()
         else []
     )
     cards = []
     for path in run_dirs:
         cards.append(
-            f'''<a class="run" href="runs/{esc(path.name)}/"><span class="dot"></span><span><strong>{esc(path.name[:12])}</strong><small>open experiment report →</small></span></a>'''
+            f"""<a class="run" href="runs/{esc(path.name)}/"><span class="dot"></span><span><strong>{esc(path.name[:12])}</strong><small>open experiment report →</small></span></a>"""
         )
-    index = f'''<!doctype html>
+    index = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Catsy Lab · Complex experiment archive</title>
 <style>:root{{color-scheme:dark;--bg:#070b12;--panel:#111827;--line:#263244;--text:#edf2f7;--muted:#94a3b8;--accent:#7dd3fc}}*{{box-sizing:border-box}}body{{margin:0;background:radial-gradient(circle at 20% 0%,#0d2940,transparent 35rem),radial-gradient(circle at 90% 20%,#211a3c,transparent 35rem),var(--bg);color:var(--text);font:15px/1.6 system-ui,sans-serif}}main{{width:min(900px,calc(100% - 32px));margin:0 auto;padding:90px 0}}h1{{font-size:clamp(40px,7vw,68px);line-height:1;letter-spacing:-.05em;margin:8px 0 18px}}p{{color:var(--muted)}}.eyebrow{{color:var(--accent);text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:800}}.run{{display:flex;align-items:center;gap:15px;border:1px solid var(--line);background:rgba(17,24,39,.75);padding:17px;border-radius:15px;margin:10px 0;transition:.2s}}.run:hover{{border-color:#4b637c;transform:translateX(3px)}}.run strong,.run small{{display:block}}.run strong{{font:800 14px ui-monospace,monospace}}.run small{{color:var(--muted);font-size:11px}}.dot{{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px rgba(125,211,252,.8)}}code{{color:#c4b5fd}}</style></head>
-<body><main><div class="eyebrow">Catsy · CI experiment archive</div><h1>Complex experiment runs</h1><p>Commit-addressed visual reports. Every run preserves its plots and journal output together, making the generated experiment history browsable and reproducible.</p><div style="margin-top:34px">{''.join(cards) or '<p>No reports yet.</p>'}</div></main></body></html>'''
+<body><main><div class="eyebrow">Catsy · CI experiment archive</div><h1>Complex experiment runs</h1><p>Commit-addressed visual reports. Every run preserves its plots and journal output together, making the generated experiment history browsable and reproducible.</p><div style="margin-top:34px">{"".join(cards) or "<p>No reports yet.</p>"}</div></main></body></html>"""
     (OUTPUT_ROOT / "index.html").write_text(index, encoding="utf-8")
 
 
