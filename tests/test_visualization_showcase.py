@@ -115,7 +115,7 @@ def test_showcase_gaussian_evolution_gallery(
     assert_layout_can_render(figure)
 
 
-def _even_cat(cutoff: int = 32, alpha: complex = 2.2) -> qt.Qobj:
+def _even_cat(cutoff: int = 20, alpha: complex = 2.2) -> qt.Qobj:
     """Create a normalized even cat density matrix for gallery rendering."""
     state = (qt.coherent(cutoff, alpha) + qt.coherent(cutoff, -alpha)).unit()
     return qt.ket2dm(state)
@@ -126,7 +126,7 @@ def test_showcase_cat_state_evolution_gallery(
     assert_no_empty_axes, assert_layout_can_render
 ):
     """Show a cat state changing under Kerr evolution and photon loss."""
-    cutoff = 32
+    cutoff = 20
     cat = _even_cat(cutoff=cutoff, alpha=2.2)
     a = qt.destroy(cutoff)
     number = a.dag() * a
@@ -220,7 +220,7 @@ def test_showcase_heralded_cat_processing_gallery(
 @pytest.mark.visualize
 def test_showcase_compass_state_gallery(assert_no_empty_axes, assert_layout_can_render):
     """Show a four-component compass state and its nonclassical interference."""
-    cutoff = 32
+    cutoff = 20
     alpha = 2.4
     state = (
         qt.coherent(cutoff, alpha)
