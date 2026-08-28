@@ -4,6 +4,7 @@ workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_BRANCH == "exilas" && $CI_OPEN_MERGE_REQUESTS == null'
 
 stages:
   - test
@@ -104,8 +105,6 @@ mypy:
     - uv sync --group dev --locked
     - uv run mypy
 
-# Checks documentation source links whenever docs, README, source files, or
-# this checker changes. It does not rebuild the documentation artifact.
 docs-links:
   stage: test
   image: python:3.13-slim
@@ -148,6 +147,72 @@ typst:
     paths:
       - architectural_specs.pdf
     expire_in: 30 days
+
+complex-example:
+  extends: .uv-job
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - examples/complex_example.py
+        - examples/config.toml
+        - scripts/build_complex_report.py
+        - src/catsy/**/*
+        - pyproject.toml
+        - uv.lock
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == "exilas" && $CI_PIPELINE_SOURCE == "push"'
+  script:
+    - uv sync --group dev --locked
+    - rm -rf runs/complex_circuit
+    - uv run python examples/complex_example.py
+    - test -f runs/complex_circuit/index.json || true
+    - test -d runs/complex_circuit/plots
+  artifacts:
+    when: always
+    expose_as: "Complex example experiment output"
+    paths:
+      - runs/complex_circuit/
+    expire_in: 30 days
+
+complex-pages:
+  extends: .uv-job
+  stage: deploy
+  needs:
+    - job: complex-example
+      artifacts: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "exilas" && $CI_PIPELINE_SOURCE == "push"'
+  script:
+    - rm -rf _site pages-state
+    - |
+      if git ls-remote --exit-code --heads "${CI_REPOSITORY_URL}" gitlab-pages >/dev/null 2>&1; then
+        git clone --depth 1 --branch gitlab-pages "${CI_REPOSITORY_URL}" pages-state
+      else
+        mkdir pages-state
+        git -C pages-state init
+        git -C pages-state checkout -b gitlab-pages
+        git -C pages-state remote add origin "${CI_REPOSITORY_URL}"
+      fi
+    - mkdir -p _site
+    - cp -a pages-state/. _site/
+    - uv sync --group dev --locked
+    - uv run python scripts/build_complex_report.py
+    - find pages-state -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+    - cp -a _site/. pages-state/
+    - git -C pages-state config user.name "GitLab CI"
+    - git -C pages-state config user.email "gitlab-ci@${CI_SERVER_HOST}"
+    - git -C pages-state add -A
+    - |
+      if ! git -C pages-state diff --cached --quiet; then
+        git -C pages-state commit -m "ci: publish complex report ${CI_COMMIT_SHORT_SHA}"
+        git -C pages-state push origin HEAD:gitlab-pages
+      fi
+    - rm -rf public
+    - cp -a _site public
+  pages: true
+  environment:
+    name: production
 
 pages:
   stage: deploy
