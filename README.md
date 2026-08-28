@@ -207,13 +207,15 @@ The complex example is continuously executed in CI as a small, reproducible expe
            ▼
 ┌─────────────────────┐
 │ lossy Mach–Zehnder  │
-│ phase scan           │
+│ phase scan          │
 └──────────┬──────────┘
            ├──────────────► homodyne
            └──────────────► heterodyne
 ```
-
-Every published run is tied to its exact source commit and keeps its **plots + machine-readable journal together**. The generated simulation explorer provides:
+<details>
+<summary>
+Every published run is tied to its exact source commit and keeps its **plots + machine-readable journal together**.
+</summary>
 
 - stage-by-stage navigation through the experiment;
 - filtering by **Gaussian**, **Fock**, **interferometer**, and **measurement** layers;
@@ -222,8 +224,9 @@ Every published run is tied to its exact source commit and keeps its **plots + m
 - direct links to the source commit and CI run;
 - raw journal files alongside the figures;
 - a persistent archive of earlier commit-addressed runs.
+</details>
 
-**[Open the Catsy simulation explorer →](https://catsy-1d3a5f.idmpages.uni-h.de/)**  -  <sub>also on [GitHub](https://raiyiz.github.io/catsy/)</sub>
+**[→ Open the Catsy simulation explorer](https://catsy-1d3a5f.idmpages.uni-h.de/)**  <sub>also on [GitHub](https://raiyiz.github.io/catsy/)</sub>
 
 The explorer is deliberately static: no server or Python environment is required to browse the results. The plots themselves are generated exclusively through Catsy's visualization helpers.
 
@@ -264,14 +267,13 @@ uv run pytest --plot
 | [`journal.py`](src/catsy/journal.py)   | experiment persistence                                               |
 ## Documentation
 
-The [documentation](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the more detailed API and usage information.
+The [documentation](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the more detailed architectural and mathematical specifications.
 
 The repository also contains examples and tests that can be useful when exploring particular operations.
 
 ## Status
 
-`catsy` is focused on continuous-variable quantum optics rather than providing a general-purpose quantum-computing framework. The API is still developing, but the core conventions and numerical operations are covered by the test suite.
-
+`catsy` is focused on continuous-variable quantum optics and Fock states, rather than providing a general-purpose quantum-computing framework. The API is evolving, and core conventions and numerical operations are covered in the test suite.
 
 
 ## Test coverage
