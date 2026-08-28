@@ -5,12 +5,6 @@ on:
     branches: [main, circuits, pappel, exilas, exilas-complex-example]
   pull_request:
   workflow_dispatch:
-    inputs:
-      publish_complex_report:
-        description: "Publish the complex example simulation explorer to GitHub Pages"
-        required: false
-        default: true
-        type: boolean
 
 permissions:
   contents: read
@@ -77,10 +71,8 @@ jobs:
     name: publish complex example report
     if: >-
       needs.complex-example.result == 'success' &&
-      ((github.event_name == 'push' &&
-        (github.ref_name == 'exilas' || github.ref_name == 'exilas-complex-example')) ||
-       (github.event_name == 'workflow_dispatch' &&
-        inputs.publish_complex_report == true))
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref_name == 'exilas-complex-example'))
     needs: complex-example
     runs-on: ubuntu-latest
     permissions:
@@ -106,9 +98,8 @@ jobs:
           fi
       - name: Build Pages report
         env:
-          REPORT_COMMIT: ${{ github.sha }}
+          REPORT_SHA: ${{ github.sha }}
           REPORT_REF: ${{ github.ref_name }}
-          REPORT_RUN_ID: ${{ github.run_id }}
         run: python scripts/build_complex_report.py
       - name: Publish Pages history
         run: |
@@ -126,10 +117,8 @@ jobs:
     name: deploy complex example report
     if: >-
       needs.publish-complex-report.result == 'success' &&
-      ((github.event_name == 'push' &&
-        (github.ref_name == 'exilas' || github.ref_name == 'exilas-complex-example')) ||
-       (github.event_name == 'workflow_dispatch' &&
-        inputs.publish_complex_report == true))
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref_name == 'exilas-complex-example'))
     needs: publish-complex-report
     runs-on: ubuntu-latest
     permissions:
