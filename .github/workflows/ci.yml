@@ -44,10 +44,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MPLBACKEND: Agg
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -69,20 +65,36 @@ jobs:
           name: complex-example
           path: runs/complex_circuit/
           if-no-files-found: error
+
+  publish-complex-report:
+    name: publish complex example report
+    if: github.event_name == 'push' && github.ref_name == 'exilas-complex-example'
+    needs: complex-example
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Download complex example output
+        uses: actions/download-artifact@v4
+        with:
+          name: complex-example
+          path: runs/complex_circuit
       - name: Restore Pages history
-        if: success() && github.event_name == 'push'
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
             git fetch origin gh-pages
             git worktree add _site origin/gh-pages
           else
-            git worktree add --orphan gh-pages _site
+            git worktree add --orphan -b gh-pages _site
           fi
       - name: Build Pages report
-        if: success() && github.event_name == 'push'
-        run: uv run python scripts/build_complex_report.py
+        run: python scripts/build_complex_report.py
       - name: Publish Pages history
-        if: success() && github.event_name == 'push'
         run: |
           git -C _site config user.name "github-actions[bot]"
           git -C _site config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -90,18 +102,16 @@ jobs:
           git -C _site commit -m "ci: publish complex example $GITHUB_SHA" || exit 0
           git -C _site push origin HEAD:gh-pages
       - name: Upload Pages report
-        if: success() && github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy-complex-report:
     name: deploy complex example report
-    if: github.event_name == 'push' && (github.ref_name == 'exilas' || github.ref_name == 'exilas-complex-example')
-    needs: complex-example
+    if: github.event_name == 'push' && github.ref_name == 'exilas-complex-example'
+    needs: publish-complex-report
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       pages: write
       id-token: write
     environment:
