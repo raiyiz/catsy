@@ -1,8 +1,10 @@
 """Shared pytest fixtures and options for the catsy test suite."""
 
 import os
+import re
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -23,7 +25,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--plot",
         action="store_true",
-        help="run tests marked visualize and display their figures locally",
+        help="run tests marked visualize, save their figures to ./gallery, and display them locally",
     )
     parser.addoption(
         "--plot-pause",
@@ -127,6 +129,54 @@ def plot_enabled(request):
     return bool(request.config.getoption("--plot"))
 
 
+def _figure_filename(request, figure_index: int, figure_count: int) -> str:
+    """Build a stable, filesystem-safe filename from module and test name."""
+    module = Path(request.node.fspath).stem
+    test_name = request.node.name.split("[")[0]
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{module}__{test_name}").strip("_")
+    if figure_count > 1:
+        stem += f"__{figure_index:02d}"
+    return f"{stem}.png"
+
+
+@pytest.fixture(autouse=True)
+def manage_visual_figures(request, monkeypatch):
+    """Save and optionally display visualization figures, then clean them up."""
+    if request.node.get_closest_marker("visualize") is None:
+        yield
+        return
+
+    original_show = plt.show
+
+    def suppress_show(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(plt, "show", suppress_show)
+
+    yield
+
+    if request.config.getoption("--plot") and plt.get_fignums():
+        gallery = Path.cwd() / "gallery"
+        gallery.mkdir(parents=True, exist_ok=True)
+
+        figures = [plt.figure(num) for num in plt.get_fignums()]
+        for index, figure in enumerate(figures, start=1):
+            filename = _figure_filename(request, index, len(figures))
+            figure.savefig(
+                gallery / filename,
+                dpi=180,
+                bbox_inches="tight",
+                facecolor="white",
+            )
+
+        if not IN_CI:
+            pause = request.config.getoption("--plot-pause")
+            original_show(block=False)
+            plt.pause(pause)
+
+    plt.close("all")
+
+
 @pytest.fixture(autouse=True)
 def measure_test_timing(request):
     """Record wall-clock duration and enforce explicit timing budgets."""
@@ -149,30 +199,3 @@ def measure_test_timing(request):
             f"test exceeded timing budget: {duration:.3f}s > {max_seconds:.3f}s",
             pytrace=False,
         )
-
-
-@pytest.fixture(autouse=True)
-def manage_visual_figures(request, monkeypatch):
-    """Own Matplotlib display and cleanup for every visualization test."""
-    if request.node.get_closest_marker("visualize") is None:
-        yield
-        return
-
-    original_show = plt.show
-
-    def suppress_show(*args, **kwargs):
-        """Keep display policy in this fixture rather than individual tests."""
-        return None
-
-    monkeypatch.setattr(plt, "show", suppress_show)
-
-    yield
-
-    # --plot-pause is validated once in pytest_configure, so it's safe to
-    # trust here; figure cleanup below always runs regardless of --plot.
-    if request.config.getoption("--plot") and not IN_CI and plt.get_fignums():
-        pause = request.config.getoption("--plot-pause")
-        original_show(block=False)
-        plt.pause(pause)
-
-    plt.close("all")
