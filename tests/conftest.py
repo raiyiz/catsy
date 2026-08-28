@@ -25,7 +25,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--plot",
         action="store_true",
-        help="run tests marked visualize, save their figures to ./gallery, and display them locally",
+        help="run tests marked visualize, save their figures to ./examples/gallery, and display them locally",
     )
     parser.addoption(
         "--plot-pause",
@@ -130,9 +130,11 @@ def plot_enabled(request):
 
 
 def _figure_filename(request, figure_index: int, figure_count: int) -> str:
-    """Build a stable, filesystem-safe filename from module and test name."""
+    """Build a stable, concise filename from module and test name."""
     module = Path(request.node.fspath).stem
     test_name = request.node.name.split("[")[0]
+    module = re.sub(r"^test_", "", module)
+    test_name = re.sub(r"^test_", "", test_name)
     stem = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{module}__{test_name}").strip("_")
     if figure_count > 1:
         stem += f"__{figure_index:02d}"
@@ -156,7 +158,7 @@ def manage_visual_figures(request, monkeypatch):
     yield
 
     if request.config.getoption("--plot") and plt.get_fignums():
-        gallery = Path.cwd() / "gallery"
+        gallery = Path.cwd() / "examples" / "gallery"
         gallery.mkdir(parents=True, exist_ok=True)
 
         figures = [plt.figure(num) for num in plt.get_fignums()]
