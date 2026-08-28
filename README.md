@@ -30,17 +30,29 @@ state = GaussianState.coherent("signal", alpha=1.2 + 0.4j)
 state = GaussianState.tmsv("signal", "idler", r=0.7)
 ```
 
-The same `GaussianState` interface is used for both single- and multi-mode states. Internally, the state stores its mode ordering, displacement vector, and covariance matrix. Throughout the package, quadratures follow the convention
-
-$$
-\alpha = \frac{x + ip}{\sqrt{2}},
-\qquad
-V_\mathrm{vac} = \frac{I}{2},
-\qquad
-\hbar = 1.
-$$
+The same `GaussianState` interface is used for both single- and multi-mode states. Internally, the state stores its mode ordering, displacement vector, and covariance matrix. 
 
 This phase-space representation is the default because many optical calculations can be performed without introducing a truncated Hilbert space.
+
+### Conventions
+
+The phase-space convention used throughout the package is
+
+* $\hbar = 1$
+* $[x,p] = i$
+* $V_\mathrm{vac} = I/2$
+* quadratures ordered as `(x1, p1, x2, p2, ...)`
+* $\alpha = (x + ip)/\sqrt{2}$
+
+For a single-mode squeezed vacuum with $\theta=0$,
+
+$$
+\operatorname{Var}(x) = \frac{e^{-2r}}{2},
+\qquad
+\operatorname{Var}(p) = \frac{e^{2r}}{2}.
+$$
+
+These conventions are used consistently by the Gaussian and Fock-space interfaces.
 
 ## From states to experiments
 
@@ -75,13 +87,21 @@ GaussianState
 GaussianState
 ```
 
+States are represented in phase space by their first moments and covariance matrix. Common operations include:
+
+* vacuum, coherent, and two-mode squeezed vacuum states
+* squeezing and displacement
+* phase shifts and beam splitters
+* loss and thermal channels
+* homodyne and heterodyne measurements
+
 A circuit therefore does not replace a state, and a state does not have to be embedded in a circuit. You can manipulate a state directly for one-off calculations, or construct a circuit when the sequence of operations itself is something you want to reuse, inspect, serialize, or run with different initial states.
 
 ## When Gaussian states are not enough
 
 Gaussian states are not a universal representation. Some experiments produce or require genuinely non-Gaussian physics, where a covariance matrix alone cannot capture the state.
 
-For these cases, `catsy` can convert a Gaussian state into a **truncated Fock-space representation** backed by QuTiP:
+For these cases, `catsy` can convert a Gaussian state into a **truncated Fock-space representation** backed by [QuTiP](https://qutip.org/):
 
 ```python
 rho = final.to_qutip(N_cutoff=30)
@@ -118,6 +138,13 @@ Most users can therefore stay entirely within the Gaussian representation until 
 
 ## Modes and circuits
 
+Circuits can be serialized and restored, and rendered as a plain-text schematic:
+
+```python
+circuit.render_schematic()      # -> str
+circuit.draw()                  # prints it
+```
+
 A circuit operates on named optical modes such as `"signal"` and `"idler"`. In the simplest code, these names are just strings:
 
 ```python
@@ -125,7 +152,7 @@ circuit.squeeze("signal", r=0.5)
 circuit.beam_splitter("signal", "idler", eta=0.5)
 ```
 
-For applications where mode ownership matters, `Circuit.mode()` can return a runtime `Mode` handle:
+In general though, modes belong to a circuit invoked with `Circuit.mode()` to prevent mixing up modes from different circuits. `add_mode()` is the fluent convenience form: it registers the mode and returns the circuit so that mode registration can be chained. `mode()` registers the mode and returns the `Mode` handle itself. Those distinguish beam paths, ports, channels.
 
 ```python
 circuit = Circuit()
@@ -136,9 +163,6 @@ circuit.squeeze(signal, r=0.5)
 circuit.beam_splitter(signal, idler, eta=0.5)
 ```
 
-`add_mode()` is the fluent convenience form: it registers the mode and returns the circuit so that mode registration can be chained. `mode()` registers the mode and returns the `Mode` handle itself.
-
-Using a `Mode` handle allows the circuit to detect accidental use of a mode belonging to another circuit. Plain strings remain useful when that distinction is unnecessary.
 
 ## Where to start
 | If you want to...                           | Use                               |
@@ -202,80 +226,6 @@ Every published run is tied to its exact source commit and keeps its **plots + m
 **[Open the Catsy simulation explorer →](https://catsy-1d3a5f.idmpages.uni-h.de/)**  -  <sub>also on [GitHub](https://raiyiz.github.io/catsy/)</sub>
 
 The explorer is deliberately static: no server or Python environment is required to browse the results. The plots themselves are generated exclusively through Catsy's visualization helpers.
-
-## Gaussian states
-
-States are represented in phase space by their first moments and covariance matrix. Common operations include:
-
-* vacuum, coherent, and two-mode squeezed vacuum states
-* squeezing and displacement
-* phase shifts and beam splitters
-* loss and thermal channels
-* homodyne and heterodyne measurements
-
-For example:
-
-```python
-from catsy import GaussianState
-state = GaussianState.vacuum(("a",))
-state = state.squeeze("a", r=0.5)
-state = state.displace(
-    "a",
-    alpha=0.4 + 0.2j,
-)
-```
-## Circuits
-
-For a sequence of operations that you want to keep as a reusable experiment, `Circuit` provides an executable sequence independent of the Gaussian state implementation:
-
-```python
-from catsy import Circuit, GaussianState
-
-initial = GaussianState.vacuum(("a", "b"))
-circuit = Circuit().add_mode("a").add_mode("b")
-circuit.squeeze("a", r=0.7, theta=0.0)
-circuit.beam_splitter("a", "b", eta=0.5)
-final = circuit.run(initial)
-```
-
-Circuits can also be serialized and restored, and rendered as a plain-text schematic:
-
-```python
-circuit.render_schematic()   # -> str
-circuit.draw()                # prints it
-```
-
-## Fock-space calculations
-
-Gaussian states can be converted to QuTiP density matrices when an explicit Fock-space representation is useful:
-
-```python
-rho = state.to_qutip(N_cutoff=20)
-```
-
-The cutoff is numerical, so it should be increased until the quantity of interest has converged.
-
-`catsy` uses [QuTiP](https://qutip.org/) for this part of the calculation.
-
-## Conventions
-
-The phase-space convention used throughout the package is
-
-* $\hbar = 1$
-* $[x,p] = i$
-* $V_\mathrm{vac} = I/2$
-* quadratures ordered as `(x1, p1, x2, p2, ...)`
-* $\alpha = (x + ip)/\sqrt{2}$
-
-For a single-mode squeezed vacuum with $\theta=0$,
-
-$$
-\operatorname{Var}(x) = \frac{e^{-2r}}{2},
-\qquad
-\operatorname{Var}(p) = \frac{e^{2r}}{2}.
-$$
-
-These conventions are used consistently by the Gaussian and Fock-space interfaces.
 
 ## Installation
 
