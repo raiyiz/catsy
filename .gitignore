@@ -1,6 +1,8 @@
+.envrc
 __pycache__
 *.pdf
 .coverage
 .aux
 runs/
 examples/gallery/
+

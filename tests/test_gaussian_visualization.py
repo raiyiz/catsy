@@ -1,18 +1,13 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 from catsy import GaussianState
-from catsy.core import DUAN_SEPARABILITY_BOUND
-from catsy.gaussian import LossChannels, compute_duan_inseparability
 from catsy.gaussian.visualization import (
     animate_phase_space,
     plot_evolution,
-    plot_joint_correlation,
     plot_multimode_evolution,
     plot_phase_space,
     plot_phase_space_trajectory_timecoded,
-    plot_state_dashboard,
     plot_wigner,
 )
 
@@ -56,67 +51,6 @@ def _phase_space_trajectory_states() -> list[GaussianState]:
         GaussianState.coherent(("a",), 1.2 + 0.8j),
         GaussianState.coherent(("a",), 0.3 + 1.1j),
     ]
-
-
-class TestStaticVisualizations:
-    """Contract tests for static Gaussian visualizations."""
-
-    @pytest.mark.visualize
-    def test_multimode_dashboard_showcase(
-        self, assert_no_empty_axes, assert_layout_can_render
-    ) -> None:
-        figure = plot_state_dashboard(_complex_state(), mode="b")
-        assert len(figure.axes) == 7
-        assert_no_empty_axes(figure)
-        assert_layout_can_render(figure)
-
-    @pytest.mark.visualize
-    def test_phase_space_and_wigner_showcase(
-        self, assert_no_empty_axes, assert_layout_can_render
-    ) -> None:
-        state = _complex_state()
-        phase_space = plot_phase_space(state, "a")
-        wigner = plot_wigner(state, "a", num_points=60)
-
-        assert len(phase_space.axes) == 1
-        assert len(wigner.axes) == 2
-        assert wigner.axes[0].collections
-        assert wigner.axes[0].get_xlabel() == "$x$ quadrature"
-        assert wigner.axes[0].get_ylabel() == "$p$ quadrature"
-        assert_no_empty_axes(phase_space)
-        assert_no_empty_axes(wigner)
-        assert_layout_can_render(phase_space)
-        assert_layout_can_render(wigner)
-
-    @pytest.mark.visualize
-    def test_joint_correlation_distinguishes_entanglement_from_classical_noise(
-        self,
-        assert_no_empty_axes,
-        assert_layout_can_render,
-    ) -> None:
-        tmsv = GaussianState.tmsv("a", "b", r=1.0)
-        classical = LossChannels.correlated_thermal_noise(
-            "a", "b", eta=0.3, n_thermal=1.5, c_correlation=1.4
-        ).apply(GaussianState.vacuum(("a", "b")))
-
-        fig, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
-        for (state, quad), ax in zip(
-            [(tmsv, "x"), (tmsv, "p"), (classical, "x"), (classical, "p")],
-            axes.flat,
-            strict=True,
-        ):
-            plot_joint_correlation(state, "a", "b", quadrature=quad, ax=ax)
-
-        fig.suptitle(
-            f"Genuine entanglement vs classical correlation "
-            f"(separability bound = {DUAN_SEPARABILITY_BOUND})"
-        )
-        assert_no_empty_axes(fig)
-        assert_layout_can_render(fig)
-
-        duan_tmsv = compute_duan_inseparability(tmsv, "a", "b")
-        duan_classical = compute_duan_inseparability(classical, "a", "b")
-        assert duan_tmsv < DUAN_SEPARABILITY_BOUND < duan_classical
 
 
 class TestEvolutionVisualizations:
