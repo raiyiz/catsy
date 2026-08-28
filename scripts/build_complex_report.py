@@ -5,24 +5,112 @@ from __future__ import annotations
 import html
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 OUTPUT_ROOT = Path("_site")
 RUN_ROOT = Path("runs/complex_circuit")
 
 STAGES = [
-    ("01", "Gaussian preparation", "gaussian", "Prepare and couple the three-mode Gaussian state.", "01_final_signal_phase_space", "Check the initial signal phase-space geometry before the non-Gaussian operations.", "Gaussian state / signal mode"),
-    ("02", "Covariance structure", "gaussian", "Inspect second-order moments of the final Gaussian circuit state.", "02_final_covariance_matrix", "Look for squeezing, variances, and cross-mode covariance structure.", "Covariance matrix"),
-    ("03", "Mode correlations", "gaussian", "Visualize correlations established between signal, idler, and reference.", "03_final_mode_correlations", "Use this as the correlation baseline for the later conditioned measurements.", "Inter-mode correlations"),
-    ("04", "Even cat preparation", "fock", "Prepare the non-Gaussian even Schrödinger cat state.", "04_even_cat_wigner", "Look for the characteristic interference structure distinguishing the cat from a Gaussian state.", "Wigner representation"),
-    ("05", "Cat-state diagnostics", "fock", "Inspect the prepared cat in the complementary state representations.", "05_even_cat_state", "Compare occupation structure and phase-space features before heralding.", "Fock / phase-space diagnostics"),
-    ("06", "Photon subtraction", "fock", "Apply realistic photon subtraction with finite tap reflectivity and detector efficiency.", "06_after_photon_subtraction", "Assess how the heralded operation changes the non-Gaussian state.", "Conditioned Fock state"),
-    ("07", "Photon addition", "fock", "Follow subtraction with realistic photon addition.", "07_after_photon_addition", "Compare the state with the subtraction output and track the effect of the second heralded operation.", "Conditioned Fock state"),
-    ("08", "Mach–Zehnder scan", "interferometer", "Probe the processed state through a lossy 33-point phase scan.", None, "The journal records the phase-dependent interferometric response; this stage is the bridge from state preparation to readout.", "33 phase points"),
-    ("09", "Homodyne readout", "measurement", "Condition the Gaussian state on a signal quadrature measurement.", "08_after_homodyne_idler", "Inspect the conditioned idler state and the effect of selecting one quadrature outcome.", "Quadrature measurement"),
-    ("10", "Heterodyne readout", "measurement", "Condition the Gaussian state on simultaneous x/p detection.", "09_after_heterodyne_idler", "Compare the conditioned state with homodyne, noting the different measurement information retained.", "Phase-space measurement"),
-    ("11", "Measurement comparison", "measurement", "Compare the states produced by the two measurement schemes.", "10_measurement_conditioning", "Use this final diagnostic to connect the measurement outcomes with their conditioned states.", "Homodyne vs heterodyne"),
+    (
+        "01",
+        "Gaussian preparation",
+        "gaussian",
+        "Prepare and couple the three-mode Gaussian state.",
+        "01_final_signal_phase_space",
+        "Check the initial signal phase-space geometry before the non-Gaussian operations.",
+        "Gaussian state / signal mode",
+    ),
+    (
+        "02",
+        "Covariance structure",
+        "gaussian",
+        "Inspect second-order moments of the final Gaussian circuit state.",
+        "02_final_covariance_matrix",
+        "Look for squeezing, variances, and cross-mode covariance structure.",
+        "Covariance matrix",
+    ),
+    (
+        "03",
+        "Mode correlations",
+        "gaussian",
+        "Visualize correlations established between signal, idler, and reference.",
+        "03_final_mode_correlations",
+        "Use this as the correlation baseline for the later conditioned measurements.",
+        "Inter-mode correlations",
+    ),
+    (
+        "04",
+        "Even cat preparation",
+        "fock",
+        "Prepare the non-Gaussian even Schrödinger cat state.",
+        "04_even_cat_wigner",
+        "Look for the characteristic interference structure distinguishing the cat from a Gaussian state.",
+        "Wigner representation",
+    ),
+    (
+        "05",
+        "Cat-state diagnostics",
+        "fock",
+        "Inspect the prepared cat in the complementary state representations.",
+        "05_even_cat_state",
+        "Compare occupation structure and phase-space features before heralding.",
+        "Fock / phase-space diagnostics",
+    ),
+    (
+        "06",
+        "Photon subtraction",
+        "fock",
+        "Apply realistic photon subtraction with finite tap reflectivity and detector efficiency.",
+        "06_after_photon_subtraction",
+        "Assess how the heralded operation changes the non-Gaussian state.",
+        "Conditioned Fock state",
+    ),
+    (
+        "07",
+        "Photon addition",
+        "fock",
+        "Follow subtraction with realistic photon addition.",
+        "07_after_photon_addition",
+        "Compare the state with the subtraction output and track the effect of the second heralded operation.",
+        "Conditioned Fock state",
+    ),
+    (
+        "08",
+        "Mach–Zehnder scan",
+        "interferometer",
+        "Probe the processed state through a lossy 33-point phase scan.",
+        None,
+        "The journal records the phase-dependent interferometric response; this stage is the bridge from state preparation to readout.",
+        "33 phase points",
+    ),
+    (
+        "09",
+        "Homodyne readout",
+        "measurement",
+        "Condition the Gaussian state on a signal quadrature measurement.",
+        "08_after_homodyne_idler",
+        "Inspect the conditioned idler state and the effect of selecting one quadrature outcome.",
+        "Quadrature measurement",
+    ),
+    (
+        "10",
+        "Heterodyne readout",
+        "measurement",
+        "Condition the Gaussian state on simultaneous x/p detection.",
+        "09_after_heterodyne_idler",
+        "Compare the conditioned state with homodyne, noting the different measurement information retained.",
+        "Phase-space measurement",
+    ),
+    (
+        "11",
+        "Measurement comparison",
+        "measurement",
+        "Compare the states produced by the two measurement schemes.",
+        "10_measurement_conditioning",
+        "Use this final diagnostic to connect the measurement outcomes with their conditioned states.",
+        "Homodyne vs heterodyne",
+    ),
 ]
 
 
@@ -45,7 +133,7 @@ def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
     for number, title, category, description, plot_stem, inspect, result in STAGES:
         pipeline.append(
             f'<a class="pipeline-step" href="#stage-{esc(number)}">'
-            f'<span>{esc(number)}</span><strong>{esc(title)}</strong><small>{esc(category)}</small></a>'
+            f"<span>{esc(number)}</span><strong>{esc(title)}</strong><small>{esc(category)}</small></a>"
         )
         plot = by_stem.get(plot_stem) if plot_stem else None
         image = ""
@@ -61,10 +149,10 @@ def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
             f'<article class="stage" data-category="{esc(category)}" id="stage-{esc(number)}">'
             f'<div class="stage-number">{esc(number)}</div>{visual}'
             f'<div class="stage-copy"><div class="kicker">{esc(category)}</div>'
-            f'<h3>{esc(title)}</h3><p>{esc(description)}</p>'
+            f"<h3>{esc(title)}</h3><p>{esc(description)}</p>"
             f'<div class="meaning"><strong>What to inspect</strong><span>{esc(inspect)}</span></div>'
             f'<div class="result"><strong>Diagnostic</strong><span>{esc(result)}</span></div>'
-            f'</div></article>'
+            f"</div></article>"
         )
 
     journal_links = []
@@ -73,7 +161,7 @@ def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
         journal_links.append(
             f'<a class="journal-file" href="{relative}" target="_blank" rel="noopener">'
             f'<span class="file-type">{esc(journal.suffix[1:].upper())}</span>'
-            f'<span><strong>{relative}</strong><small>{journal.stat().st_size:,} bytes · open raw file ↗</small></span></a>'
+            f"<span><strong>{relative}</strong><small>{journal.stat().st_size:,} bytes · open raw file ↗</small></span></a>"
         )
 
     template = """<!doctype html>
@@ -112,7 +200,10 @@ def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
         .replace("__JOURNAL_COUNT__", str(len(journals)))
         .replace("__PIPELINE__", "".join(pipeline))
         .replace("__STAGES__", "".join(stages))
-        .replace("__JOURNAL__", "".join(journal_links) or "<p>No journal files were generated.</p>")
+        .replace(
+            "__JOURNAL__",
+            "".join(journal_links) or "<p>No journal files were generated.</p>",
+        )
     )
     (site_run_root / "index.html").write_text(report, encoding="utf-8")
 
@@ -122,32 +213,40 @@ def main() -> None:
         raise SystemExit(f"Missing complex-example output: {RUN_ROOT}")
 
     commit = os.environ.get("GITHUB_SHA", "unknown")
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d · %H:%M UTC")
+    generated_at = datetime.now(UTC).strftime("%Y-%m-%d · %H:%M UTC")
     site_run_root = OUTPUT_ROOT / "runs" / commit
     site_run_root.mkdir(parents=True, exist_ok=True)
     shutil.copytree(RUN_ROOT, site_run_root, dirs_exist_ok=True)
     build_run_page(site_run_root, commit, generated_at)
 
     runs_root = OUTPUT_ROOT / "runs"
-    run_dirs = sorted(
-        (p for p in runs_root.iterdir() if p.is_dir()),
-        key=lambda p: p.name,
-        reverse=True,
-    ) if runs_root.exists() else []
+    run_dirs = (
+        sorted(
+            (p for p in runs_root.iterdir() if p.is_dir()),
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        if runs_root.exists()
+        else []
+    )
     cards = "".join(
         f'<a class="run" href="runs/{esc(p.name)}/"><span class="dot"></span>'
-        f'<span><strong>{esc(run_datetime(p))}</strong><small>{esc(p.name[:12])} · open simulation explorer →</small></span></a>'
+        f"<span><strong>{esc(run_datetime(p))}</strong><small>{esc(p.name[:12])} · open simulation explorer →</small></span></a>"
         for p in run_dirs
     )
     index = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Catsy · Simulation archive</title><style>
-:root{color-scheme:dark;--bg:#0a0d12;--panel:#10151d;--line:#252d39;--text:#e7ebf0;--muted:#8994a3;--accent:#8fb8c5}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 Inter,ui-sans-serif,system-ui,sans-serif}main{width:min(920px,calc(100% - 32px));margin:auto;padding:72px 0}.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:750}h1{font-size:clamp(38px,6vw,58px);line-height:1;letter-spacing:-.04em;margin:8px 0 14px}p{max-width:70ch;color:var(--muted)}.run{display:flex;align-items:center;gap:13px;padding:14px;border:1px solid var(--line);background:var(--panel);border-radius:8px;margin:7px 0}.run:hover{border-color:#485564}.run strong,.run small{display:block}.run strong{font-size:12px}.run small{color:var(--muted);font:10px ui-monospace,monospace;margin-top:2px}.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}</style></head><body><main><div class="eyebrow">Catsy · commit-addressed simulation archive</div><h1>Complex experiment runs</h1><p>Visual history of the Gaussian → Fock → interferometric workflow. Each run keeps its stage diagnostics and machine-readable journal together.</p><div style="margin-top:30px">__CARDS__</div></main></body></html>""".replace("__CARDS__", cards or "<p>No reports yet.</p>")
+:root{color-scheme:dark;--bg:#0a0d12;--panel:#10151d;--line:#252d39;--text:#e7ebf0;--muted:#8994a3;--accent:#8fb8c5}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 Inter,ui-sans-serif,system-ui,sans-serif}main{width:min(920px,calc(100% - 32px));margin:auto;padding:72px 0}.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:750}h1{font-size:clamp(38px,6vw,58px);line-height:1;letter-spacing:-.04em;margin:8px 0 14px}p{max-width:70ch;color:var(--muted)}.run{display:flex;align-items:center;gap:13px;padding:14px;border:1px solid var(--line);background:var(--panel);border-radius:8px;margin:7px 0}.run:hover{border-color:#485564}.run strong,.run small{display:block}.run strong{font-size:12px}.run small{color:var(--muted);font:10px ui-monospace,monospace;margin-top:2px}.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}</style></head><body><main><div class="eyebrow">Catsy · commit-addressed simulation archive</div><h1>Complex experiment runs</h1><p>Visual history of the Gaussian → Fock → interferometric workflow. Each run keeps its stage diagnostics and machine-readable journal together.</p><div style="margin-top:30px">__CARDS__</div></main></body></html>""".replace(
+        "__CARDS__", cards or "<p>No reports yet.</p>"
+    )
     (OUTPUT_ROOT / "index.html").write_text(index, encoding="utf-8")
 
 
 def run_datetime(path: Path) -> str:
     try:
-        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).strftime("%Y-%m-%d · %H:%M UTC")
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).strftime(
+            "%Y-%m-%d · %H:%M UTC"
+        )
     except OSError:
         return "time unavailable"
 
