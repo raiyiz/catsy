@@ -138,6 +138,121 @@ CATEGORY_LABELS = {
     "measurement": "Measurement",
 }
 
+# The real topology built by examples/complex_example.py:build_circuit(), with
+# the parameter values from examples/config.toml. Kept here as data (rather
+# than introspecting a live Circuit object) because this script runs in the
+# Pages-publishing job, which never installs catsy.
+CIRCUIT_NAME = "Three-mode Gaussian demo"
+CIRCUIT_ROWS = ["signal", "idler", "reference"]
+# column, kind ("box" | "link"), row(s), label, sub-label
+CIRCUIT_OPS = [
+    (1, "box", "signal", "Squeeze", "r = 0.60"),
+    (2, "box", "signal", "Displace", "α"),
+    (3, "link", ("signal", "idler"), "Beam splitter", "η = 0.65"),
+    (4, "box", "idler", "Rotate", "φ = 0.35"),
+    (5, "box", "idler", "Thermal loss", "η = 0.90, n̄ = 0.15"),
+    (6, "box", "reference", "Squeeze", "r = 0.35, θ = π/4"),
+    (7, "link", ("idler", "reference"), "Beam splitter", "η = 0.50"),
+    (8, "box", "signal", "Loss", "η = 0.92"),
+]
+CIRCUIT_LAST_COL = 9  # measurement / readout column
+
+
+def render_circuit_diagram() -> str:
+    col_w, x0 = 108, 60
+    row_y = {"signal": 56, "idler": 156, "reference": 256}
+    box_w, box_h = 96, 46
+
+    def x_of(col: int) -> float:
+        return x0 + col * col_w
+
+    width = x_of(CIRCUIT_LAST_COL) + 150
+    height = 320
+
+    parts: list[str] = []
+
+    # wires span the full timeline for every mode - all three start in vacuum
+    for row in CIRCUIT_ROWS:
+        y = row_y[row]
+        parts.append(
+            f'<line class="c-wire" x1="{x0 - 20}" y1="{y}" x2="{x_of(CIRCUIT_LAST_COL) + 60}" y2="{y}"></line>'
+        )
+        parts.append(
+            f'<text class="c-row-label" x="{x0 - 20}" y="{y - 16}">{esc(row)}</text>'
+        )
+        parts.append(f'<text class="c-vac" x="{x0 - 20}" y="{y + 4}">|0⟩</text>')
+
+    for col, kind, row, label, sub in CIRCUIT_OPS:
+        cx = x_of(col)
+        if kind == "box":
+            y = row_y[row]
+            parts.append(
+                f'<rect class="c-box" x="{cx - box_w / 2:.1f}" y="{y - box_h / 2:.1f}" '
+                f'width="{box_w}" height="{box_h}" rx="8"></rect>'
+            )
+            parts.append(
+                f'<text class="c-label" x="{cx}" y="{y - 3}" text-anchor="middle">{esc(label)}</text>'
+            )
+            parts.append(
+                f'<text class="c-sub" x="{cx}" y="{y + 13}" text-anchor="middle">{esc(sub)}</text>'
+            )
+        else:
+            row_a, row_b = row
+            y_a, y_b = row_y[row_a], row_y[row_b]
+            parts.append(
+                f'<line class="c-wire c-link" x1="{cx}" y1="{y_a}" x2="{cx}" y2="{y_b}"></line>'
+            )
+            mid_y = (y_a + y_b) / 2
+            parts.append(
+                f'<rect class="c-box" x="{cx - box_w / 2:.1f}" y="{mid_y - box_h / 2:.1f}" '
+                f'width="{box_w}" height="{box_h}" rx="8"></rect>'
+            )
+            parts.append(
+                f'<text class="c-label" x="{cx}" y="{mid_y - 3}" text-anchor="middle">{esc(label)}</text>'
+            )
+            parts.append(
+                f'<text class="c-sub" x="{cx}" y="{mid_y + 13}" text-anchor="middle">{esc(sub)}</text>'
+            )
+
+    # idler and reference simply continue on to the diagnostics already shown
+    # in the stage cards (mode correlations, conditioned readout)
+    for row in ("idler", "reference"):
+        y = row_y[row]
+        end_x = x_of(CIRCUIT_LAST_COL) - 10
+        parts.append(
+            f'<text class="c-port" x="{end_x}" y="{y + 4}" text-anchor="end">→ readout</text>'
+        )
+
+    # signal forks into the two independent measurement schemes
+    sig_y = row_y["signal"]
+    fork_x = x_of(8) + box_w / 2 + 26
+    for dy, label, sub in ((-52, "Homodyne", "φ = π/6"), (52, "Heterodyne", "x, p")):
+        end_y = sig_y + dy
+        parts.append(
+            f'<path class="c-wire" d="M {fork_x - 26} {sig_y} '
+            f'C {fork_x + 10} {sig_y}, {fork_x + 10} {end_y}, {fork_x + 46} {end_y}" fill="none"></path>'
+        )
+        parts.append(
+            f'<rect class="c-box meas" x="{fork_x + 46:.1f}" y="{end_y - box_h / 2:.1f}" '
+            f'width="{box_w}" height="{box_h}" rx="8"></rect>'
+        )
+        parts.append(
+            f'<text class="c-label" x="{fork_x + 46 + box_w / 2}" y="{end_y - 3}" text-anchor="middle">{esc(label)}</text>'
+        )
+        parts.append(
+            f'<text class="c-sub" x="{fork_x + 46 + box_w / 2}" y="{end_y + 13}" text-anchor="middle">{esc(sub)}</text>'
+        )
+
+    width = fork_x + 46 + box_w + 30
+    return (
+        f'<svg class="circuit" viewBox="0 0 {width:.0f} {height}" role="img" '
+        f'aria-label="Signal, idler, and reference mode wires through squeezing, a beam splitter, '
+        f'rotation, thermal loss, a second beam splitter, loss, and finally homodyne and heterodyne readout on the signal mode.">'
+        + "".join(parts)
+        + "</svg>"
+    )
+
+
 PAGE_STYLE = """
 :root{
   color-scheme:dark;
@@ -188,6 +303,22 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.02em;mar
 .section-head{margin-bottom:22px;max-width:60ch}
 .section-head h2{font-size:24px}
 .section-head p{margin:8px 0 0;color:var(--muted);font-size:14.5px}
+
+.circuit-card{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:26px 24px 20px;overflow-x:auto}
+.section.alt .circuit-card{background:var(--surface-2)}
+svg.circuit{width:100%;min-width:640px;height:auto;display:block}
+.c-wire{stroke:var(--line);stroke-width:2}
+.c-link{stroke:var(--gaussian);stroke-width:2;opacity:.5}
+.c-box{fill:rgba(95,211,232,.10);stroke:var(--gaussian);stroke-width:1.4}
+.c-box.meas{fill:rgba(179,166,242,.14);stroke:var(--measurement)}
+.c-label{font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--text)}
+.c-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:var(--muted)}
+.c-row-label{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.c-vac{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--muted)}
+.c-port{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:var(--muted)}
+.circuit-legend{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap}
+.circuit-legend span{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.circuit-legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
 
 .pipeline{display:grid;grid-template-columns:repeat(11,1fr);gap:6px}
 .pipeline-step{min-height:92px;padding:12px 10px;border:1px solid var(--line);border-radius:9px;
@@ -375,7 +506,7 @@ def build_run_page(
 <style>{PAGE_STYLE}</style></head><body>
 <header class="topbar"><div class="container topbar-inner">
   <a class="brand" href="../.."><span class="dot"></span>catsy · lab</a>
-  <nav class="nav"><a href="../..">all runs</a><a href="#pipeline">pipeline</a><a href="#stages">stages</a><a href="#journal">journal</a></nav>
+  <nav class="nav"><a href="../..">all runs</a><a href="#circuit">circuit</a><a href="#pipeline">pipeline</a><a href="#stages">stages</a><a href="#journal">journal</a></nav>
 </div></header>
 <main>
 <section class="hero"><div class="container">
@@ -399,6 +530,19 @@ def build_run_page(
     <div class="metric"><div class="value">2</div><div class="label">readout schemes</div></div>
     <div class="metric"><div class="value">33</div><div class="label">MZI phase points</div></div>
     <div class="metric"><div class="value">{len(plots)}</div><div class="label">saved diagnostics</div></div>
+  </div>
+</div></section>
+
+<section class="section" id="circuit"><div class="container">
+  <div class="section-head"><div class="eyebrow">Circuit topology</div>
+  <h2>What the three modes actually go through</h2>
+  <p>The Gaussian half of the experiment, as built by <span class="mono">build_circuit()</span> — each wire is a
+  mode starting in vacuum; each box is the operation applied to it, in the order it runs.</p></div>
+  <div class="circuit-card">{render_circuit_diagram()}</div>
+  <div class="circuit-legend">
+    <span><span class="sw" style="background:var(--gaussian)"></span>Gaussian operation</span>
+    <span><span class="sw" style="background:var(--measurement)"></span>measurement</span>
+    <span class="mono">circuit name: “{esc(CIRCUIT_NAME)}”</span>
   </div>
 </div></section>
 
