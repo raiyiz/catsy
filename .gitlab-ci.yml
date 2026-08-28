@@ -166,7 +166,6 @@ complex-example:
     - uv sync --group dev --locked
     - rm -rf runs/complex_circuit
     - uv run python examples/complex_example.py
-    - test -f runs/complex_circuit/index.json || true
     - test -d runs/complex_circuit/plots
   artifacts:
     when: always
@@ -184,35 +183,18 @@ complex-pages:
   rules:
     - if: '$CI_COMMIT_BRANCH == "exilas" && $CI_PIPELINE_SOURCE == "push"'
   script:
-    - rm -rf _site pages-state
-    - |
-      if git ls-remote --exit-code --heads "${CI_REPOSITORY_URL}" gitlab-pages >/dev/null 2>&1; then
-        git clone --depth 1 --branch gitlab-pages "${CI_REPOSITORY_URL}" pages-state
-      else
-        mkdir pages-state
-        git -C pages-state init
-        git -C pages-state checkout -b gitlab-pages
-        git -C pages-state remote add origin "${CI_REPOSITORY_URL}"
-      fi
-    - mkdir -p _site
-    - cp -a pages-state/. _site/
+    - rm -rf _site public
     - uv sync --group dev --locked
     - uv run python scripts/build_complex_report.py
-    - find pages-state -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-    - cp -a _site/. pages-state/
-    - git -C pages-state config user.name "GitLab CI"
-    - git -C pages-state config user.email "gitlab-ci@${CI_SERVER_HOST}"
-    - git -C pages-state add -A
-    - |
-      if ! git -C pages-state diff --cached --quiet; then
-        git -C pages-state commit -m "ci: publish complex report ${CI_COMMIT_SHORT_SHA}"
-        git -C pages-state push origin HEAD:gitlab-pages
-      fi
-    - rm -rf public
+    # The report is deployed as a one-segment GitLab Pages parallel deployment,
+    # so its link back to the project root needs one .. rather than ../../.
+    - sed -i 's|href="../../"|href="../"|g' _site/index.html
     - cp -a _site public
-  pages: true
+  pages:
+    path_prefix: "complex-${CI_COMMIT_SHORT_SHA}"
+    expire_in: never
   environment:
-    name: production
+    name: "complex-report/${CI_COMMIT_SHORT_SHA}"
 
 pages:
   stage: deploy
