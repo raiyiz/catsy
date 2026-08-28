@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Commit-addressed Catsy complex experiment report for 43395974974b">
+<title>Catsy Lab · Complex experiment · 43395974974b</title>
+<style>
+:root { color-scheme: dark; --bg:#070b12; --panel:rgba(17,24,39,.78); --line:rgba(148,163,184,.16); --text:#edf2f7; --muted:#94a3b8; --accent:#7dd3fc; --accent2:#c4b5fd; --good:#86efac; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:radial-gradient(circle at 15% 0%,rgba(56,189,248,.13),transparent 30rem),radial-gradient(circle at 90% 15%,rgba(139,92,246,.13),transparent 32rem),var(--bg); color:var(--text); font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+a { color:inherit; text-decoration:none; }
+.container { width:min(1240px,calc(100% - 40px)); margin:auto; }
+.topbar { position:sticky; top:0; z-index:10; backdrop-filter:blur(18px); background:rgba(7,11,18,.72); border-bottom:1px solid var(--line); }
+.topbar-inner { min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.brand { font-weight:800; letter-spacing:.02em; }
+.brand span { color:var(--accent); }
+.nav { display:flex; gap:18px; color:var(--muted); font-size:13px; }
+.nav a:hover { color:var(--text); }
+.hero { padding:78px 0 52px; position:relative; }
+.eyebrow { color:var(--accent); text-transform:uppercase; letter-spacing:.18em; font-size:11px; font-weight:800; }
+h1 { margin:10px 0 14px; font-size:clamp(38px,6vw,70px); line-height:.98; letter-spacing:-.045em; max-width:850px; }
+.lead { max-width:800px; color:#cbd5e1; font-size:18px; }
+.badges { display:flex; flex-wrap:wrap; gap:8px; margin:25px 0; }
+.badge { border:1px solid var(--line); background:rgba(15,23,42,.62); border-radius:999px; padding:5px 10px; color:#cbd5e1; font-size:12px; }
+.badge.good { color:var(--good); }
+.meta-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:30px; }
+.metric { padding:17px; border:1px solid var(--line); border-radius:16px; background:var(--panel); box-shadow:0 18px 50px rgba(0,0,0,.15); }
+.metric .value { font-size:24px; font-weight:800; letter-spacing:-.03em; }
+.metric .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.12em; margin-top:2px; }
+.section { padding:45px 0; }
+.section-head { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:22px; }
+h2 { margin:0; font-size:30px; letter-spacing:-.03em; }
+.section-head p { margin:5px 0 0; color:var(--muted); }
+.pipeline { display:grid; grid-template-columns:repeat(11,1fr); gap:8px; align-items:stretch; }
+.pipeline-step { position:relative; min-height:104px; padding:13px 10px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(145deg,rgba(30,41,59,.72),rgba(15,23,42,.55)); }
+.pipeline-step::after { content:"→"; position:absolute; right:-12px; top:40%; color:#64748b; z-index:2; }
+.pipeline-step:last-child::after { display:none; }
+.pipeline-step .num { color:var(--accent); font:700 11px ui-monospace,SFMono-Regular,monospace; }
+.pipeline-step strong { display:block; margin-top:8px; font-size:12px; line-height:1.25; }
+.pipeline-step small { display:block; color:var(--muted); margin-top:6px; font-size:10px; line-height:1.25; }
+.stages { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+.stage { display:grid; grid-template-columns:44px minmax(180px,42%) 1fr; min-height:205px; overflow:hidden; border:1px solid var(--line); border-radius:18px; background:var(--panel); transition:transform .2s,border-color .2s; }
+.stage:hover { transform:translateY(-2px); border-color:rgba(125,211,252,.35); }
+.stage-index { padding:18px 10px; color:var(--accent2); font:800 12px ui-monospace,SFMono-Regular,monospace; }
+.stage-image { display:block; min-height:205px; background:#05080e; overflow:hidden; }
+.stage-image img { width:100%; height:100%; min-height:205px; object-fit:cover; display:block; }
+.stage-image.empty { display:flex; align-items:center; justify-content:center; flex-direction:column; color:#64748b; font-size:38px; }
+.stage-image.empty small { font-size:10px; color:var(--muted); }
+.stage-body { padding:22px 20px; }
+.stage-body h3 { margin:0 0 8px; font-size:18px; }
+.stage-body p { margin:0; color:var(--muted); font-size:13px; }
+.gallery { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.gallery-card { border:1px solid var(--line); border-radius:16px; overflow:hidden; background:var(--panel); transition:transform .2s,border-color .2s; }
+.gallery-card:hover { transform:translateY(-3px); border-color:rgba(196,181,253,.45); }
+.gallery-image { aspect-ratio:16/10; background:#05080e; }
+.gallery-image img { width:100%; height:100%; object-fit:contain; display:block; }
+.gallery-caption { display:flex; justify-content:space-between; gap:10px; padding:12px 14px; }
+.gallery-caption span { font-weight:700; font-size:13px; }
+.gallery-caption small { color:var(--muted); font-size:10px; white-space:nowrap; }
+.journal { display:grid; gap:10px; max-width:850px; }
+.journal-file { display:flex; align-items:center; gap:14px; border:1px solid var(--line); border-radius:13px; padding:13px; background:var(--panel); }
+.journal-file:hover { border-color:rgba(125,211,252,.35); }
+.file-icon { width:42px; height:42px; display:grid; place-items:center; border-radius:10px; background:rgba(125,211,252,.1); color:var(--accent); font:800 10px ui-monospace,monospace; }
+.journal-file strong,.journal-file small { display:block; }
+.journal-file strong { font-size:13px; }
+.journal-file small { color:var(--muted); font-size:11px; }
+.footer { padding:35px 0 70px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); }
+.links { display:flex; gap:12px; flex-wrap:wrap; }
+.button { border:1px solid var(--line); padding:8px 12px; border-radius:10px; background:rgba(15,23,42,.65); }
+.button:hover { border-color:var(--accent); color:var(--accent); }
+@media(max-width:900px) { .meta-grid { grid-template-columns:repeat(2,1fr); } .pipeline { grid-template-columns:repeat(3,1fr); } .pipeline-step::after { display:none; } .stages,.gallery { grid-template-columns:1fr; } }
+@media(max-width:600px) { .container { width:min(100% - 24px,1240px); } .hero { padding-top:52px; } .meta-grid { grid-template-columns:1fr 1fr; } .stage { grid-template-columns:34px 1fr; } .stage-image { grid-column:2; min-height:180px; } .stage-body { grid-column:2; } .nav { display:none; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="container topbar-inner"><a class="brand" href="../..">catsy <span>LAB</span></a><nav class="nav"><a href="../../">all runs</a><a href="#pipeline">pipeline</a><a href="#gallery">plots</a><a href="#journal">journal</a></nav></div></header>
+<main>
+<section class="hero"><div class="container">
+<div class="eyebrow">Commit-addressed experiment report</div>
+<h1>Gaussian → non-Gaussian → interferometric readout</h1>
+<p class="lead">A visual record of the Catsy complex example: three-mode Gaussian state preparation, heralded Fock-space processing, lossy Mach–Zehnder interferometry, and complementary homodyne / heterodyne measurements.</p>
+<div class="badges"><span class="badge good">● CI generated</span><span class="badge">commit <code>43395974974b</code></span><span class="badge">10 plots</span><span class="badge">1 journal files</span></div>
+<div class="meta-grid">
+<div class="metric"><div class="value">3</div><div class="label">Gaussian modes</div></div>
+<div class="metric"><div class="value">2</div><div class="label">Measurement schemes</div></div>
+<div class="metric"><div class="value">33</div><div class="label">MZI phase points</div></div>
+<div class="metric"><div class="value">10</div><div class="label">Saved diagnostics</div></div>
+</div>
+<div class="links" style="margin-top:20px"><a class="button" href="https://github.com/raiyiz/catsy/commit/43395974974b9092dcc3fc40c5ea0f2ee6a0e4c4" target="_blank">view commit ↗</a><a class="button" href="https://github.com/raiyiz/catsy/actions" target="_blank">view CI ↗</a><a class="button" href="../../">← all runs</a></div>
+</div></section>
+
+<section class="section" id="pipeline"><div class="container"><div class="section-head"><div><h2>The experiment pipeline</h2><p>From Gaussian preparation to two independent signal readouts.</p></div></div>
+<div class="pipeline"><div class="pipeline-step"><span class="num">01</span><strong>Gaussian preparation</strong><small>Prepare and couple the three-mode Gaussian state.</small></div><div class="pipeline-step"><span class="num">02</span><strong>Gaussian diagnostics</strong><small>Inspect covariance and inter-mode correlations.</small></div><div class="pipeline-step"><span class="num">03</span><strong>Mode correlations</strong><small>Visualize the correlations created by the Gaussian circuit.</small></div><div class="pipeline-step"><span class="num">04</span><strong>Even cat state</strong><small>Prepare the non-Gaussian even Schrödinger cat.</small></div><div class="pipeline-step"><span class="num">05</span><strong>Cat-state diagnostics</strong><small>Inspect the cat in the Fock basis and phase space.</small></div><div class="pipeline-step"><span class="num">06</span><strong>Heralded photon subtraction</strong><small>Apply a lossy, detector-limited subtraction event.</small></div><div class="pipeline-step"><span class="num">07</span><strong>Heralded photon addition</strong><small>Follow subtraction with realistic photon addition.</small></div><div class="pipeline-step"><span class="num">08</span><strong>Mach–Zehnder interferometer</strong><small>Probe the processed state across a lossy phase scan.</small></div><div class="pipeline-step"><span class="num">09</span><strong>Homodyne readout</strong><small>Condition the Gaussian state on a signal quadrature measurement.</small></div><div class="pipeline-step"><span class="num">10</span><strong>Heterodyne readout</strong><small>Condition the Gaussian state on simultaneous x/p detection.</small></div><div class="pipeline-step"><span class="num">11</span><strong>Measurement comparison</strong><small>Compare the conditioned phase-space states.</small></div></div>
+</div></section>
+
+<section class="section"><div class="container"><div class="section-head"><div><h2>Stage-by-stage</h2><p>Each card links directly to the diagnostic produced at that point in the experiment.</p></div></div>
+<div class="stages"><article class="stage"><div class="stage-index">01</div><a class="stage-image" href="plots/01_final_signal_phase_space.png" target="_blank"><img src="plots/01_final_signal_phase_space.png" alt="Gaussian preparation" loading="lazy"></a><div class="stage-body"><h3>Gaussian preparation</h3><p>Prepare and couple the three-mode Gaussian state.</p></div></article><article class="stage"><div class="stage-index">02</div><a class="stage-image" href="plots/02_final_covariance_matrix.png" target="_blank"><img src="plots/02_final_covariance_matrix.png" alt="Gaussian diagnostics" loading="lazy"></a><div class="stage-body"><h3>Gaussian diagnostics</h3><p>Inspect covariance and inter-mode correlations.</p></div></article><article class="stage"><div class="stage-index">03</div><a class="stage-image" href="plots/03_final_mode_correlations.png" target="_blank"><img src="plots/03_final_mode_correlations.png" alt="Mode correlations" loading="lazy"></a><div class="stage-body"><h3>Mode correlations</h3><p>Visualize the correlations created by the Gaussian circuit.</p></div></article><article class="stage"><div class="stage-index">04</div><a class="stage-image" href="plots/04_even_cat_wigner.png" target="_blank"><img src="plots/04_even_cat_wigner.png" alt="Even cat state" loading="lazy"></a><div class="stage-body"><h3>Even cat state</h3><p>Prepare the non-Gaussian even Schrödinger cat.</p></div></article><article class="stage"><div class="stage-index">05</div><a class="stage-image" href="plots/05_even_cat_state.png" target="_blank"><img src="plots/05_even_cat_state.png" alt="Cat-state diagnostics" loading="lazy"></a><div class="stage-body"><h3>Cat-state diagnostics</h3><p>Inspect the cat in the Fock basis and phase space.</p></div></article><article class="stage"><div class="stage-index">06</div><a class="stage-image" href="plots/06_after_photon_subtraction.png" target="_blank"><img src="plots/06_after_photon_subtraction.png" alt="Heralded photon subtraction" loading="lazy"></a><div class="stage-body"><h3>Heralded photon subtraction</h3><p>Apply a lossy, detector-limited subtraction event.</p></div></article><article class="stage"><div class="stage-index">07</div><a class="stage-image" href="plots/07_after_photon_addition.png" target="_blank"><img src="plots/07_after_photon_addition.png" alt="Heralded photon addition" loading="lazy"></a><div class="stage-body"><h3>Heralded photon addition</h3><p>Follow subtraction with realistic photon addition.</p></div></article><article class="stage"><div class="stage-index">08</div><div class="stage-image empty"><span>◌</span><small>phase scan recorded in journal</small></div><div class="stage-body"><h3>Mach–Zehnder interferometer</h3><p>Probe the processed state across a lossy phase scan.</p></div></article><article class="stage"><div class="stage-index">09</div><a class="stage-image" href="plots/08_after_homodyne_idler.png" target="_blank"><img src="plots/08_after_homodyne_idler.png" alt="Homodyne readout" loading="lazy"></a><div class="stage-body"><h3>Homodyne readout</h3><p>Condition the Gaussian state on a signal quadrature measurement.</p></div></article><article class="stage"><div class="stage-index">10</div><a class="stage-image" href="plots/09_after_heterodyne_idler.png" target="_blank"><img src="plots/09_after_heterodyne_idler.png" alt="Heterodyne readout" loading="lazy"></a><div class="stage-body"><h3>Heterodyne readout</h3><p>Condition the Gaussian state on simultaneous x/p detection.</p></div></article><article class="stage"><div class="stage-index">11</div><a class="stage-image" href="plots/10_measurement_conditioning.png" target="_blank"><img src="plots/10_measurement_conditioning.png" alt="Measurement comparison" loading="lazy"></a><div class="stage-body"><h3>Measurement comparison</h3><p>Compare the conditioned phase-space states.</p></div></article></div></div></section>
+
+<section class="section" id="gallery"><div class="container"><div class="section-head"><div><h2>Visual gallery</h2><p>Full-resolution Catsy diagnostics. Click any image to inspect it without leaving the report.</p></div></div>
+<div class="gallery"><a class="gallery-card" href="plots/01_final_signal_phase_space.png" target="_blank"><div class="gallery-image"><img src="plots/01_final_signal_phase_space.png" alt="01 Final Signal Phase Space" loading="lazy"></div><div class="gallery-caption"><span>01 Final Signal Phase Space</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/02_final_covariance_matrix.png" target="_blank"><div class="gallery-image"><img src="plots/02_final_covariance_matrix.png" alt="02 Final Covariance Matrix" loading="lazy"></div><div class="gallery-caption"><span>02 Final Covariance Matrix</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/03_final_mode_correlations.png" target="_blank"><div class="gallery-image"><img src="plots/03_final_mode_correlations.png" alt="03 Final Mode Correlations" loading="lazy"></div><div class="gallery-caption"><span>03 Final Mode Correlations</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/04_even_cat_wigner.png" target="_blank"><div class="gallery-image"><img src="plots/04_even_cat_wigner.png" alt="04 Even Cat Wigner" loading="lazy"></div><div class="gallery-caption"><span>04 Even Cat Wigner</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/05_even_cat_state.png" target="_blank"><div class="gallery-image"><img src="plots/05_even_cat_state.png" alt="05 Even Cat State" loading="lazy"></div><div class="gallery-caption"><span>05 Even Cat State</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/06_after_photon_subtraction.png" target="_blank"><div class="gallery-image"><img src="plots/06_after_photon_subtraction.png" alt="06 After Photon Subtraction" loading="lazy"></div><div class="gallery-caption"><span>06 After Photon Subtraction</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/07_after_photon_addition.png" target="_blank"><div class="gallery-image"><img src="plots/07_after_photon_addition.png" alt="07 After Photon Addition" loading="lazy"></div><div class="gallery-caption"><span>07 After Photon Addition</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/08_after_homodyne_idler.png" target="_blank"><div class="gallery-image"><img src="plots/08_after_homodyne_idler.png" alt="08 After Homodyne Idler" loading="lazy"></div><div class="gallery-caption"><span>08 After Homodyne Idler</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/09_after_heterodyne_idler.png" target="_blank"><div class="gallery-image"><img src="plots/09_after_heterodyne_idler.png" alt="09 After Heterodyne Idler" loading="lazy"></div><div class="gallery-caption"><span>09 After Heterodyne Idler</span><small>open full resolution ↗</small></div></a><a class="gallery-card" href="plots/10_measurement_conditioning.png" target="_blank"><div class="gallery-image"><img src="plots/10_measurement_conditioning.png" alt="10 Measurement Conditioning" loading="lazy"></div><div class="gallery-caption"><span>10 Measurement Conditioning</span><small>open full resolution ↗</small></div></a></div></div></section>
+
+<section class="section" id="journal"><div class="container"><div class="section-head"><div><h2>Experiment journal</h2><p>Raw journal output is preserved beside the plots for reproducibility.</p></div></div>
+<div class="journal"><a class="journal-file" href="entry_20260828T001742Z_4ef5d05a.json" target="_blank"><span class="file-icon">JSON</span><span><strong>entry_20260828T001742Z_4ef5d05a.json</strong><small>7,398 bytes · open raw file ↗</small></span></a></div></div></section>
+</main>
+<footer class="footer"><div class="container"><strong>Catsy Lab</strong> · complex example · commit <code>43395974974b9092dcc3fc40c5ea0f2ee6a0e4c4</code><br><span>Static report generated by CI; plots are produced exclusively through Catsy's plotting helpers.</span></div></footer>
+</body></html>
