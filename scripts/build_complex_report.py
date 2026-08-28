@@ -11,6 +11,7 @@ from pathlib import Path
 OUTPUT_ROOT = Path("_site")
 RUN_ROOT = Path("runs/complex_circuit")
 
+# number, title, category, description, plot stem, what to look for, diagnostic label
 STAGES = [
     (
         "01",
@@ -113,12 +114,193 @@ STAGES = [
     ),
 ]
 
+# One line of physical insight per stage, shown as a highlighted callout on the
+# card. Kept next to STAGES (not injected later) so the page is correct the
+# moment it is generated.
+INSIGHTS = {
+    "01": "The phase-space ellipse is the state's uncertainty region before anything non-Gaussian happens to it.",
+    "02": "Read the diagonal as single-mode variances and the off-diagonal blocks as inter-mode covariance.",
+    "03": "Correlated quadratures here are the Gaussian coupling the later conditioned measurements will draw on.",
+    "04": "A two-lobed Wigner function with interference fringes is the signature a Gaussian description cannot produce.",
+    "05": "Occupation structure in Fock space is the complementary view of the same non-Gaussian state.",
+    "06": "Finite tap reflectivity and detector efficiency make this a realistic conditional operation, not an ideal one.",
+    "07": "Compare directly against subtraction to see how heralded photon-number engineering reshapes the state.",
+    "08": "The phase scan is the bridge from state preparation to a readout that depends on interferometer phase.",
+    "09": "Homodyne selects one quadrature; the conditioned idler state reflects only that partial information.",
+    "10": "Heterodyne samples both quadratures at once, trading precision for a genuinely two-dimensional outcome.",
+    "11": "Same input state, two measurement models — the difference is what each scheme lets you infer.",
+}
+
+CATEGORY_LABELS = {
+    "gaussian": "Gaussian",
+    "fock": "Fock",
+    "interferometer": "Interferometer",
+    "measurement": "Measurement",
+}
+
+PAGE_STYLE = """
+:root{
+  color-scheme:dark;
+  --bg:#0a0d13; --surface:#10141c; --surface-2:#171c27; --line:#242b39;
+  --text:#e7e9f0; --muted:#8a91a6;
+  --gaussian:#5fd3e8; --fock:#f0568e; --interferometer:#e8b34c; --measurement:#b3a6f2;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.65 'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,sans-serif}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.container{width:min(1120px,calc(100% - 40px));margin:auto}
+h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.02em;margin:0}
+
+.topbar{position:sticky;top:0;z-index:20;background:rgba(10,13,19,.92);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topbar-inner{min-height:56px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-family:'Fraunces',serif;font-weight:600;font-size:16px;display:flex;align-items:center;gap:8px}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--gaussian);box-shadow:0 0 8px var(--gaussian)}
+.nav{display:flex;gap:20px;color:var(--muted);font-size:12.5px}
+.nav a{transition:color .15s}
+.nav a:hover{color:var(--text)}
+
+.hero{padding:60px 0 44px;border-bottom:1px solid var(--line);
+  background:radial-gradient(640px 320px at 88% -10%,rgba(95,211,232,.09),transparent 60%),
+             radial-gradient(520px 280px at 100% 40%,rgba(240,86,142,.07),transparent 60%)}
+.eyebrow{color:var(--gaussian);text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:600;
+  font-family:'IBM Plex Mono',monospace}
+.hero h1{max-width:820px;margin:10px 0 14px;font-size:clamp(30px,4.4vw,46px);line-height:1.08}
+.lead{max-width:72ch;color:#b7bfcb;font-size:15.5px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 0}
+.badge{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 11px;font-size:12px;color:#b8c1cc}
+.badge strong{color:var(--text)}
+.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);
+  border-radius:7px;padding:8px 13px;font-size:12.5px;transition:border-color .15s,color .15s}
+.button:hover{border-color:#3a4257;color:var(--text)}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:26px}
+.metric{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.metric .value{font-family:'Fraunces',serif;font-size:24px;font-weight:600}
+.metric .label{margin-top:3px;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;font-family:'IBM Plex Mono',monospace}
+
+.section{padding:48px 0}
+.section.alt{background:var(--surface);border-block:1px solid var(--line)}
+.section-head{margin-bottom:22px;max-width:60ch}
+.section-head h2{font-size:24px}
+.section-head p{margin:8px 0 0;color:var(--muted);font-size:14.5px}
+
+.pipeline{display:grid;grid-template-columns:repeat(11,1fr);gap:6px}
+.pipeline-step{min-height:92px;padding:12px 10px;border:1px solid var(--line);border-radius:9px;
+  background:var(--bg);border-left:3px solid var(--step-color);transition:border-color .15s,transform .15s}
+.section.alt .pipeline-step{background:var(--surface-2)}
+.pipeline-step:hover{transform:translateY(-2px)}
+.pipeline-step .n{font:700 10px 'IBM Plex Mono',monospace;color:var(--step-color)}
+.pipeline-step strong{display:block;margin-top:7px;font-size:10.5px;line-height:1.3;font-family:'IBM Plex Sans',sans-serif;font-weight:600}
+.pipeline-step small{display:block;margin-top:5px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace}
+
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+.filter{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:7px 14px;font-size:12px;color:var(--muted);transition:all .15s}
+.filter.active{color:var(--bg);background:var(--text);border-color:var(--text);font-weight:600}
+.section.alt .filter{background:var(--surface-2)}
+
+.stages{display:grid;gap:14px}
+.stage{display:grid;grid-template-columns:42px minmax(220px,36%) 1fr;border:1px solid var(--line);
+  border-radius:12px;background:var(--surface);overflow:hidden}
+.section.alt .stage{background:var(--surface-2)}
+.stage-index{padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  background:linear-gradient(180deg,var(--stage-color) 0%,transparent 2px)}
+.stage-index .num{font:700 12px 'IBM Plex Mono',monospace;color:var(--stage-color)}
+.stage-index .cat{writing-mode:vertical-rl;text-orientation:mixed;font-size:9.5px;color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase}
+.stage-plot{width:100%;min-height:220px;border:0;padding:0;background:#080b10;cursor:zoom-in;overflow:hidden;border-inline:1px solid var(--line)}
+.stage-plot img{display:block;width:100%;height:100%;min-height:220px;object-fit:cover;transition:transform .3s}
+.stage-plot:hover img{transform:scale(1.03)}
+.stage-plot.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#52606f;font-size:22px;gap:6px}
+.stage-plot.empty small{font-size:10px;color:var(--muted);text-align:center;padding:0 16px}
+.stage-copy{padding:18px 22px}
+.stage-copy h3{font-size:17px;margin-bottom:6px}
+.stage-copy p{margin:0 0 14px;color:var(--muted);font-size:13px}
+.callout{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:11.5px}
+.callout .lbl{color:#b7c0cb;font-weight:600;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+.callout span:last-child{color:var(--muted)}
+.insight{margin-top:2px;padding:11px 13px;border-radius:8px;background:color-mix(in srgb, var(--stage-color) 12%, transparent);
+  border:1px solid color-mix(in srgb, var(--stage-color) 30%, transparent);font-size:12px;color:var(--text)}
+.insight strong{color:var(--stage-color);font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;
+  letter-spacing:.08em;display:block;margin-bottom:4px}
+
+.journal{display:grid;gap:8px;max-width:820px}
+.journal-file{display:flex;align-items:center;gap:13px;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--bg)}
+.section.alt .journal-file{background:var(--surface-2)}
+.journal-file:hover{border-color:#3a4257}
+.file-type{width:38px;height:32px;display:grid;place-items:center;border-radius:6px;
+  background:rgba(95,211,232,.12);color:var(--gaussian);font:700 9.5px 'IBM Plex Mono',monospace}
+.journal-file strong,.journal-file small{display:block}
+.journal-file strong{font-size:12px;font-family:'IBM Plex Mono',monospace}
+.journal-file small{color:var(--muted);font-size:10.5px;margin-top:2px}
+
+.modal{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:24px;background:rgba(6,8,12,.9);backdrop-filter:blur(3px)}
+.modal.open{display:grid}
+.modal-inner{width:min(1180px,96vw);max-height:94vh}
+.modal-head,.modal-foot{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:8px 0}
+.modal-title{font-weight:600;font-family:'Fraunces',serif}
+.modal-close{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 10px;cursor:pointer}
+.modal img{display:block;width:100%;max-height:80vh;object-fit:contain;background:#05070a;border:1px solid var(--line);border-radius:6px}
+.modal-foot{color:var(--muted);font-size:10.5px}
+
+.footer{padding:32px 0 56px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px}
+
+@media(max-width:950px){.pipeline{grid-template-columns:repeat(4,1fr)}.metrics{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.container{width:calc(100% - 24px)}.nav{display:none}
+  .metrics{grid-template-columns:1fr 1fr}
+  .stage{grid-template-columns:30px 1fr}
+  .stage-index .cat{display:none}
+  .stage-plot{grid-column:2;min-height:190px}
+  .stage-copy{grid-column:2}
+  .pipeline{grid-template-columns:repeat(2,1fr)}}
+"""
+
+RUN_SCRIPT = """
+(function(){
+  const modal=document.getElementById('viewer'),img=document.getElementById('viewer-image'),
+        title=document.getElementById('viewer-title'),openLink=document.getElementById('viewer-open');
+  function close(){modal.classList.remove('open');img.src='';document.body.style.overflow='';}
+  document.querySelectorAll('[data-src]').forEach(function(el){
+    el.addEventListener('click',function(){
+      img.src=el.dataset.src;img.alt=el.dataset.title;title.textContent=el.dataset.title;
+      openLink.href=el.dataset.src;modal.classList.add('open');document.body.style.overflow='hidden';
+    });
+  });
+  document.getElementById('viewer-close').addEventListener('click',close);
+  modal.addEventListener('click',function(e){if(e.target===modal)close();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+  document.querySelectorAll('.filter').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.filter').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      const f=btn.dataset.filter;
+      document.querySelectorAll('.stage').forEach(function(s){
+        s.style.display=(f==='all'||s.dataset.category===f)?'grid':'none';
+      });
+    });
+  });
+})();
+"""
+
+FONT_LINK = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&'
+    'family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">'
+)
+
 
 def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
-def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
+def build_run_page(
+    site_run_root: Path, commit: str, ref: str, run_id: str, generated_at: str
+) -> None:
     short_commit = commit[:12]
     plots = sorted((site_run_root / "plots").glob("*.png"))
     by_stem = {plot.stem: plot for plot in plots}
@@ -132,8 +314,10 @@ def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
     stages = []
     for number, title, category, description, plot_stem, inspect, result in STAGES:
         pipeline.append(
-            f'<a class="pipeline-step" href="#stage-{esc(number)}">'
-            f"<span>{esc(number)}</span><strong>{esc(title)}</strong><small>{esc(category)}</small></a>"
+            f'<a class="pipeline-step" href="#stage-{esc(number)}" '
+            f'style="--step-color:var(--{esc(category)})">'
+            f'<span class="n">{esc(number)}</span><strong>{esc(title)}</strong>'
+            f"<small>{esc(CATEGORY_LABELS[category])}</small></a>"
         )
         plot = by_stem.get(plot_stem) if plot_stem else None
         image = ""
@@ -144,14 +328,27 @@ def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
                 f'<img src="{relative}" alt="{esc(title)}" loading="lazy"></button>'
             )
         else:
-            visual = '<div class="stage-plot empty"><span>—</span><small>response recorded in journal</small></div>'
+            visual = (
+                '<div class="stage-plot empty"><span>—</span>'
+                "<small>response recorded in journal, not plotted</small></div>"
+            )
+        insight = INSIGHTS.get(number, "")
+        insight_html = (
+            f'<div class="insight"><strong>Why it matters</strong>{esc(insight)}</div>'
+            if insight
+            else ""
+        )
         stages.append(
             f'<article class="stage" data-category="{esc(category)}" id="stage-{esc(number)}">'
-            f'<div class="stage-number">{esc(number)}</div>{visual}'
-            f'<div class="stage-copy"><div class="kicker">{esc(category)}</div>'
+            f'<div class="stage-index" style="--stage-color:var(--{esc(category)})">'
+            f'<span class="num">{esc(number)}</span>'
+            f'<span class="cat">{esc(CATEGORY_LABELS[category])}</span></div>'
+            f"{visual}"
+            f'<div class="stage-copy" style="--stage-color:var(--{esc(category)})">'
             f"<h3>{esc(title)}</h3><p>{esc(description)}</p>"
-            f'<div class="meaning"><strong>What to inspect</strong><span>{esc(inspect)}</span></div>'
-            f'<div class="result"><strong>Diagnostic</strong><span>{esc(result)}</span></div>'
+            f'<div class="callout"><span class="lbl">Look for</span><span>{esc(inspect)}</span></div>'
+            f'<div class="callout"><span class="lbl">Diagnostic</span><span>{esc(result)}</span></div>'
+            f"{insight_html}"
             f"</div></article>"
         )
 
@@ -161,69 +358,127 @@ def build_run_page(site_run_root: Path, commit: str, generated_at: str) -> None:
         journal_links.append(
             f'<a class="journal-file" href="{relative}" target="_blank" rel="noopener">'
             f'<span class="file-type">{esc(journal.suffix[1:].upper())}</span>'
-            f"<span><strong>{relative}</strong><small>{journal.stat().st_size:,} bytes · open raw file ↗</small></span></a>"
+            f"<span><strong>{relative}</strong>"
+            f"<small>{journal.stat().st_size:,} bytes · open raw file ↗</small></span></a>"
         )
 
-    template = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Catsy complex simulation report for __SHORT_COMMIT__">
-<title>Catsy · Complex simulation · __SHORT_COMMIT__</title>
-<style>
-:root{color-scheme:dark;--bg:#0a0d12;--panel:#10151d;--panel2:#141a23;--line:#252d39;--text:#e7ebf0;--muted:#8994a3;--accent:#8fb8c5;--accent-soft:rgba(143,184,197,.10)}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.65 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}a{color:inherit;text-decoration:none}button{font:inherit;color:inherit}.container{width:min(1120px,calc(100% - 40px));margin:auto}
-.topbar{position:sticky;top:0;z-index:20;background:rgba(10,13,18,.94);border-bottom:1px solid var(--line)}.topbar-inner{min-height:54px;display:flex;align-items:center;justify-content:space-between}.brand{font-weight:750;letter-spacing:.02em}.brand span{color:var(--accent)}.nav{display:flex;gap:18px;color:var(--muted);font-size:12px}.nav a:hover{color:var(--text)}
-.hero{padding:64px 0 46px;border-bottom:1px solid var(--line)}.eyebrow,.kicker{color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:750}.hero h1{max-width:850px;margin:8px 0 14px;font-size:clamp(36px,5vw,60px);line-height:1.02;letter-spacing:-.045em;font-weight:700}.lead{max-width:780px;color:#b5bec9;font-size:16px}.meta{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0}.badge,.button,.filter{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px 10px;font-size:11px;color:#b8c1cc}.badge strong{color:var(--text)}.button{display:inline-flex}.button:hover,.filter:hover{border-color:#485564;color:var(--text)}.links{display:flex;gap:8px;flex-wrap:wrap}
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:24px}.metric{padding:14px 15px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.metric .value{font-size:22px;font-weight:700}.metric .label{margin-top:2px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.1em}
-.section{padding:42px 0}.section.alt{background:#0d1117;border-block:1px solid var(--line)}.section-head{margin-bottom:20px}.section-head h2{margin:3px 0 4px;font-size:26px;letter-spacing:-.025em}.section-head p{margin:0;color:var(--muted)}
-.pipeline{display:grid;grid-template-columns:repeat(11,1fr);gap:6px}.pipeline-step{min-height:88px;padding:11px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);transition:border-color .15s}.pipeline-step:hover{border-color:#4a5968}.pipeline-step span{font:700 10px ui-monospace,monospace;color:var(--accent)}.pipeline-step strong{display:block;margin-top:7px;font-size:10px;line-height:1.3}.pipeline-step small{display:block;margin-top:5px;color:var(--muted);font-size:9px}
-.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.filter{cursor:pointer}.filter.active{background:var(--accent-soft);border-color:#506b76;color:#dce8eb}.stages{display:grid;gap:12px}.stage{display:grid;grid-template-columns:38px minmax(220px,38%) 1fr;min-height:220px;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}.stage-number{padding:16px 9px;color:#657181;font:700 11px ui-monospace,monospace}.stage-plot{width:100%;min-height:220px;border:0;padding:0;background:#080b10;cursor:zoom-in;overflow:hidden}.stage-plot img{display:block;width:100%;height:100%;min-height:220px;object-fit:cover}.stage-plot.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#52606f;font-size:26px}.stage-plot.empty small{font-size:10px;color:var(--muted)}.stage-copy{padding:18px 20px}.stage-copy h3{margin:4px 0 7px;font-size:18px}.stage-copy p{margin:0 0 14px;color:var(--muted);font-size:13px}.meaning,.result{display:grid;grid-template-columns:100px 1fr;gap:8px;padding:9px 0;border-top:1px solid var(--line);font-size:11px}.meaning strong,.result strong{color:#b7c0cb;font-weight:650}.meaning span,.result span{color:var(--muted)}
-.journal{display:grid;gap:7px;max-width:820px}.journal-file{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}.journal-file:hover{border-color:#485564}.file-type{width:36px;height:30px;display:grid;place-items:center;border-radius:5px;background:var(--accent-soft);color:var(--accent);font:700 9px ui-monospace,monospace}.journal-file strong,.journal-file small{display:block}.journal-file strong{font-size:11px}.journal-file small{color:var(--muted);font-size:10px}
-.modal{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:24px;background:rgba(0,0,0,.86)}.modal.open{display:grid}.modal-inner{width:min(1180px,96vw);max-height:94vh}.modal-head,.modal-foot{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:8px 0}.modal-title{font-weight:650}.modal-close{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 9px;cursor:pointer}.modal img{display:block;width:100%;max-height:80vh;object-fit:contain;background:#05070a;border:1px solid var(--line)}.modal-foot{color:var(--muted);font-size:10px}
-.footer{padding:30px 0 55px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}@media(max-width:950px){.pipeline{grid-template-columns:repeat(4,1fr)}.metrics{grid-template-columns:repeat(2,1fr)}}@media(max-width:680px){.container{width:calc(100% - 24px)}.nav{display:none}.metrics{grid-template-columns:1fr 1fr}.stage{grid-template-columns:30px 1fr}.stage-plot{grid-column:2;min-height:190px}.stage-copy{grid-column:2}.pipeline{grid-template-columns:repeat(2,1fr)}}
-</style></head><body>
-<header class="topbar"><div class="container topbar-inner"><a class="brand" href="../..">catsy <span>LAB</span></a><nav class="nav"><a href="../..">runs</a><a href="#pipeline">pipeline</a><a href="#stages">stages</a><a href="#journal">journal</a></nav></div></header>
-<main><section class="hero"><div class="container"><div class="eyebrow">Complex simulation · __GENERATED_AT__</div><h1>Gaussian preparation, non-Gaussian processing, interferometry and readout.</h1><p class="lead">A compact visual record of the three-mode experiment. Each diagnostic is kept with the physical stage it describes, with enough context to interpret the result without turning the report into a plot catalogue.</p><div class="meta"><span class="badge">commit <strong>__SHORT_COMMIT__</strong></span><span class="badge">__PLOT_COUNT__ diagnostics</span><span class="badge">__JOURNAL_COUNT__ journal files</span></div><div class="links"><a class="button" href="https://github.com/raiyiz/catsy/commit/__COMMIT__" target="_blank" rel="noopener">source commit ↗</a><a class="button" href="https://github.com/raiyiz/catsy/actions" target="_blank" rel="noopener">CI ↗</a><a class="button" href="../..">all runs</a></div><div class="metrics"><div class="metric"><div class="value">3</div><div class="label">Gaussian modes</div></div><div class="metric"><div class="value">2</div><div class="label">readout schemes</div></div><div class="metric"><div class="value">33</div><div class="label">MZI phase points</div></div><div class="metric"><div class="value">__PLOT_COUNT__</div><div class="label">saved diagnostics</div></div></div></div></section>
-<section class="section alt" id="pipeline"><div class="container"><div class="section-head"><div class="eyebrow">Experiment map</div><h2>From state preparation to measurement</h2><p>Each step links to the diagnostic and its physical interpretation below.</p></div><div class="pipeline">__PIPELINE__</div></div></section>
-<section class="section" id="stages"><div class="container"><div class="section-head"><div class="eyebrow">Stage diagnostics</div><h2>What happened at each step</h2><p>Plots are shown once, beside the operation they document.</p></div><div class="filters"><button class="filter active" data-filter="all" type="button">all</button><button class="filter" data-filter="gaussian" type="button">Gaussian</button><button class="filter" data-filter="fock" type="button">Fock</button><button class="filter" data-filter="interferometer" type="button">interferometer</button><button class="filter" data-filter="measurement" type="button">measurement</button></div><div class="stages">__STAGES__</div></div></section>
-<section class="section alt" id="journal"><div class="container"><div class="section-head"><div class="eyebrow">Reproducibility</div><h2>Experiment journal</h2><p>Machine-readable records remain beside the visual diagnostics.</p></div><div class="journal">__JOURNAL__</div></div></section></main>
-<div class="modal" id="viewer" role="dialog" aria-modal="true" aria-label="Plot viewer"><div class="modal-inner"><div class="modal-head"><span class="modal-title" id="viewer-title"></span><button class="modal-close" id="viewer-close" type="button">close</button></div><img id="viewer-image" alt=""><div class="modal-foot"><span>Esc to close · click outside to close</span><a id="viewer-open" href="#" target="_blank" rel="noopener">open original ↗</a></div></div></div>
-<footer class="footer"><div class="container">Catsy · complex simulation · commit <code>__COMMIT__</code><br>Static report generated by CI. Visualizations are produced through Catsy's plotting helpers.</div></footer>
-<script>
-(function(){const modal=document.getElementById('viewer'),img=document.getElementById('viewer-image'),title=document.getElementById('viewer-title'),open=document.getElementById('viewer-open');function close(){modal.classList.remove('open');img.src='';document.body.style.overflow='';}document.querySelectorAll('[data-src]').forEach(function(el){el.addEventListener('click',function(){img.src=el.dataset.src;img.alt=el.dataset.title;title.textContent=el.dataset.title;open.href=el.dataset.src;modal.classList.add('open');document.body.style.overflow='hidden';});});document.getElementById('viewer-close').addEventListener('click',close);modal.addEventListener('click',function(e){if(e.target===modal)close();});document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});document.querySelectorAll('.filter').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.filter').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');const f=btn.dataset.filter;document.querySelectorAll('.stage').forEach(function(s){s.style.display=f==='all'||s.dataset.category===f?'grid':'none';});});});})();
-</script></body></html>"""
-
-    report = (
-        template.replace("__SHORT_COMMIT__", esc(short_commit))
-        .replace("__COMMIT__", esc(commit))
-        .replace("__GENERATED_AT__", esc(generated_at))
-        .replace("__PLOT_COUNT__", str(len(plots)))
-        .replace("__JOURNAL_COUNT__", str(len(journals)))
-        .replace("__PIPELINE__", "".join(pipeline))
-        .replace("__STAGES__", "".join(stages))
-        .replace(
-            "__JOURNAL__",
-            "".join(journal_links) or "<p>No journal files were generated.</p>",
-        )
+    filters = "".join(
+        f'<button class="filter" data-filter="{esc(key)}" type="button">{esc(label)}</button>'
+        for key, label in CATEGORY_LABELS.items()
     )
-    (site_run_root / "index.html").write_text(report, encoding="utf-8")
+
+    page = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Catsy complex simulation report for {short_commit}">
+<title>catsy · complex simulation · {short_commit}</title>
+{FONT_LINK}
+<style>{PAGE_STYLE}</style></head><body>
+<header class="topbar"><div class="container topbar-inner">
+  <a class="brand" href="../.."><span class="dot"></span>catsy · lab</a>
+  <nav class="nav"><a href="../..">all runs</a><a href="#pipeline">pipeline</a><a href="#stages">stages</a><a href="#journal">journal</a></nav>
+</div></header>
+<main>
+<section class="hero"><div class="container">
+  <div class="eyebrow">Complex simulation · {esc(generated_at)}</div>
+  <h1>Gaussian preparation, non-Gaussian processing, interferometry and readout.</h1>
+  <p class="lead">A compact visual record of the three-mode experiment. Each diagnostic sits beside the physical
+  stage it documents, with enough context to read the result without turning the report into a plot catalogue.</p>
+  <div class="meta">
+    <span class="badge">commit <strong>{short_commit}</strong></span>
+    <span class="badge">ref <strong>{esc(ref)}</strong></span>
+    <span class="badge"><strong>{len(plots)}</strong> diagnostics</span>
+    <span class="badge"><strong>{len(journals)}</strong> journal files</span>
+  </div>
+  <div class="links">
+    <a class="button" href="https://github.com/raiyiz/catsy/commit/{esc(commit)}" target="_blank" rel="noopener">source commit ↗</a>
+    <a class="button" href="https://github.com/raiyiz/catsy/actions/runs/{esc(run_id)}" target="_blank" rel="noopener">CI run ↗</a>
+    <a class="button" href="../..">all runs</a>
+  </div>
+  <div class="metrics">
+    <div class="metric"><div class="value">3</div><div class="label">Gaussian modes</div></div>
+    <div class="metric"><div class="value">2</div><div class="label">readout schemes</div></div>
+    <div class="metric"><div class="value">33</div><div class="label">MZI phase points</div></div>
+    <div class="metric"><div class="value">{len(plots)}</div><div class="label">saved diagnostics</div></div>
+  </div>
+</div></section>
+
+<section class="section alt" id="pipeline"><div class="container">
+  <div class="section-head"><div class="eyebrow">Experiment map</div>
+  <h2>From state preparation to measurement</h2>
+  <p>Each step links to the diagnostic and its physical interpretation below.</p></div>
+  <div class="pipeline">{"".join(pipeline)}</div>
+</div></section>
+
+<section class="section" id="stages"><div class="container">
+  <div class="section-head"><div class="eyebrow">Stage diagnostics</div>
+  <h2>What happened at each step</h2>
+  <p>Plots are shown once, beside the operation they document.</p></div>
+  <div class="filters"><button class="filter active" data-filter="all" type="button">all</button>{filters}</div>
+  <div class="stages">{"".join(stages)}</div>
+</div></section>
+
+<section class="section alt" id="journal"><div class="container">
+  <div class="section-head"><div class="eyebrow">Reproducibility</div>
+  <h2>Experiment journal</h2>
+  <p>Machine-readable records remain beside the visual diagnostics.</p></div>
+  <div class="journal">{"".join(journal_links) or "<p>No journal files were generated.</p>"}</div>
+</div></section>
+</main>
+
+<div class="modal" id="viewer" role="dialog" aria-modal="true" aria-label="Plot viewer">
+  <div class="modal-inner">
+    <div class="modal-head"><span class="modal-title" id="viewer-title"></span>
+    <button class="modal-close" id="viewer-close" type="button">close</button></div>
+    <img id="viewer-image" alt="">
+    <div class="modal-foot"><span>Esc to close · click outside to close</span>
+    <a id="viewer-open" href="#" target="_blank" rel="noopener">open original ↗</a></div>
+  </div>
+</div>
+
+<footer class="footer"><div class="container">
+  catsy · complex simulation · commit <span class="mono">{esc(commit)}</span><br>
+  Static report generated by CI. Visualizations are produced through catsy's plotting helpers.
+</div></footer>
+<script>{RUN_SCRIPT}</script>
+</body></html>"""
+
+    (site_run_root / "index.html").write_text(page, encoding="utf-8")
 
 
-def main() -> None:
-    if not RUN_ROOT.exists():
-        raise SystemExit(f"Missing complex-example output: {RUN_ROOT}")
+def _read_metadata(run_dir: Path) -> dict[str, str]:
+    metadata_file = run_dir / "run_metadata.txt"
+    values: dict[str, str] = {}
+    if metadata_file.exists():
+        for line in metadata_file.read_text(encoding="utf-8").splitlines():
+            if "=" in line:
+                key, _, value = line.partition("=")
+                values[key] = value
+    return values
 
-    commit = os.environ.get("GITHUB_SHA", "unknown")
-    generated_at = datetime.now(UTC).strftime("%Y-%m-%d · %H:%M UTC")
-    site_run_root = OUTPUT_ROOT / "runs" / commit
-    site_run_root.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(RUN_ROOT, site_run_root, dirs_exist_ok=True)
-    build_run_page(site_run_root, commit, generated_at)
 
-    runs_root = OUTPUT_ROOT / "runs"
+def run_datetime(path: Path) -> str:
+    """Prefer the recorded build timestamp; a checkout resets file mtimes."""
+    timestamp = _read_metadata(path).get("timestamp")
+    if timestamp:
+        try:
+            return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime(
+                "%Y-%m-%d · %H:%M UTC"
+            )
+        except ValueError:
+            pass
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).strftime(
+            "%Y-%m-%d · %H:%M UTC"
+        )
+    except OSError:
+        return "time unavailable"
+
+
+def build_archive_page(runs_root: Path) -> None:
     run_dirs = (
         sorted(
             (p for p in runs_root.iterdir() if p.is_dir()),
-            key=lambda p: p.name,
+            key=lambda p: _read_metadata(p).get("timestamp", p.name),
             reverse=True,
         )
         if runs_root.exists()
@@ -231,24 +486,73 @@ def main() -> None:
     )
     cards = "".join(
         f'<a class="run" href="runs/{esc(p.name)}/"><span class="dot"></span>'
-        f"<span><strong>{esc(run_datetime(p))}</strong><small>{esc(p.name[:12])} · open simulation explorer →</small></span></a>"
+        f'<span class="run-copy"><small class="run-time">{esc(run_datetime(p))}</small>'
+        f"<strong>{esc(p.name[:12])}</strong>"
+        f'<span class="run-detail">complex simulation · open explorer →</span></span></a>'
         for p in run_dirs
     )
-    index = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Catsy · Simulation archive</title><style>
-:root{color-scheme:dark;--bg:#0a0d12;--panel:#10151d;--line:#252d39;--text:#e7ebf0;--muted:#8994a3;--accent:#8fb8c5}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 Inter,ui-sans-serif,system-ui,sans-serif}main{width:min(920px,calc(100% - 32px));margin:auto;padding:72px 0}.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:750}h1{font-size:clamp(38px,6vw,58px);line-height:1;letter-spacing:-.04em;margin:8px 0 14px}p{max-width:70ch;color:var(--muted)}.run{display:flex;align-items:center;gap:13px;padding:14px;border:1px solid var(--line);background:var(--panel);border-radius:8px;margin:7px 0}.run:hover{border-color:#485564}.run strong,.run small{display:block}.run strong{font-size:12px}.run small{color:var(--muted);font:10px ui-monospace,monospace;margin-top:2px}.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}</style></head><body><main><div class="eyebrow">Catsy · commit-addressed simulation archive</div><h1>Complex experiment runs</h1><p>Visual history of the Gaussian → Fock → interferometric workflow. Each run keeps its stage diagnostics and machine-readable journal together.</p><div style="margin-top:30px">__CARDS__</div></main></body></html>""".replace(
-        "__CARDS__", cards or "<p>No reports yet.</p>"
-    )
+    index = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>catsy lab · simulation archive</title>
+{FONT_LINK}
+<style>
+:root{{color-scheme:dark;--bg:#070b12;--panel:#111827;--line:#242b39;--text:#edf2f7;--muted:#8a91a6;
+  --gaussian:#5fd3e8;--fock:#f0568e}}
+*{{box-sizing:border-box}}
+body{{margin:0;background:radial-gradient(circle at 15% 0%,#0d2940,transparent 34rem),
+  radial-gradient(circle at 90% 20%,#2b1730,transparent 36rem),var(--bg);
+  color:var(--text);font:15px/1.6 'IBM Plex Sans',system-ui,sans-serif}}
+main{{width:min(1040px,calc(100% - 32px));margin:auto;padding:88px 0}}
+.eyebrow{{color:var(--gaussian);text-transform:uppercase;letter-spacing:.14em;font-size:11px;font-weight:600;
+  font-family:'IBM Plex Mono',monospace}}
+h1{{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(38px,6vw,62px);line-height:1.02;
+  letter-spacing:-.03em;margin:10px 0 16px}}
+p{{color:var(--muted);max-width:70ch}}
+.archive{{margin-top:34px;display:grid;gap:10px}}
+.run{{display:grid;grid-template-columns:12px 1fr;gap:15px;border:1px solid var(--line);
+  background:linear-gradient(135deg,rgba(17,24,39,.88),rgba(10,16,27,.8));
+  padding:18px 20px;border-radius:14px;transition:.2s}}
+.run:hover{{border-color:rgba(95,211,232,.5);transform:translateX(4px);box-shadow:0 14px 45px rgba(0,0,0,.25)}}
+.dot{{width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--gaussian);
+  box-shadow:0 0 16px rgba(95,211,232,.7)}}
+.run-copy{{display:grid;gap:2px}}
+.run-time{{color:var(--gaussian);font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.03em}}
+.run strong{{font:600 16px 'IBM Plex Mono',monospace}}
+.run-detail{{color:var(--muted);font-size:11.5px}}
+.hint{{margin-top:28px;padding:15px 17px;border:1px solid var(--line);border-radius:12px;
+  background:rgba(15,23,42,.55);color:var(--muted);font-size:12.5px}}
+</style></head><body><main>
+<div class="eyebrow">catsy · commit-addressed simulation archive</div>
+<h1>Complex experiment runs</h1>
+<p>Browse the visual history of the Gaussian → Fock → interferometric workflow. Each run keeps its stage
+diagnostics and machine-readable journal together for reproducibility.</p>
+<div class="archive">{cards or "<p>No reports yet.</p>"}</div>
+<div class="hint">Tip: open a run to follow the state transformation stage by stage — diagnostics are attached
+to the physical step they explain, not duplicated in a separate gallery.</div>
+</main></body></html>"""
     (OUTPUT_ROOT / "index.html").write_text(index, encoding="utf-8")
 
 
-def run_datetime(path: Path) -> str:
-    try:
-        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).strftime(
-            "%Y-%m-%d · %H:%M UTC"
-        )
-    except OSError:
-        return "time unavailable"
+def main() -> None:
+    if not RUN_ROOT.exists():
+        raise SystemExit(f"Missing complex-example output: {RUN_ROOT}")
+    commit = os.environ.get("REPORT_COMMIT", os.environ.get("GITHUB_SHA", "unknown"))
+    ref = os.environ.get("REPORT_REF", "unknown")
+    run_id = os.environ.get("REPORT_RUN_ID", "")
+    generated_at = datetime.now(UTC).strftime("%Y-%m-%d · %H:%M UTC")
+
+    site_run_root = OUTPUT_ROOT / "runs" / commit
+    site_run_root.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(RUN_ROOT, site_run_root, dirs_exist_ok=True)
+
+    (site_run_root / "run_metadata.txt").write_text(
+        f"timestamp={datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')}\n"
+        f"commit={commit}\nref={ref}\nrun_id={run_id}\n",
+        encoding="utf-8",
+    )
+
+    build_run_page(site_run_root, commit, ref, run_id, generated_at)
+    build_archive_page(OUTPUT_ROOT / "runs")
 
 
 if __name__ == "__main__":
