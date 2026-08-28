@@ -174,41 +174,78 @@ complex-example:
       - runs/complex_circuit/
     expire_in: 30 days
 
-complex-pages:
+complex-circuit-example:
   extends: .uv-job
-  stage: deploy
-  needs:
-    - job: complex-example
-      artifacts: true
+  stage: test
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - examples/complex_circuit.py
+        - examples/config_circuit.toml
+        - scripts/build_complex_report.py
+        - src/catsy/**/*
+        - pyproject.toml
+        - uv.lock
+        - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
   script:
-    - rm -rf _site public
     - uv sync --group dev --locked
-    - uv run python scripts/build_complex_report.py
-    # The report is deployed as a one-segment GitLab Pages parallel deployment,
-    # so its link back to the project root needs one .. rather than ../../.
-    - sed -i 's|href="../../"|href="../"|g' _site/index.html
-    - sed -i "s|https://github.com/raiyiz/catsy/commit/${CI_COMMIT_SHA}|${CI_PROJECT_URL}/-/commit/${CI_COMMIT_SHA}|g" _site/index.html
-    - sed -i "s|https://github.com/raiyiz/catsy/actions|${CI_PIPELINE_URL}|g" _site/index.html
-    - cp -a _site public
-  pages:
-    path_prefix: "complex-${CI_COMMIT_SHORT_SHA}"
-    expire_in: never
-  environment:
-    name: "complex-report/${CI_COMMIT_SHORT_SHA}"
+    - rm -rf runs/complex_circuit_basic
+    - uv run python examples/complex_circuit.py
+    - test -d runs/complex_circuit_basic
+  artifacts:
+    when: always
+    expose_as: "Complex circuit example experiment output"
+    paths:
+      - runs/complex_circuit_basic/
+    expire_in: 30 days
 
+# Deploys one persistent GitLab Pages site: the example-run archive at the
+# root, and the pytest coverage report nested under /coverage/. Pages history
+# (every example's accumulated runs) is kept on a dedicated `pages-history`
+# branch and restored before each build, the same way the GitHub Actions
+# pipeline keeps history on `gh-pages` — so this needs the CI job token to be
+# allowed to push to the repository (Settings > CI/CD > Job token permissions,
+# or "Allow the job token to push to this repository" for this project).
 pages:
+  extends: .uv-job
   stage: deploy
   needs:
     - job: pytest
       artifacts: true
+    - job: complex-example
+      artifacts: true
+    - job: complex-circuit-example
+      artifacts: true
   rules:
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
+  variables:
+    REPORT_COMMIT: "${CI_COMMIT_SHA}"
+    REPORT_REF: "${CI_COMMIT_REF_NAME}"
+    REPORT_RUN_ID: "${CI_PIPELINE_ID}"
+    REPORT_COMMIT_URL: "${CI_PROJECT_URL}/-/commit/${CI_COMMIT_SHA}"
+    REPORT_CI_URL: "${CI_PIPELINE_URL}"
   script:
     - test -f coverage/html/index.html
+    - uv sync --group dev --locked
+    - |
+      if git ls-remote --exit-code origin pages-history >/dev/null 2>&1; then
+        git fetch origin pages-history
+        git worktree add _site origin/pages-history
+      else
+        git worktree add --orphan pages-history _site
+      fi
+    - uv run python scripts/build_complex_report.py
+    - rm -rf _site/coverage
+    - cp -r coverage/html _site/coverage
+    - |
+      git -C _site config user.name "gitlab-ci"
+      git -C _site config user.email "gitlab-ci@${CI_SERVER_HOST}"
+      git -C _site add --all
+      git -C _site commit -m "ci: publish pages for ${CI_COMMIT_SHA}"
+      git -C _site push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:pages-history
     - rm -rf public
-    - mv coverage/html public
+    - cp -a _site public
   artifacts:
     paths:
       - public
