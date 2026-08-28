@@ -6,7 +6,6 @@ import html
 import os
 from pathlib import Path
 
-
 OUTPUT_ROOT = Path("_site")
 RUN_ROOT = Path("runs/complex_circuit")
 
@@ -15,7 +14,9 @@ def build_run_page(site_run_root: Path, commit: str) -> None:
     short_commit = commit[:12]
     plots = sorted((site_run_root / "plots").glob("*.png"))
     journals = sorted(
-        path for path in site_run_root.rglob("*") if path.suffix.lower() in {".json", ".jsonl"}
+        path
+        for path in site_run_root.rglob("*")
+        if path.suffix.lower() in {".json", ".jsonl"}
     )
 
     cards = []
@@ -58,9 +59,9 @@ code {{ background: #f3f3f3; padding: .1em .3em; border-radius: 3px; }}
 <p class="meta">Commit <code>{html.escape(commit)}</code></p>
 <p>Three-mode Gaussian preparation, heralded Fock processing, lossy Mach–Zehnder interferometry, and homodyne/heterodyne readout.</p>
 <h2>Plots</h2>
-<div class="grid">{''.join(cards) or '<p>No plots were generated.</p>'}</div>
+<div class="grid">{"".join(cards) or "<p>No plots were generated.</p>"}</div>
 <h2>Journal</h2>
-<ul>{''.join(journal_links) or '<li>No journal files were generated.</li>'}</ul>
+<ul>{"".join(journal_links) or "<li>No journal files were generated.</li>"}</ul>
 </body>
 </html>
 """
@@ -82,11 +83,15 @@ def main() -> None:
     build_run_page(site_run_root, commit)
 
     runs_root = OUTPUT_ROOT / "runs"
-    run_dirs = sorted(
-        (path for path in runs_root.iterdir() if path.is_dir()),
-        key=lambda path: path.name,
-        reverse=True,
-    ) if runs_root.exists() else []
+    run_dirs = (
+        sorted(
+            (path for path in runs_root.iterdir() if path.is_dir()),
+            key=lambda path: path.name,
+            reverse=True,
+        )
+        if runs_root.exists()
+        else []
+    )
     links = [
         f'<li><a href="runs/{html.escape(path.name)}/">{html.escape(path.name)}</a></li>'
         for path in run_dirs
@@ -99,7 +104,7 @@ def main() -> None:
 </head><body>
 <h1>Catsy complex-example reports</h1>
 <p>Commit-addressed CI reports. Each run contains its plots and journal output.</p>
-<ul>{''.join(links) or '<li>No reports yet.</li>'}</ul>
+<ul>{"".join(links) or "<li>No reports yet.</li>"}</ul>
 </body></html>
 """
     (OUTPUT_ROOT / "index.html").write_text(index, encoding="utf-8")
