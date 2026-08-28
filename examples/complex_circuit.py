@@ -16,7 +16,7 @@ except ImportError:  # running as a script (`python examples/complex_circuit.py`
 
 LOGGER = logging.getLogger(__name__)
 
-_DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.toml"
+_DEFAULT_CONFIG_PATH = Path(__file__).parent / "config_circuit.toml"
 
 
 def build_circuit(config: RunConfig, rng: np.random.Generator) -> Circuit:
