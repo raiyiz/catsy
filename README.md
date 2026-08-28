@@ -138,7 +138,6 @@ circuit.beam_splitter(signal, idler, eta=0.5)
 
 Using a `Mode` handle allows the circuit to detect accidental use of a mode belonging to another circuit. Plain strings remain useful when that distinction is unnecessary.
 
-
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
@@ -153,6 +152,55 @@ Using a `Mode` handle allows the circuit to detect accidental use of a mode belo
 | Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L670), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L594) |
 | Visualize a truncated Fock-space state      | [`plot_fock_dashboard()`](src/catsy/fock/visualization.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
+
+## Simulation explorer
+
+### A visual laboratory notebook
+
+The complex example is continuously executed in CI as a small, reproducible experiment. It deliberately crosses the package's main physical layers:
+
+```text
+┌─────────────────────┐
+│ Gaussian preparation│
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│ 3-mode optical      │──────► covariance & correlations
+│ circuit             │
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│ Fock-space bridge   │
+│ even cat state      │
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│ photon subtraction  │
+│ photon addition     │
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│ lossy Mach–Zehnder  │
+│ phase scan           │
+└──────────┬──────────┘
+           ├──────────────► homodyne
+           └──────────────► heterodyne
+```
+
+Every published run is tied to its exact source commit and keeps its **plots + machine-readable journal together**. The generated simulation explorer provides:
+
+- stage-by-stage navigation through the experiment;
+- filtering by **Gaussian**, **Fock**, **interferometer**, and **measurement** layers;
+- an in-page full-resolution plot viewer, so figures can be inspected without downloading an archive;
+- experiment metrics and reproducibility metadata;
+- direct links to the source commit and CI run;
+- raw journal files alongside the figures;
+- a persistent archive of earlier commit-addressed runs.
+
+**[Open the Catsy simulation explorer →](https://raiyiz.github.io/catsy/)**
+
+The explorer is deliberately static: no server or Python environment is required to browse the results. The plots themselves are generated exclusively through Catsy's visualization helpers.
+
 ## Gaussian states
 
 States are represented in phase space by their first moments and covariance matrix. Common operations include:
