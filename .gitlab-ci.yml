@@ -161,7 +161,7 @@ complex-example:
         - pyproject.toml
         - uv.lock
         - .gitlab-ci.yml
-    - if: '$CI_COMMIT_BRANCH == "exilas" && $CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
   script:
     - uv sync --group dev --locked
     - rm -rf runs/complex_circuit
@@ -181,7 +181,7 @@ complex-pages:
     - job: complex-example
       artifacts: true
   rules:
-    - if: '$CI_COMMIT_BRANCH == "exilas" && $CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
   script:
     - rm -rf _site public
     - uv sync --group dev --locked
