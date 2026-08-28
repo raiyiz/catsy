@@ -1,9 +1,9 @@
 {
   "schema_version": "2.1.0",
   "metadata": {
-    "entry_id": "20260828T154026Z_4b44aeec",
+    "entry_id": "20260828T154500Z_378bee65",
     "title": "Three-mode Gaussian preparation, heralded Fock processing, and interferometric readout",
-    "timestamp": "2026-08-28T15:40:26.581661",
+    "timestamp": "2026-08-28T15:45:00.467991",
     "tags": [
       "example",
       "gaussian",
@@ -20,9 +20,9 @@
   },
   "runs": [
     {
-      "run_id": "f33a5266106847e69a27ae4817ab1d06",
+      "run_id": "5578506a05f145659fc762c9298f87ae",
       "run_name": "gaussian_state_preparation",
-      "timestamp": "2026-08-28T15:40:26.581790",
+      "timestamp": "2026-08-28T15:45:00.468118",
       "circuit": {
         "name": "Three-mode Gaussian demo",
         "modes": [
@@ -117,8 +117,8 @@
           "idler",
           "reference"
         ],
-        "displacement_npz_key": "f33a5266106847e69a27ae4817ab1d06__final_state__displacement",
-        "covariance_npz_key": "f33a5266106847e69a27ae4817ab1d06__final_state__covariance"
+        "displacement_npz_key": "5578506a05f145659fc762c9298f87ae__final_state__displacement",
+        "covariance_npz_key": "5578506a05f145659fc762c9298f87ae__final_state__covariance"
       },
       "scalar_results": {
         "num_modes": 3,
@@ -127,7 +127,7 @@
       },
       "data_payloads": {
         "displacement": {
-          "npz_key": "f33a5266106847e69a27ae4817ab1d06__displacement",
+          "npz_key": "5578506a05f145659fc762c9298f87ae__displacement",
           "description": "Final first moments.",
           "unit": "quadrature",
           "dimensions": [
@@ -139,7 +139,7 @@
           "dtype": "float64"
         },
         "covariance": {
-          "npz_key": "f33a5266106847e69a27ae4817ab1d06__covariance",
+          "npz_key": "5578506a05f145659fc762c9298f87ae__covariance",
           "description": "Final covariance matrix.",
           "unit": "quadrature^2",
           "dimensions": [
@@ -155,9 +155,9 @@
       }
     },
     {
-      "run_id": "12c76550bcc0479b9f35f235d48db86a",
+      "run_id": "8f65a068cbf34d77a22983a56398f735",
       "run_name": "heralded_fock_processing",
-      "timestamp": "2026-08-28T15:40:26.581913",
+      "timestamp": "2026-08-28T15:45:00.468209",
       "circuit": null,
       "final_state_cv": null,
       "scalar_results": {
@@ -168,9 +168,9 @@
       "data_payloads": {}
     },
     {
-      "run_id": "facdb63d77a446e0b26c28d22652a379",
+      "run_id": "231db8002f4841eca70fca520aa81ee4",
       "run_name": "lossy_mach_zehnder_scan",
-      "timestamp": "2026-08-28T15:40:26.581952",
+      "timestamp": "2026-08-28T15:45:00.468241",
       "circuit": null,
       "final_state_cv": null,
       "scalar_results": {
@@ -180,7 +180,7 @@
       },
       "data_payloads": {
         "theta": {
-          "npz_key": "facdb63d77a446e0b26c28d22652a379__theta",
+          "npz_key": "231db8002f4841eca70fca520aa81ee4__theta",
           "description": "Scanned phase in the lossy MZI arm.",
           "unit": "radians",
           "dimensions": [
@@ -192,7 +192,7 @@
           "dtype": "float64"
         },
         "n1": {
-          "npz_key": "facdb63d77a446e0b26c28d22652a379__n1",
+          "npz_key": "231db8002f4841eca70fca520aa81ee4__n1",
           "description": "Mean photon number at MZI output port 1.",
           "unit": "photons",
           "dimensions": [
@@ -204,7 +204,7 @@
           "dtype": "float64"
         },
         "n2": {
-          "npz_key": "facdb63d77a446e0b26c28d22652a379__n2",
+          "npz_key": "231db8002f4841eca70fca520aa81ee4__n2",
           "description": "Mean photon number at MZI output port 2.",
           "unit": "photons",
           "dimensions": [
@@ -216,7 +216,7 @@
           "dtype": "float64"
         },
         "parity1": {
-          "npz_key": "facdb63d77a446e0b26c28d22652a379__parity1",
+          "npz_key": "231db8002f4841eca70fca520aa81ee4__parity1",
           "description": "Parity signal at MZI output port 1.",
           "unit": "dimensionless",
           "dimensions": [
@@ -230,17 +230,17 @@
       }
     },
     {
-      "run_id": "a7355b0157c9496292a913035458cf60",
+      "run_id": "a68f04901aef4002b2f386a49ce2e0aa",
       "run_name": "homodyne_signal_readout",
-      "timestamp": "2026-08-28T15:40:26.582003",
+      "timestamp": "2026-08-28T15:45:00.468283",
       "circuit": null,
       "final_state_cv": {
         "modes": [
           "idler",
           "reference"
         ],
-        "displacement_npz_key": "a7355b0157c9496292a913035458cf60__final_state__displacement",
-        "covariance_npz_key": "a7355b0157c9496292a913035458cf60__final_state__covariance"
+        "displacement_npz_key": "a68f04901aef4002b2f386a49ce2e0aa__final_state__displacement",
+        "covariance_npz_key": "a68f04901aef4002b2f386a49ce2e0aa__final_state__covariance"
       },
       "scalar_results": {
         "outcome": 0.1468259487731242,
@@ -250,17 +250,17 @@
       "data_payloads": {}
     },
     {
-      "run_id": "28b7795998744f62a43bded42caa875d",
+      "run_id": "2bed1bde81b04433a11214cbf84a4044",
       "run_name": "heterodyne_signal_readout",
-      "timestamp": "2026-08-28T15:40:26.582040",
+      "timestamp": "2026-08-28T15:45:00.468303",
       "circuit": null,
       "final_state_cv": {
         "modes": [
           "idler",
           "reference"
         ],
-        "displacement_npz_key": "28b7795998744f62a43bded42caa875d__final_state__displacement",
-        "covariance_npz_key": "28b7795998744f62a43bded42caa875d__final_state__covariance"
+        "displacement_npz_key": "2bed1bde81b04433a11214cbf84a4044__final_state__displacement",
+        "covariance_npz_key": "2bed1bde81b04433a11214cbf84a4044__final_state__covariance"
       },
       "scalar_results": {
         "outcome_x": 0.4828579987985858,
