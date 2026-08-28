@@ -10,7 +10,7 @@ The free functions at the end of #src-link("src/catsy/gaussian/__init__.py", lab
 
 == Analytical Wigner function
 
-For a Gaussian state, the Wigner quasi-probability distribution is itself a Gaussian function in phase space and is therefore non-negative. Negativity is a non-Gaussian feature of Wigner representations; the Gaussian case is reviewed by #link("https://doi.org/10.1140/epjst/e2012-01532-4")[Olivares (2012)] and #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)]. For a single mode with local displacement vector $d$ and local covariance $V$, it holds exactly that:
+For a Gaussian state, the Wigner quasi-probability distribution is itself a Gaussian function in phase space and therefore non-negative. Negativity is a non-Gaussian feature of Wigner representations; the Gaussian case is reviewed by #link("https://doi.org/10.1140/epjst/e2012-01532-4")[Olivares (2012)] and #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)]. For a single mode with local displacement vector $d$ and local covariance $V$, it holds exactly that:
 $ W(x, p) = 1 / (2 pi sqrt(det V)) exp(-1/2 (r - d)^T V^(-1) (r - d)), quad r = vec(x, p) $
 
 `compute_wigner_analytically` evaluates this formula directly on a grid, without constructing any Fock-space representation:
