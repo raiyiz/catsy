@@ -17,6 +17,7 @@ import qutip as qt
 
 from catsy import GaussianState
 from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
+from catsy.fock.visualization import plot_fock_density_matrix
 from catsy.fock.visualization import plot_wigner as plot_fock_wigner
 from catsy.gaussian import LossChannels
 from catsy.gaussian.visualization import (
@@ -161,12 +162,9 @@ def test_showcase_cat_state_evolution_gallery(
         fontweight="medium",
     )
 
-    initial_wigner = qt.wigner(
-        result.states[0], np.linspace(-6.5, 6.5, 96), np.linspace(-6.5, 6.5, 96)
-    )
-    final_wigner = qt.wigner(
-        result.states[-1], np.linspace(-6.5, 6.5, 96), np.linspace(-6.5, 6.5, 96)
-    )
+    grid = np.linspace(-6.5, 6.5, 96)
+    initial_wigner = qt.wigner(result.states[0], grid, grid)
+    final_wigner = qt.wigner(result.states[-1], grid, grid)
     assert np.min(initial_wigner) < -0.01
     assert np.min(final_wigner) < 0.0
     assert_no_empty_axes(figure)
@@ -234,18 +232,23 @@ def test_showcase_compass_state_gallery(
     ).unit()
     rho = qt.ket2dm(state)
 
-    figure = plt.figure(figsize=(12, 5.5), constrained_layout=True)
-    grid = figure.add_gridspec(1, 2, wspace=0.12)
+    figure = plt.figure(figsize=(13, 6), constrained_layout=True)
+    grid = figure.add_gridspec(1, 3, width_ratios=(1.0, 1.0, 0.9), wspace=0.1)
     wigner_ax = figure.add_subplot(grid[0, 0])
-    density_ax = figure.add_subplot(grid[0, 1])
+    magnitude_ax = figure.add_subplot(grid[0, 1])
+    phase_ax = figure.add_subplot(grid[0, 2])
 
     plot_fock_wigner(rho, xlim=(-7, 7), resolution=96, ax=wigner_ax)
-    plot_fock_wigner(rho, xlim=(-7, 7), resolution=96, ax=density_ax)
-    density_ax.set_title("Phase-space interference")
+    plot_fock_density_matrix(rho, axes=(magnitude_ax, phase_ax))
 
-    figure.suptitle("Four-component compass state · non-Gaussian interference", fontsize=16)
+    figure.suptitle(
+        "Four-component compass state · phase-space interference and Fock coherence",
+        fontsize=16,
+        fontweight="medium",
+    )
 
-    wigner = qt.wigner(rho, np.linspace(-7, 7, 96), np.linspace(-7, 7, 96))
+    grid_values = np.linspace(-7, 7, 96)
+    wigner = qt.wigner(rho, grid_values, grid_values)
     assert np.min(wigner) < -0.01
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
