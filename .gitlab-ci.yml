@@ -235,7 +235,7 @@ pages:
     - |
       if git ls-remote --exit-code origin "${PAGES_HISTORY_REF}" >/dev/null 2>&1; then
         git fetch origin "${PAGES_HISTORY_REF}"
-        git worktree add _site FETCH_HEAD
+        git worktree add -f _site FETCH_HEAD
       elif git ls-remote --exit-code origin "refs/heads/${PAGES_HISTORY_BRANCH}" >/dev/null 2>&1; then
         # One-time migration from the old visible branch to the custom ref.
         git fetch origin "refs/heads/${PAGES_HISTORY_BRANCH}"
