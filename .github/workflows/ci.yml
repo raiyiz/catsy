@@ -76,11 +76,7 @@ jobs:
   publish-complex-report:
     name: publish complex example report
     if: >-
-      needs.complex-example.result == 'success' &&
-      ((github.event_name == 'push' &&
-        (github.ref_name == 'exilas' || github.ref_name == 'exilas-complex-example')) ||
-       (github.event_name == 'workflow_dispatch' &&
-        inputs.publish_complex_report == true))
+      needs.complex-example.result == 'success'
     needs: complex-example
     runs-on: ubuntu-latest
     permissions:
@@ -133,11 +129,7 @@ jobs:
   deploy-complex-report:
     name: deploy complex example report
     if: >-
-      needs.publish-complex-report.result == 'success' &&
-      ((github.event_name == 'push' &&
-        (github.ref_name == 'exilas' || github.ref_name == 'exilas-complex-example')) ||
-       (github.event_name == 'workflow_dispatch' &&
-        inputs.publish_complex_report == true))
+      needs.publish-complex-report.result == 'success'
     needs: publish-complex-report
     runs-on: ubuntu-latest
     permissions:
