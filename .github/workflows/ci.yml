@@ -90,7 +90,7 @@ jobs:
             git fetch origin gh-pages
             git worktree add _site origin/gh-pages
           else
-            git worktree add --orphan -b gh-pages _site
+            git worktree add --orphan gh-pages _site
           fi
       - name: Build Pages report
         run: python scripts/build_complex_report.py
