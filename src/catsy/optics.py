@@ -25,7 +25,13 @@ from catsy.gaussian import (
     thermal_loss,
 )
 
-from .core import _check_non_negative, _check_positive_int, _json_load, _json_save
+from .core import (
+    _check_non_negative,
+    _check_positive_int,
+    _json_load,
+    _json_save,
+    _normalize_phase_vector,
+)
 from .types import CircuitData, FloatArray, GateParameters, Modes, ParameterValue
 
 
@@ -111,9 +117,7 @@ def _normalize_gate_kwargs(
     if "alpha" not in kwargs:
         return kwargs
     kwargs = dict(kwargs)
-    _, x, p = GaussianState._normalize_translation(
-        alpha=cast(complex, kwargs.pop("alpha"))
-    )
+    _, x, p = _normalize_phase_vector(alpha=cast(complex, kwargs.pop("alpha")))
     kwargs["x"] = x
     kwargs["p"] = p
     return kwargs

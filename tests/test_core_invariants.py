@@ -18,7 +18,11 @@ also means it isn't silently deleted as "dead code" by a future refactor.
 import numpy as np
 import pytest
 
-from catsy.core import _validate_physical_covariance, _williamson_decomposition
+from catsy.core import (
+    _normalize_phase_vector,
+    _validate_physical_covariance,
+    _williamson_decomposition,
+)
 
 # _validate_physical_covariance
 
@@ -66,3 +70,31 @@ def test_williamson_decomposition_rejects_numerically_singular_symplectic_eigenv
     covariance = np.diag([1e-25, 1.0])
     with pytest.raises(ValueError, match="numerically singular"):
         _williamson_decomposition(covariance)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"alpha": 0.6 - 0.9j}, (0.6 - 0.9j, np.sqrt(2) * 0.6, -np.sqrt(2) * 0.9)),
+        ({"x": 1.2, "p": -1.8}, ((1.2 - 1.8j) / np.sqrt(2), 1.2, -1.8)),
+    ],
+)
+def test_normalize_phase_vector_accepts_supported_forms(kwargs, expected):
+    assert _normalize_phase_vector(**kwargs) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "exception", "match"),
+    [
+        # alpha combined with x/p, and x or p alone, are each a single branch
+        ({"alpha": 1.0, "x": 1.0, "p": 1.0}, ValueError, "either `alpha` or"),
+        ({}, TypeError, "need some input"),
+        ({"x": 1.0}, ValueError, "both `x` and `p`"),
+        ({"alpha": np.nan}, ValueError, "finite"),
+        ({"x": np.nan, "p": 1.0}, ValueError, "x must be finite"),
+        ({"alpha": "bad"}, TypeError, "numeric"),
+    ],
+)
+def test_normalize_phase_vector_rejects_invalid_inputs(kwargs, exception, match):
+    with pytest.raises(exception, match=match):
+        _normalize_phase_vector(**kwargs)
