@@ -51,7 +51,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
 
     journal = SimulationJournal(config.output_dir)
     circuit = build_circuit(config, rng)
-    initial = GaussianState.vacuum(circuit.modes)
+    initial = GaussianState.vacuum(tuple(mode.name for mode in circuit.modes))
 
     LOGGER.info("Running circuit %r on modes %s", circuit.name, circuit.modes)
     final_state = circuit.run(initial)
