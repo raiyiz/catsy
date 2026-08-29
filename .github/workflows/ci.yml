@@ -183,6 +183,10 @@ jobs:
           REPORT_COMMIT_URL: https://github.com/raiyiz/catsy/commit/${{ github.sha }}
           REPORT_CI_URL: https://github.com/raiyiz/catsy/actions/runs/${{ github.run_id }}
         run: python scripts/build_complex_report.py
+      - name: Sync explorer from execution journal
+        env:
+          REPORT_COMMIT: ${{ github.sha }}
+        run: python scripts/sync_complex_execution_stages.py
       - name: Publish Pages history
         run: |
           git -C _site config user.name "github-actions[bot]"
