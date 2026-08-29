@@ -46,7 +46,7 @@ def run_cat_mzi_phase_scan(
     theta_list: Sequence[float] | None = None,
     kappa: float = 0.0,
     loss_time: float = 1.0,
-) -> tuple[qt.QObj, ObservableScanData]:
+) -> tuple[qt.Qobj, ObservableScanData]:
     """Prepare an even cat and run it through a Mach-Zehnder phase scan."""
     cat = make_even_cat(cutoff=cutoff, alpha=alpha)
     return cat, run_mzi_phase_scan(
@@ -61,7 +61,7 @@ def run_cat_mzi_phase_scan(
 def plot_mzi_scan(
     results: ObservableScanData,
     *,
-    state: qt.QObj | None = None,
+    state: qt.Qobj | None = None,
     state_title: str = "MZI input state",
     state_xlim: tuple[float, float] = (-6.0, 6.0),
     resolution: int = 120,
