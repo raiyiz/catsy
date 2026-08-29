@@ -16,7 +16,8 @@ from catsy import (
     SimulationJournal,
 )
 from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
-from catsy.fock.visualization import plot_fock_dashboard, plot_mach_zehnder_scan, plot_wigner
+from catsy.fock.mzi_visualization import plot_mach_zehnder_scan
+from catsy.fock.visualization import plot_fock_dashboard, plot_wigner
 from catsy.gaussian.visualization import (
     plot_covariance_matrix,
     plot_mode_correlation_map,
