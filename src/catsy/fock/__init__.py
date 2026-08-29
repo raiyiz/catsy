@@ -277,6 +277,76 @@ def loss(
     return rho_coupled.ptrace(list(range(n_modes)))
 
 
+def thermal_loss(
+    rho: qt.Qobj,
+    mode_idx: int = 0,
+    eta: float = 1.0,
+    nbar: float = 0.0,
+    N_cutoff: int | None = None,
+    ancilla_cutoff: int | None = None,
+) -> qt.Qobj:
+    """Apply thermal loss with transmissivity ``eta`` and bath occupancy ``nbar``.
+
+    The selected system mode is coupled to a thermal ancilla through the same
+    beam-splitter unitary used by :func:`loss`, after which the ancilla is
+    traced out.
+
+    ``nbar=0`` reduces exactly to vacuum-coupled loss.  For ``nbar>0`` the
+    channel describes attenuation into a thermal environment.
+
+    ``ancilla_cutoff`` controls the Fock-space truncation of the thermal
+    environment.  It defaults to the system cutoff; for large ``nbar`` it
+    may need to be increased to faithfully represent the thermal state.
+    """
+    _check_unit_interval(eta, "eta")
+    _check_non_negative(nbar, "nbar")
+
+    n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
+
+    ancilla_cutoff = cutoff if ancilla_cutoff is None else ancilla_cutoff
+    _check_positive_int(ancilla_cutoff, "ancilla_cutoff")
+
+    dims = [cutoff] * n_modes + [ancilla_cutoff]
+    ancilla_idx = n_modes
+
+    a_sys = _expand_operator(
+        qt.destroy(cutoff),
+        dims=dims,
+        mode_idx=mode_idx,
+    )
+    a_anc = _expand_operator(
+        qt.destroy(ancilla_cutoff),
+        dims=dims,
+        mode_idx=ancilla_idx,
+    )
+
+    # Same beamsplitter convention as loss():
+    #
+    #   a_sys' = sqrt(eta) a_sys + sqrt(1-eta) a_anc
+    #
+    # For a thermal environment this implements the bosonic thermal-loss
+    # channel with transmissivity eta and environment mean occupation nbar.
+    t = np.sqrt(eta)
+    r_coeff = np.sqrt(1.0 - eta)
+
+    O = np.block(
+        [
+            [t * np.eye(2), r_coeff * np.eye(2)],
+            [-r_coeff * np.eye(2), t * np.eye(2)],
+        ]
+    )
+
+    U = _qutip_passive_unitary(O, [a_sys, a_anc])
+
+    # Replace the vacuum environment used by loss() with a thermal state.
+    ancilla_thermal = qt.thermal_dm(ancilla_cutoff, nbar)
+    rho_extended = qt.tensor(rho, ancilla_thermal)
+
+    rho_coupled = U * rho_extended * U.dag()
+
+    return rho_coupled.ptrace(list(range(n_modes)))
+
+
 def _apply_kraus_operators(
     rho: qt.Qobj,
     kraus_ops: Sequence[qt.Qobj],
@@ -625,6 +695,28 @@ class FockState:
             self.rho, idx, eta, N_cutoff=self.N_cutoff, ancilla_cutoff=ancilla_cutoff
         )
         return FockState(modes=self.modes, rho=new_rho, N_cutoff=self.N_cutoff)
+
+    def thermal_loss(
+        self,
+        mode: str,
+        eta: float,
+        nbar: float = 0.0,
+        ancilla_cutoff: int | None = None,
+    ) -> FockState:
+        idx = self.get_mode_index(mode)
+        new_rho = thermal_loss(
+            self.rho,
+            idx,
+            eta,
+            nbar=nbar,
+            N_cutoff=self.N_cutoff,
+            ancilla_cutoff=ancilla_cutoff,
+        )
+        return FockState(
+            modes=self.modes,
+            rho=new_rho,
+            N_cutoff=self.N_cutoff,
+        )
 
     # -- Non-Gaussian operations (Fock-only, by physics) --------------------
 
