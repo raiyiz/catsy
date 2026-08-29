@@ -50,12 +50,14 @@ class Gate:
 
     name: str
     transform: GateTransform
-    modes: tuple[Mode, ...]
+    modes: tuple[Mode | str, ...]
     kwargs: GateParameters
 
     def apply(self, state: Any | None) -> GaussianState:
         """Apply the gate using mode names at the backend boundary."""
-        mode_names = tuple(mode.name for mode in self.modes)
+        mode_names = tuple(
+            mode.name if isinstance(mode, Mode) else mode for mode in self.modes
+        )
         return self.transform(cast("GaussianState", state), mode_names, **self.kwargs)
 
 
@@ -109,7 +111,7 @@ class Circuit:
         if mode.index != len(self._mode_registry):
             raise ValueError("Circuit modes must have consecutive indices in circuit order.")
         self._mode_registry[mode.name] = mode
-        self.modes = ModeNamespace((*tuple(self.modes), mode))
+        self.modes = ModeNamespace((*self.modes._modes, mode))
         return mode
 
     @property
@@ -156,7 +158,12 @@ class Circuit:
         return apply
 
     def mode(self, mode_name: str) -> Mode:
-        """Create and return a new immutable mode owned by this circuit."""
+        """Return an existing mode or create a new immutable mode."""
+        if not isinstance(mode_name, str) or not mode_name.strip():
+            raise ValueError("Mode name must be a non-empty string.")
+        existing = self._mode_registry.get(mode_name)
+        if existing is not None:
+            return existing
         new_mode = Mode(name=mode_name, index=len(self._mode_registry), owner=self)
         return self._register_mode(new_mode)
 
