@@ -99,6 +99,107 @@ def run_heterodyne(
     return np.asarray(outcome), conditioned
 
 
+def execution_stages(
+    *,
+    circuit: Circuit,
+    final_state: GaussianState,
+    cat: qt.Qobj,
+    subtracted: qt.Qobj,
+    added: qt.Qobj,
+    mzi_scan: dict[str, np.ndarray],
+    homodyne_state: GaussianState,
+    heterodyne_state: GaussianState,
+) -> list[dict[str, object]]:
+    """Describe the stages that were actually executed, in execution order.
+
+    This is deliberately built from the outputs of the simulation rather than
+    being maintained by the report generator. The Simulation Explorer consumes
+    this trace, making the journal the source of truth for the displayed map.
+    """
+    return [
+        {
+            "id": "gaussian_state_preparation",
+            "title": "Gaussian preparation",
+            "category": "gaussian",
+            "description": "Run the three-mode Gaussian circuit and obtain its final state.",
+            "plot": "01_final_signal_phase_space",
+            "inspect": "Check the signal phase-space geometry after the recorded circuit execution.",
+            "result": "Gaussian state / signal mode",
+            "run": "gaussian_state_preparation",
+        },
+        {
+            "id": "even_cat_preparation",
+            "title": "Even cat preparation",
+            "category": "fock",
+            "description": "Construct the even Schrödinger cat in the truncated Fock basis.",
+            "plot": "04_even_cat_wigner",
+            "inspect": "Look for the non-Gaussian two-lobed structure and interference fringes.",
+            "result": f"trace = {float(cat.tr()):.6f}",
+            "run": "even_cat_preparation",
+        },
+        {
+            "id": "photon_subtraction",
+            "title": "Photon subtraction",
+            "category": "fock",
+            "description": "Apply realistic heralded photon subtraction to the cat state.",
+            "plot": "06_after_photon_subtraction",
+            "inspect": "Compare the conditioned state with the input cat and account for finite detector efficiency.",
+            "result": f"trace = {float(subtracted.tr()):.6f}",
+            "run": "photon_subtraction",
+        },
+        {
+            "id": "photon_addition",
+            "title": "Photon addition",
+            "category": "fock",
+            "description": "Apply realistic heralded photon addition to the subtraction output.",
+            "plot": "07_after_photon_addition",
+            "inspect": "Compare against subtraction to see the effect of conditional photon-number engineering.",
+            "result": f"trace = {float(added.tr()):.6f}",
+            "run": "photon_addition",
+        },
+        {
+            "id": "mach_zehnder_scan",
+            "title": "Mach–Zehnder scan",
+            "category": "interferometer",
+            "description": "Scan the processed Fock state through the lossy Mach–Zehnder interferometer.",
+            "plot": "11_mach_zehnder_scan",
+            "inspect": "Follow the phase-dependent output response across all 33 scan points.",
+            "result": f"{len(mzi_scan['theta'])} phase points",
+            "run": "lossy_mach_zehnder_scan",
+        },
+        {
+            "id": "homodyne_signal_readout",
+            "title": "Homodyne readout",
+            "category": "measurement",
+            "description": "Condition the Gaussian state on the measured signal quadrature.",
+            "plot": "08_after_homodyne_idler",
+            "inspect": "Inspect the remaining idler state after selecting one quadrature outcome.",
+            "result": f"xφ = {float(np.asarray(homodyne_state.displacement).flat[0]):.4f} state recorded",
+            "run": "homodyne_signal_readout",
+        },
+        {
+            "id": "heterodyne_signal_readout",
+            "title": "Heterodyne readout",
+            "category": "measurement",
+            "description": "Condition the Gaussian state on simultaneous x/p detection.",
+            "plot": "09_after_heterodyne_idler",
+            "inspect": "Inspect the conditioned state after a two-quadrature measurement outcome.",
+            "result": "x, p outcome recorded",
+            "run": "heterodyne_signal_readout",
+        },
+        {
+            "id": "measurement_comparison",
+            "title": "Measurement comparison",
+            "category": "measurement",
+            "description": "Compare the conditioned states produced by homodyne and heterodyne readout.",
+            "plot": "10_measurement_conditioning",
+            "inspect": "Compare how the measurement model changes the inferred idler state.",
+            "result": "homodyne vs heterodyne",
+            "run": "measurement_comparison",
+        },
+    ]
+
+
 def plot_experiment(
     final_state: GaussianState,
     homodyne_state: GaussianState,
@@ -117,29 +218,19 @@ def plot_experiment(
     heterodyne_reordered = heterodyne_state.reorder_modes(remaining_modes)
 
     figures = {
-        "01_final_signal_phase_space": plot_phase_space(
-            final_state, "signal", show=False
-        ),
+        "01_final_signal_phase_space": plot_phase_space(final_state, "signal", show=False),
         "02_final_covariance_matrix": plot_covariance_matrix(final_state, show=False),
         "03_final_mode_correlations": plot_mode_correlation_map(final_state, show=False),
-        "04_even_cat_wigner": plot_wigner(
-            cat, xlim=(-4.5, 4.5), resolution=150, show=False
-        ),
-        "05_even_cat_state": plot_fock_dashboard(
-            cat, xlim=(-4.5, 4.5), resolution=120, show=False
-        ),
+        "04_even_cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150, show=False),
+        "05_even_cat_state": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120, show=False),
         "06_after_photon_subtraction": plot_fock_dashboard(
             subtracted, xlim=(-4.5, 4.5), resolution=120, show=False
         ),
         "07_after_photon_addition": plot_fock_dashboard(
             added, xlim=(-4.5, 4.5), resolution=120, show=False
         ),
-        "08_after_homodyne_idler": plot_phase_space(
-            homodyne_reordered, "idler", show=False
-        ),
-        "09_after_heterodyne_idler": plot_phase_space(
-            heterodyne_reordered, "idler", show=False
-        ),
+        "08_after_homodyne_idler": plot_phase_space(homodyne_reordered, "idler", show=False),
+        "09_after_heterodyne_idler": plot_phase_space(heterodyne_reordered, "idler", show=False),
         "10_measurement_conditioning": plot_phase_space_trajectory(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
@@ -148,7 +239,7 @@ def plot_experiment(
 
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)
-        plt.close(figure)  # none of these are shown; free them as we go
+        plt.close(figure)
 
     LOGGER.info(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
@@ -202,6 +293,17 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         output_dir / "plots",
     )
 
+    stages = execution_stages(
+        circuit=circuit,
+        final_state=final_state,
+        cat=cat,
+        subtracted=subtracted,
+        added=added,
+        mzi_scan=mzi_scan,
+        homodyne_state=homodyne_state,
+        heterodyne_state=heterodyne_state,
+    )
+
     entry = journal.new_entry(
         "Three-mode Gaussian preparation, heralded Fock processing, and interferometric readout",
         tags=["example", "gaussian", "fock", "interferometer", "measurement", "plotting"],
@@ -211,7 +313,11 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "interferometer, and compares homodyne with heterodyne conditioning of the "
             "Gaussian signal mode."
         ),
-        metadata={"circuit_name": circuit.name, "output_dir": str(output_dir)},
+        metadata={
+            "circuit_name": circuit.name,
+            "output_dir": str(output_dir),
+            "execution_stages": stages,
+        },
     )
     entry.log_run(
         "gaussian_state_preparation",
@@ -238,12 +344,16 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         },
     )
     entry.log_run(
-        "heralded_fock_processing",
-        metrics={
-            "cat_trace": float(cat.tr()),
-            "subtracted_trace": float(subtracted.tr()),
-            "added_trace": float(added.tr()),
-        },
+        "even_cat_preparation",
+        metrics={"trace": float(cat.tr())},
+    )
+    entry.log_run(
+        "photon_subtraction",
+        metrics={"trace": float(subtracted.tr())},
+    )
+    entry.log_run(
+        "photon_addition",
+        metrics={"trace": float(added.tr())},
     )
     entry.log_run(
         "lossy_mach_zehnder_scan",
@@ -296,6 +406,10 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "outcome_p": float(heterodyne_outcome[1]),
             "remaining_modes": len(heterodyne_state.modes),
         },
+    )
+    entry.log_run(
+        "measurement_comparison",
+        metrics={"homodyne_vs_heterodyne": True},
     )
 
     saved_path = entry.save(output_dir)
