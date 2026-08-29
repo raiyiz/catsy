@@ -14,16 +14,13 @@ from typing import Any, Protocol, TypedDict, cast
 import numpy as np
 import qutip as qt
 
-from catsy.gaussian import (
-    GaussianState,
-    beam_splitter,
-    displace,
-    initial_state,
-    loss,
-    rotate,
-    squeeze,
-    thermal_loss,
-)
+from catsy.fock import FockState
+from catsy.gaussian import GaussianState, initial_state, thermal_loss
+from catsy.gaussian import beam_splitter as _gaussian_beam_splitter
+from catsy.gaussian import displace as _gaussian_displace
+from catsy.gaussian import loss as _gaussian_loss
+from catsy.gaussian import rotate as _gaussian_rotate
+from catsy.gaussian import squeeze as _gaussian_squeeze
 
 from .core import (
     _check_non_negative,
@@ -34,13 +31,23 @@ from .core import (
 )
 from .types import CircuitData, FloatArray, GateParameters, Modes, ParameterValue
 
+# A circuit's running state is Gaussian until it hits a gate that isn't --
+# see `Circuit.run` and the non-Gaussian gates registered near the bottom
+# of this module. There is deliberately no third, "back to Gaussian" case:
+# once a computation is a `FockState`, it stays one (see `catsy.fock`).
+CVState = GaussianState | FockState
+
 
 class GateTransform(Protocol):
-    """Callable contract for a state transformation."""
+    """Callable contract for a state transformation.
 
-    def __call__(
-        self, state: GaussianState, modes: Modes, **kwargs: ParameterValue
-    ) -> GaussianState: ...
+    A single transform is expected to accept *either* representation and
+    return the matching one (see the dispatching gates registered below,
+    e.g. `catsy.optics.squeeze`) -- `Circuit` itself stays representation-
+    agnostic and never inspects `state`'s type.
+    """
+
+    def __call__(self, state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState: ...
 
 
 @dataclass(frozen=True)
@@ -52,12 +59,12 @@ class Gate:
     modes: Modes
     kwargs: GateParameters
 
-    def apply(self, state: Any | None) -> GaussianState:
+    def apply(self, state: Any | None) -> CVState:
         # `state` is None only when this is (or precedes) an InitialState
         # gate; Circuit.run() enforces that invariant before calling apply()
         # on any other gate, so the cast reflects an already-checked fact
         # rather than papering over an unchecked one.
-        return self.transform(cast("GaussianState", state), self.modes, **self.kwargs)
+        return self.transform(cast("CVState", state), self.modes, **self.kwargs)
 
 
 class CircuitState(Protocol):
@@ -278,7 +285,7 @@ class Circuit:
             )
         )
 
-    def run(self, initial_state: GaussianState | None = None) -> Any:
+    def run(self, initial_state: CVState | None = None) -> Any:
         """Run the ordered gate chain against an optional initial state."""
         if not self.modes:
             raise ValueError("Circuit has no registered modes.")
@@ -398,6 +405,112 @@ class Circuit:
         print("\n" + self.render_schematic(input_states) + "\n")
 
 
+# ---------------------------------------------------------------------------
+# Universal gates: one dispatcher per physical operation, not per
+# representation. Squeezing/rotation/displacement/beam splitters/loss are
+# Gaussian (quadratic-generator) operations with an exact representation in
+# either picture, so each dispatcher below just forwards to the matching
+# GaussianState method (via the `catsy.gaussian` functions) or FockState
+# method depending on what `state` currently is. This is what lets a
+# `Circuit` mix these gates freely regardless of when/whether it has been
+# promoted into Fock space (see the non-Gaussian gates further down).
+# ---------------------------------------------------------------------------
+
+
+def squeeze(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
+    if isinstance(state, FockState):
+        return state.squeeze(
+            mode=modes[0],
+            r=cast(float, kwargs["r"]),
+            theta=cast(float, kwargs.get("theta", 0.0)),
+        )
+    return _gaussian_squeeze(cast(GaussianState, state), modes, **kwargs)
+
+
+def rotate(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
+    if isinstance(state, FockState):
+        return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
+    return _gaussian_rotate(cast(GaussianState, state), modes, **kwargs)
+
+
+def displace(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
+    if isinstance(state, FockState):
+        return state.displace(
+            mode=modes[0],
+            alpha=cast(complex, kwargs["alpha"]) if "alpha" in kwargs else None,
+            x=cast(float, kwargs["x"]) if "x" in kwargs else None,
+            p=cast(float, kwargs["p"]) if "p" in kwargs else None,
+        )
+    return _gaussian_displace(cast(GaussianState, state), modes, **kwargs)
+
+
+def beam_splitter(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
+    if isinstance(state, FockState):
+        return state.beam_splitter(
+            mode_a=modes[0], mode_b=modes[1], eta=cast(float, kwargs["eta"])
+        )
+    return _gaussian_beam_splitter(cast(GaussianState, state), modes, **kwargs)
+
+
+def loss(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
+    if isinstance(state, FockState):
+        return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
+    return _gaussian_loss(cast(GaussianState, state), modes, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Non-Gaussian gates: Fock-only by physics (a ideal photon
+# subtraction/addition is not a Gaussian channel), so unlike the dispatchers
+# above these have no Gaussian branch. What they do have is automatic,
+# one-way promotion: a `GaussianState` embeds *exactly* (up to Fock-space
+# truncation) into a `FockState` via `to_fock`, so lifting into Fock space
+# on first contact with one of these gates loses nothing and needs no
+# permission from the caller -- it only needs to know the cutoff to embed
+# into, via this gate's `N_cutoff` kwarg. There is deliberately no gate that
+# goes the other way (see `catsy.fock`): once promoted, a circuit stays in
+# Fock space for the rest of its run.
+# ---------------------------------------------------------------------------
+
+
+def _ensure_fock(state: CVState, kwargs: dict[str, ParameterValue]) -> FockState:
+    if isinstance(state, FockState):
+        return state
+    if "N_cutoff" not in kwargs:
+        raise ValueError(
+            "This gate is non-Gaussian and the circuit hasn't been promoted "
+            "into Fock space yet; pass N_cutoff=... to this gate call so it "
+            "knows what cutoff to embed the current (still-Gaussian) state "
+            "into."
+        )
+    return cast(GaussianState, state).to_fock(cast(int, kwargs["N_cutoff"]))
+
+
+def photon_subtraction(state: CVState, modes: Modes, **kwargs: ParameterValue) -> FockState:
+    return _ensure_fock(state, kwargs).photon_subtraction(mode=modes[0])
+
+
+def photon_addition(state: CVState, modes: Modes, **kwargs: ParameterValue) -> FockState:
+    return _ensure_fock(state, kwargs).photon_addition(mode=modes[0])
+
+
+def realistic_photon_subtraction(
+    state: CVState, modes: Modes, **kwargs: ParameterValue
+) -> FockState:
+    fock_kwargs = {k: v for k, v in kwargs.items() if k != "N_cutoff"}
+    return _ensure_fock(state, kwargs).realistic_photon_subtraction(
+        mode=modes[0], **fock_kwargs
+    )
+
+
+def realistic_photon_addition(
+    state: CVState, modes: Modes, **kwargs: ParameterValue
+) -> FockState:
+    fock_kwargs = {k: v for k, v in kwargs.items() if k != "N_cutoff"}
+    return _ensure_fock(state, kwargs).realistic_photon_addition(
+        mode=modes[0], **fock_kwargs
+    )
+
+
 _GATE_DESERIALIZERS: dict[str, GateTransform] = {}
 
 _GATE_LABEL_ABBREVIATIONS = {
@@ -408,6 +521,10 @@ _GATE_LABEL_ABBREVIATIONS = {
     "Displacer": "DISP",
     "ThermalLoss": "TLOSS",
     "InitialState": "INIT",
+    "PhotonSubtraction": "PSUB",
+    "PhotonAddition": "PADD",
+    "RealisticPhotonSubtraction": "RPSUB",
+    "RealisticPhotonAddition": "RPADD",
 }
 
 
@@ -419,6 +536,10 @@ for _name, _transform in (
     ("Noise", loss),
     ("ThermalLoss", thermal_loss),
     ("InitialState", initial_state),
+    ("PhotonSubtraction", photon_subtraction),
+    ("PhotonAddition", photon_addition),
+    ("RealisticPhotonSubtraction", realistic_photon_subtraction),
+    ("RealisticPhotonAddition", realistic_photon_addition),
 ):
     Circuit.register(_name, _transform)
 
