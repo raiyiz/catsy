@@ -22,7 +22,7 @@ from catsy.optics import Circuit, Gate, KerrCavity, MachZehnderInterferometer, M
 def test_beam_splitter_builds_a_two_mode_gate():
     circuit = Circuit(name="Bench").add_mode("a").add_mode("b")
     circuit.beam_splitter("a", "b", eta=0.5)
-    assert circuit.modes == ("a", "b")
+    assert tuple(circuit.modes) == (circuit.modes.a, circuit.modes.b)
     assert circuit.to_dict()["gates"] == [
         {"gate": "BeamSplitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
     ]
@@ -37,14 +37,14 @@ def test_mode_returns_an_owned_handle():
     circuit = Circuit(name="Bench")
     a = circuit.mode("a")
     assert a.name == "a"
+    assert a.index == 0
+    assert a is circuit.modes.a
     assert a.owner is circuit
-    assert circuit.modes == ("a",)
 
 
 def test_mode_rejects_duplicate_name():
     circuit = Circuit().add_mode("a")
-    with pytest.raises(ValueError, match="already registered"):
-        circuit.mode("a")
+    assert circuit.mode("a") is circuit.modes.a
 
 
 def test_mode_rejects_empty_name():
@@ -56,7 +56,7 @@ def test_mode_rejects_empty_name():
 def test_free_mode_has_no_owner():
     free = Mode("a")
     assert free.owner is None
-    assert repr(free) == "Mode('a', free)"
+    assert repr(free) == "Mode('a')"
 
 
 def test_mode_uses_identity_equality():
@@ -75,6 +75,7 @@ def test_owned_mode_can_build_a_gate_on_its_circuit():
     assert circuit.to_dict()["gates"] == [
         {"gate": "BeamSplitter", "modes": ["a", "b"], "kwargs": {"eta": 0.5}}
     ]
+    assert circuit.gates[0].modes == (a, b)
 
 
 def test_mode_from_another_circuit_is_rejected():
@@ -154,8 +155,9 @@ def test_circuit_roundtrips_through_file(tmp_path):
         "Rotator",
         "BeamSplitter",
     ]
-    assert set(loaded.modes) == {"line_1", "line_2"}
+    assert {mode.name for mode in loaded.modes} == {"line_1", "line_2"}
     assert loaded.gates[2].kwargs == {"phi": 0.785}
+    assert loaded.gates[0].modes == (loaded.modes.line_1, loaded.modes.line_2)
 
 
 def test_circuit_gate_roundtrip_agrees(tmp_path):
@@ -174,13 +176,12 @@ def test_circuit_defers_physical_validation_to_gaussian_state():
         circuit.run(GaussianState.vacuum(("a", "b")))
 
 
-def test_circuit_stores_the_gate_instance():
+def test_circuit_stores_bound_mode_objects():
     gate = Gate("BeamSplitter", beam_splitter, ("a", "b"), {"eta": 0.5})
     circuit = Circuit(name="Bench", modes=("a", "b")).add_gate(gate)
-    assert circuit.gates[0] is gate
     assert circuit.gates[0].name == "BeamSplitter"
     assert circuit.gates[0].transform is beam_splitter
-    assert circuit.gates[0].modes == ("a", "b")
+    assert circuit.gates[0].modes == (circuit.modes.a, circuit.modes.b)
     assert circuit.gates[0].kwargs == {"eta": 0.5}
 
 
@@ -220,15 +221,13 @@ def test_mzi_preserves_purity_for_coherent_input():
         modes=("line_1", "line_2"), alphas=[1.5 + 0.0j, 2.0j]
     )
     result = mzi.run(coherent_in)
-    # A lossless 2-mode MZI (no loss gate) is purity-preserving:
-    # det(V) stays at the pure-state value of 0.5**(2*n_modes) == 0.0625.
     assert np.linalg.det(result.covariance) == pytest.approx(0.0625, rel=1e-9)
 
 
 def test_lossy_channel_weakens_but_can_preserve_entanglement():
     circuit = Circuit(name="Lossy Channel").add_mode("line_1").add_mode("line_2")
     circuit.loss("line_1", eta=0.9)
-    circuit.loss("line_2", eta=1.0)  # lossless reference arm
+    circuit.loss("line_2", eta=1.0)
 
     tmsv_in = GaussianState.tmsv(mode_a="line_1", mode_b="line_2", r=1.2)
     duan_before = compute_duan_inseparability(tmsv_in, "line_1", "line_2")
@@ -236,9 +235,7 @@ def test_lossy_channel_weakens_but_can_preserve_entanglement():
     result = circuit.run(tmsv_in)
     duan_after = compute_duan_inseparability(result, "line_1", "line_2")
 
-    # Loss always moves the witness toward the separability bound...
     assert duan_after > duan_before
-    # ...but 10% loss on one arm isn't enough to destroy r=1.2 entanglement.
     assert duan_after < 2.0
 
 
@@ -259,10 +256,6 @@ def test_render_schematic_of_empty_circuit():
 
 
 def test_render_schematic_labels_each_gate_and_input_state():
-    """
-    The schematic uses the Gate's noun-style name for its abbreviation,
-    rather than the underlying transform function name.
-    """
     circuit = Circuit(name="MZI Node").add_mode("line_1").add_mode("line_2")
     circuit.beam_splitter("line_1", "line_2", eta=0.5)
     circuit.loss("line_1", eta=0.9)
@@ -274,7 +267,6 @@ def test_render_schematic_labels_each_gate_and_input_state():
     )
     assert "|a=1.5>" in schematic
     assert "|b=0.8>" in schematic
-
     assert "BS" in schematic
     assert "LOSS" in schematic
     assert "PHASE" in schematic
@@ -283,9 +275,6 @@ def test_render_schematic_labels_each_gate_and_input_state():
 
 
 def test_render_schematic_bridges_modes_a_multi_mode_gate_skips_over():
-    # 3 modes, but the beam splitter only touches the outer two -- the
-    # middle mode ("b") must be bridged, not silently dropped or crashed on
-    # (this is the involved_modes[0] vs involved_modes comparison bug).
     circuit = Circuit(name="Bridge Test").add_mode("a").add_mode("b").add_mode("c")
     circuit.beam_splitter("a", "c", eta=0.5)
     circuit.rotate("b", phi=0.1)
@@ -297,8 +286,6 @@ def test_render_schematic_bridges_modes_a_multi_mode_gate_skips_over():
 
 
 def test_render_schematic_labels_initial_state_with_no_parameter_suffix():
-    # InitialState carries no eta/phi/r/alpha kwarg for kind="vacuum", so this
-    # exercises the label branch where none of the known parameter keys match.
     circuit = Circuit(name="Bench").add_mode("a").initial_state("a", kind="vacuum")
     schematic = circuit.render_schematic()
     assert "INIT" in schematic
@@ -314,7 +301,6 @@ def test_draw_prints_the_rendered_schematic(capsys):
 
 @pytest.mark.visualize
 def test_visual_schematic_draw(capsys):
-    # Schema one
     mzi = Circuit(name="MZI Interferometer Node").add_mode("line_1").add_mode("line_2")
     mzi.beam_splitter("line_1", "line_2", eta=0.5)
     mzi.loss("line_1", eta=0.9)
@@ -326,7 +312,6 @@ def test_visual_schematic_draw(capsys):
     captured = capsys.readouterr()
     assert captured.out.strip() == mzi.render_schematic(schema_one_states).strip()
 
-    # Schema two
     mzi = Circuit(name="Colored MZI Architecture").add_mode("line_1").add_mode("line_2")
     mzi.squeeze("line_2", r=0.7)
     mzi.beam_splitter("line_1", "line_2", eta=0.5)
@@ -361,26 +346,12 @@ def test_kerr_cavity_rejects_invalid_constructor_parameters(kwargs, match):
     ("run_kwargs", "match"),
     [
         ({"tlist": np.array([1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "at least 2"),
-        (
-            {
-                "tlist": np.array([[0.0, 1.0], [2.0, 3.0]]),
-                "amp": 1.0,
-                "t0": 0.0,
-                "sigma": 1.0,
-            },
-            "1D array",
-        ),
-        (
-            {"tlist": np.array([0.0, np.nan, 1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0},
-            "finite values",
-        ),
+        ({"tlist": np.array([[0.0, 1.0], [2.0, 3.0]]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "1D array"),
+        ({"tlist": np.array([0.0, np.nan, 1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "finite values"),
         ({"tlist": np.linspace(0, 1, 5), "amp": np.nan, "t0": 0.0, "sigma": 1.0}, "amp"),
         ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": np.inf, "sigma": 1.0}, "t0"),
         ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": -1.0}, "sigma"),
-        (
-            {"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": np.nan},
-            "sigma",
-        ),
+        ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": np.nan}, "sigma"),
     ],
 )
 def test_kerr_cavity_run_rejects_invalid_pulse_parameters(run_kwargs, match):
@@ -393,10 +364,7 @@ def test_kerr_cavity_run_rejects_invalid_pulse_parameters(run_kwargs, match):
     ("kwargs", "match"),
     [
         ({"kappa": -0.1, "N_cutoff": 8}, "kappa must be finite and >= 0"),
-        (
-            {"kappa": 0.1, "N_cutoff": 8, "loss_time": -1.0},
-            "loss_time must be finite and >= 0",
-        ),
+        ({"kappa": 0.1, "N_cutoff": 8, "loss_time": -1.0}, "loss_time must be finite and >= 0"),
         ({"kappa": 0.1, "N_cutoff": 0}, "N_cutoff must be a positive integer"),
     ],
 )
@@ -452,9 +420,7 @@ def test_full_cavity_multipanel_plot_demo(assert_no_empty_axes, assert_layout_ca
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 60)
-    results = MachZehnderInterferometer(kappa=0.2, N_cutoff=N_cutoff).scan(
-        psi_cat, theta_list
-    )
+    results = MachZehnderInterferometer(kappa=0.2, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     axes[0].plot(theta_list, results["n1"])
@@ -510,20 +476,13 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
 
-    # Loss has a fixed exposure time and is therefore independent of the
-    # scanned phase.  Compare the complete phase scan directly.
     theta_list = np.linspace(0, 2 * np.pi, 50)
-    results_clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(
-        psi_cat, theta_list
-    )
-    results_noisy = MachZehnderInterferometer(kappa=0.4, N_cutoff=N_cutoff).scan(
-        psi_cat, theta_list
-    )
+    results_clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
+    results_noisy = MachZehnderInterferometer(kappa=0.4, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
     tail = slice(len(theta_list) // 2, None)
     visibility_clean = np.ptp(np.array(results_clean["parity1"])[tail])
     visibility_noisy = np.ptp(np.array(results_noisy["parity1"])[tail])
-    # Loss must wash out (not enhance) the super-resolved parity fringes.
     assert visibility_noisy < visibility_clean
     print(f"MZI decoherence scan runtime: {perf_counter() - start_time:.2f}s")
 
@@ -534,12 +493,8 @@ def test_mzi_phase_scan_is_independent_of_loss_when_exposure_time_is_zero():
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.array([-0.7, 0.0, 0.9])
 
-    clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(
-        psi_cat, theta_list
-    )
-    zero_exposure = MachZehnderInterferometer(
-        kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0
-    ).scan(psi_cat, theta_list)
+    clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
+    zero_exposure = MachZehnderInterferometer(kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0).scan(psi_cat, theta_list)
 
     for key in ("n1", "n2", "parity1"):
         np.testing.assert_allclose(zero_exposure[key], clean[key], atol=1e-10, rtol=1e-10)
@@ -554,20 +509,10 @@ def test_mzi_negative_phase_is_not_clipped_to_zero():
         psi_cat, np.array([-0.8, 0.0, 0.8])
     )
 
-    # A real phase scan must distinguish a negative phase from zero.
     assert not np.allclose(result["n1"][0], result["n1"][1], atol=1e-8)
 
 
 def test_mzi_scan_accepts_a_density_matrix_input_matching_the_ket_result():
-    # scan() is documented to accept either a ket or a density matrix (e.g.
-    # the output of a lossy KerrCavity.run()), so that state doesn't need to
-    # be purified before being fed into an interferometer. Feeding the same
-    # *pure* state in as a ket and as a density matrix must give identical
-    # observables -- this is the regression test for a bug where qt.tensor
-    # in scan() only ever worked for a ket, silently making that documented
-    # code path (the `else: rho_after_loss = psi_after_BS1` branch) dead:
-    # any density-matrix input raised a QuTiP dimension-mismatch TypeError
-    # before ever reaching it.
     N_cutoff = 10
     alpha = 1.3
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
@@ -582,11 +527,6 @@ def test_mzi_scan_accepts_a_density_matrix_input_matching_the_ket_result():
 
 
 def test_lossy_kerr_cat_feeds_directly_into_mzi_scan():
-    # The composition this bug silently blocked: run a cat state through a
-    # lossy Kerr cavity (KerrCavity.run() returns a genuinely mixed density
-    # matrix once kappa > 0, not just a formally-mixed pure state), then
-    # feed that decohered state straight into an interferometer phase scan
-    # without any manual purification/conversion step in between.
     N_cutoff = 12
     tlist = np.linspace(0, 4, 60)
     states = KerrCavity(K=0.4, kappa=0.08, N_cutoff=N_cutoff).run(
@@ -600,7 +540,7 @@ def test_lossy_kerr_cat_feeds_directly_into_mzi_scan():
     assert not rho_decohered.isket
     assert rho_decohered.tr() == pytest.approx(1.0, abs=1e-6)
     purity = (rho_decohered * rho_decohered).tr().real
-    assert purity < 1.0 - 1e-6  # genuinely mixed, not just represented as a dm
+    assert purity < 1.0 - 1e-6
 
     theta_list = np.linspace(0, 2 * np.pi, 40)
     result = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0).scan(
@@ -613,14 +553,6 @@ def test_lossy_kerr_cat_feeds_directly_into_mzi_scan():
 
 @pytest.mark.visualize
 def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
-    # A single pipeline through three modules: a driven Kerr cavity
-    # (optics.py) generates a cat state; cavity photon loss decoheres it
-    # into a genuinely mixed density matrix; that mixed state is fed
-    # straight into an interferometer phase scan (the composition
-    # test_lossy_kerr_cat_feeds_directly_into_mzi_scan checks numerically)
-    # to see how much of the cat's quantum coherence survives as
-    # interference-fringe visibility on the other side. The lossless cavity
-    # is run alongside as the "how good could it have been" control.
     N_cutoff = 16
     tlist = np.linspace(0, 4, 80)
     theta_list = np.linspace(0, 2 * np.pi, 100)
@@ -642,12 +574,10 @@ def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
         purity = (rho_cat * rho_cat).tr().real
         purities.append(purity)
 
-        result = MachZehnderInterferometer(
-            kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0
-        ).scan(rho_cat, theta_list)
-        ax_fringes.plot(
-            theta_list / np.pi, result["parity1"], label=label, color=color, lw=2
+        result = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0).scan(
+            rho_cat, theta_list
         )
+        ax_fringes.plot(theta_list / np.pi, result["parity1"], label=label, color=color, lw=2)
 
     ax_purity.bar(labels, purities, color=["darkgreen", "darkorange", "crimson"])
     ax_purity.set_ylabel("Cavity output purity Tr(ρ²)")
@@ -665,9 +595,6 @@ def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
     plt.tight_layout()
     plt.show()
 
-    # Monotonic decay isn't just a plotting flourish here: it's the same
-    # physical claim test_decoherence_mzi_parity_visibility_drops_with_loss
-    # makes for loss inside the interferometer, now for loss upstream of it.
     assert purities[0] > purities[1] > purities[2]
 
 
@@ -676,20 +603,11 @@ def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
 
 @pytest.mark.visualize
 def test_kerr_cat_state_generation(plot_enabled):
-    # A driven, weakly-damped Kerr cavity: a fast pulse loads the cavity with
-    # a coherent state, then the Kerr nonlinearity shears it into a cat
-    # state. Routed through KerrCavity.run rather than
-    # hand-rolled here, so this test and test_triggered_cavity_end_to_end
-    # exercise the exact same code path the rest of the suite relies on.
-    N_cutoff = 35  # Kerr cat states have wide Fock-number support -> needs a high cutoff.
+    N_cutoff = 35
     rho_vacuum = qt.ket2dm(qt.fock(N_cutoff, 0))
     tlist = np.linspace(0, 6, 200)
 
-    states = KerrCavity(
-        K=0.5,  # Kerr nonlinearity strength
-        kappa=0.01,  # light damping -- cat states are fragile against loss
-        N_cutoff=N_cutoff,
-    ).run(
+    states = KerrCavity(K=0.5, kappa=0.01, N_cutoff=N_cutoff).run(
         rho_init=rho_vacuum,
         tlist=tlist,
         amp=5.0,
@@ -700,8 +618,6 @@ def test_kerr_cat_state_generation(plot_enabled):
     assert states[-1].tr() == pytest.approx(1.0, abs=1e-6)
 
     if plot_enabled:
-        # Snapshots: pulse arriving, freshly-displaced coherent blob, Kerr
-        # shear starting to bend it, and the final cat state.
         snapshot_indices = [10, 40, 110, -1]
         snapshot_labels = [
             "t ~ 0.3: pulse arriving",
@@ -713,9 +629,7 @@ def test_kerr_cat_state_generation(plot_enabled):
         fig, axes = plt.subplots(2, 2, figsize=(10, 10))
         xvec = np.linspace(-5, 5, 200)
         cont = None
-        for ax, idx, label in zip(
-            axes.flat, snapshot_indices, snapshot_labels, strict=True
-        ):
+        for ax, idx, label in zip(axes.flat, snapshot_indices, snapshot_labels, strict=True):
             W = qt.wigner(states[idx], xvec, xvec)
             cont = ax.contourf(xvec, xvec, W, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
             ax.set_title(label)
@@ -729,11 +643,6 @@ def test_kerr_cat_state_generation(plot_enabled):
 
 @pytest.mark.visualize
 def test_cat_state_single_shot_through_mzi():
-    # Single-phase companion to test_decoherence_mzi_parity_visibility_drops_with_loss
-    # below: a loss-free MZI at one fixed theta, kept mainly to inspect the
-    # output Wigner functions -- so it belongs with the other visual-only
-    # demos and follows the same skip-when-not-plotting convention.
-
     N_cutoff = 22
     alpha = 2
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
@@ -741,22 +650,15 @@ def test_cat_state_single_shot_through_mzi():
     a1 = qt.tensor(qt.destroy(N_cutoff), qt.qeye(N_cutoff))
     a2 = qt.tensor(qt.qeye(N_cutoff), qt.destroy(N_cutoff))
 
-    # 50:50 beam splitter between the two arms: U_BS = exp(i*pi/4*(a1^dag*a2 + a1*a2^dag)).
     H_BS = (1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())
     U_BS = H_BS.expm()
 
-    # MZI input: cat state on port 1, vacuum on port 2.
     psi_in = qt.tensor(psi_cat, qt.fock(N_cutoff, 0))
-
-    # First beam splitter entangles the two arms.
     psi_after_bs1 = U_BS * psi_in
 
-    # Phase shift theta in the upper arm (arm 1).
     theta = np.pi / 4
     U_phase = (1j * theta * a1.dag() * a1).expm()
     psi_after_phase = U_phase * psi_after_bs1
-
-    # Second beam splitter recombines the arms.
     psi_out = U_BS * psi_after_phase
 
     rho_out_port1 = qt.ptrace(psi_out, 0)
@@ -787,46 +689,23 @@ def test_cat_state_single_shot_through_mzi():
 
 @pytest.mark.visualize
 def test_cat_mzi_phase_scan_fringes(assert_no_empty_axes, assert_layout_can_render):
-    # Loss-free (kappa=0) phase scan of a cat state through the MZI -- the
-    # clean-case counterpart plotted alongside the noisy one in
-    # test_decoherence_mzi_parity_visibility_drops_with_loss. Routed through
-    # MachZehnderInterferometer.scan instead of duplicating that loop here,
-    # so both tests exercise the same simulation code.
-
     N_cutoff = 22
     alpha = 4.0 + 2j
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 200)
 
-    results = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(
-        psi_cat, theta_list
-    )
+    results = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-    ax1.plot(
-        theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2
-    )
-    ax1.plot(
-        theta_list / np.pi,
-        results["n2"],
-        label="Output port 2",
-        color="crimson",
-        lw=2,
-        ls="--",
-    )
+    ax1.plot(theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2)
+    ax1.plot(theta_list / np.pi, results["n2"], label="Output port 2", color="crimson", lw=2, ls="--")
     ax1.set_ylabel(r"Mean photon number $\langle n \rangle$")
     ax1.set_title("Mach-Zehnder interference fringes (intensity)")
     ax1.grid(True, ls="--")
     ax1.legend()
 
-    ax2.plot(
-        theta_list / np.pi,
-        results["parity1"],
-        label="Parity, port 1",
-        color="purple",
-        lw=2.5,
-    )
+    ax2.plot(theta_list / np.pi, results["parity1"], label="Parity, port 1", color="purple", lw=2.5)
     ax2.axhline(0, color="black", lw=0.5, ls="-")
     ax2.set_xlabel(r"Phase shift $\theta$ ($\times \pi$)")
     ax2.set_ylabel("Parity expectation value")
