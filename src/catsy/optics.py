@@ -15,12 +15,13 @@ import numpy as np
 import qutip as qt
 
 from catsy.fock import FockState
-from catsy.gaussian import GaussianState, initial_state, thermal_loss
+from catsy.gaussian import GaussianState, initial_state
 from catsy.gaussian import beam_splitter as _gaussian_beam_splitter
 from catsy.gaussian import displace as _gaussian_displace
 from catsy.gaussian import loss as _gaussian_loss
 from catsy.gaussian import rotate as _gaussian_rotate
 from catsy.gaussian import squeeze as _gaussian_squeeze
+from catsy.gaussian import thermal_loss as _gaussian_thermal_loss
 
 from .core import (
     _check_non_negative,
@@ -460,6 +461,26 @@ def loss(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
     return _gaussian_loss(state, modes, **kwargs)
 
 
+def thermal_loss(
+    state: CVState,
+    modes: Modes,
+    **kwargs: ParameterValue,
+) -> CVState:
+    if isinstance(state, FockState):
+        return state.thermal_loss(
+            mode=modes[0],
+            eta=cast(float, kwargs["eta"]),
+            nbar=cast(float, kwargs.get("nbar", 0.0)),
+            ancilla_cutoff=(
+                cast(int, kwargs["ancilla_cutoff"])
+                if "ancilla_cutoff" in kwargs
+                else None
+            ),
+        )
+
+    return _gaussian_thermal_loss(state, modes, **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Non-Gaussian gates: Fock-only by physics (a ideal photon
 # subtraction/addition is not a Gaussian channel), so unlike the dispatchers
@@ -502,7 +523,13 @@ def realistic_photon_subtraction(
 ) -> FockState:
     fock_kwargs = {k: v for k, v in kwargs.items() if k != "N_cutoff"}
     return _ensure_fock(state, kwargs).realistic_photon_subtraction(
-        mode=modes[0], **fock_kwargs
+        tap_reflectivity=cast(float, kwargs["tap_reflectivity"]),
+        detector_efficiency=cast(float, kwargs["detector_efficiency"]),
+        ancilla_cutoff=cast(int, kwargs["ancilla_cutoff"]),
+        # detector_efficiency: float = 0.6,
+        # ancilla_cutoff: int = 6,
+        mode=modes[0],
+        **fock_kwargs,
     )
 
 
@@ -511,7 +538,11 @@ def realistic_photon_addition(
 ) -> FockState:
     fock_kwargs = {k: v for k, v in kwargs.items() if k != "N_cutoff"}
     return _ensure_fock(state, kwargs).realistic_photon_addition(
-        mode=modes[0], **fock_kwargs
+        coupling_strength=cast(float, kwargs["coupling_strength"]),
+        detector_efficiency=cast(float, kwargs["detector_efficiency"]),
+        ancilla_cutoff=cast(int, kwargs["ancilla_cutoff"]),
+        mode=modes[0],
+        **fock_kwargs,
     )
 
 
