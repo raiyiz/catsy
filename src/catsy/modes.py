@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator, cast
 
 if TYPE_CHECKING:
     from .optics import Circuit
@@ -11,12 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, eq=False, slots=True)
 class Mode:
-    """Immutable physical-mode identity.
-
-    A standalone mode has no circuit owner and no canonical tensor index.
-    Circuit-owned modes are created by :class:`catsy.optics.Circuit` and carry
-    the circuit's immutable canonical ordering index.
-    """
+    """Immutable physical-mode identity."""
 
     name: str
     index: int | None = None
@@ -37,26 +32,26 @@ class ModeNamespace:
         self._modes = modes
 
     def __getattr__(self, name: str) -> Mode:
-        try:
-            return next(mode for mode in self._modes if mode.name == name)
-        except StopIteration as exc:
-            raise AttributeError(f"No mode named {name!r}.") from exc
+        for mode in self._modes:
+            if mode.name == name:
+                return mode
+        raise AttributeError(f"No mode named {name!r}.")
 
     def __getitem__(self, key: int | str) -> Mode:
         if isinstance(key, int):
             return self._modes[key]
-        return getattr(self, key)
+        return self.__getattr__(key)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Mode]:
         return iter(self._modes)
 
     def __len__(self) -> int:
         return len(self._modes)
 
     def __contains__(self, value: object) -> bool:
-        return value in self._modes or any(
-            isinstance(value, str) and mode.name == value for mode in self._modes
-        )
+        if isinstance(value, Mode):
+            return value in self._modes
+        return any(mode.name == value for mode in self._modes)
 
     def __repr__(self) -> str:
         return f"ModeNamespace({self._modes!r})"
