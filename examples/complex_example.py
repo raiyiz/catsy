@@ -28,6 +28,28 @@ except ImportError:
 LOGGER = logging.getLogger(__name__)
 _DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.toml"
 
+# The full set of diagnostic plots plot_experiment() saves, and the only
+# valid values for a stage's "plot" key in execution_stages(). Kept as one
+# constant, checked in both places (see the assertion in plot_experiment()
+# and test_simulation_explorer_execution.py), so a plot that gets added or
+# renamed can't silently go undocumented -- or orphaned from the Simulation
+# Explorer once sync_complex_execution_stages.py overwrites the page with
+# the journal-derived stage list -- without a passing example run or test
+# failing to catch it.
+PLOT_STEMS: tuple[str, ...] = (
+    "01_final_signal_phase_space",
+    "02_final_covariance_matrix",
+    "03_final_mode_correlations",
+    "04_even_cat_wigner",
+    "05_even_cat_state",
+    "06_after_photon_subtraction",
+    "07_after_photon_addition",
+    "08_after_homodyne_idler",
+    "09_after_heterodyne_idler",
+    "10_measurement_conditioning",
+    "11_mach_zehnder_scan",
+)
+
 
 def build_circuit(config: RunConfig, rng: np.random.Generator) -> Circuit:
     """Construct a three-mode Gaussian state-preparation and readout circuit."""
@@ -125,6 +147,32 @@ def execution_stages(
             "inspect": "Check the signal phase-space geometry after the recorded circuit execution.",
             "result": "Gaussian state / signal mode",
             "run": "gaussian_state_preparation",
+            "insight": "The phase-space ellipse is the state's uncertainty region before "
+            "anything non-Gaussian happens to it.",
+        },
+        {
+            "id": "covariance_structure",
+            "title": "Covariance structure",
+            "category": "gaussian",
+            "description": "Inspect the second-order moments of the final Gaussian circuit state.",
+            "plot": "02_final_covariance_matrix",
+            "inspect": "Look for squeezing, variances, and cross-mode covariance structure.",
+            "result": "Covariance matrix",
+            "run": "gaussian_state_preparation",
+            "insight": "The diagonal reads as single-mode variances; the off-diagonal blocks "
+            "are the inter-mode covariance the later conditioned measurements draw on.",
+        },
+        {
+            "id": "mode_correlations",
+            "title": "Mode correlations",
+            "category": "gaussian",
+            "description": "Visualize the correlations established between signal, idler, and reference.",
+            "plot": "03_final_mode_correlations",
+            "inspect": "Use this as the correlation baseline for the homodyne/heterodyne comparison later.",
+            "result": "Inter-mode correlation map",
+            "run": "gaussian_state_preparation",
+            "insight": "Correlated quadratures here are exactly what the later conditioned "
+            "measurements exploit.",
         },
         {
             "id": "even_cat_preparation",
@@ -135,6 +183,20 @@ def execution_stages(
             "inspect": "Look for the non-Gaussian two-lobed structure and interference fringes.",
             "result": f"trace = {float(cat.tr()):.6f}",
             "run": "even_cat_preparation",
+            "insight": "A two-lobed Wigner function with interference fringes is the signature "
+            "a Gaussian description cannot produce.",
+        },
+        {
+            "id": "cat_state_diagnostics",
+            "title": "Cat-state diagnostics",
+            "category": "fock",
+            "description": "Inspect the prepared cat in the complementary state representations.",
+            "plot": "05_even_cat_state",
+            "inspect": "Compare occupation structure and phase-space features before heralding.",
+            "result": "Fock occupation + phase-space diagnostics",
+            "run": "even_cat_preparation",
+            "insight": "Occupation structure in Fock space is the complementary view of the "
+            "same non-Gaussian state the Wigner function shows.",
         },
         {
             "id": "photon_subtraction",
@@ -145,6 +207,8 @@ def execution_stages(
             "inspect": "Compare the conditioned state with the input cat and account for finite detector efficiency.",
             "result": f"trace = {float(subtracted.tr()):.6f}",
             "run": "photon_subtraction",
+            "insight": "Finite tap reflectivity and detector efficiency make this a realistic "
+            "conditional operation, not an ideal one.",
         },
         {
             "id": "photon_addition",
@@ -155,6 +219,8 @@ def execution_stages(
             "inspect": "Compare against subtraction to see the effect of conditional photon-number engineering.",
             "result": f"trace = {float(added.tr()):.6f}",
             "run": "photon_addition",
+            "insight": "Compare directly against subtraction to see how heralded "
+            "photon-number engineering reshapes the state.",
         },
         {
             "id": "mach_zehnder_scan",
@@ -165,6 +231,8 @@ def execution_stages(
             "inspect": "Follow the phase-dependent output response across all 33 scan points.",
             "result": f"{len(mzi_scan['theta'])} phase points",
             "run": "lossy_mach_zehnder_scan",
+            "insight": "The phase scan is the bridge from state preparation to a readout "
+            "that depends on interferometer phase.",
         },
         {
             "id": "homodyne_signal_readout",
@@ -175,6 +243,8 @@ def execution_stages(
             "inspect": "Inspect the remaining idler state after selecting one quadrature outcome.",
             "result": f"xφ = {float(np.asarray(homodyne_state.displacement).flat[0]):.4f} state recorded",
             "run": "homodyne_signal_readout",
+            "insight": "Homodyne selects one quadrature; the conditioned idler state "
+            "reflects only that partial information.",
         },
         {
             "id": "heterodyne_signal_readout",
@@ -185,6 +255,8 @@ def execution_stages(
             "inspect": "Inspect the conditioned state after a two-quadrature measurement outcome.",
             "result": "x, p outcome recorded",
             "run": "heterodyne_signal_readout",
+            "insight": "Heterodyne samples both quadratures at once, trading precision for a "
+            "genuinely two-dimensional outcome.",
         },
         {
             "id": "measurement_comparison",
@@ -195,6 +267,8 @@ def execution_stages(
             "inspect": "Compare how the measurement model changes the inferred idler state.",
             "result": "homodyne vs heterodyne",
             "run": "measurement_comparison",
+            "insight": "Same input state, two measurement models -- the difference is what "
+            "each scheme lets you infer.",
         },
     ]
 
@@ -251,6 +325,13 @@ def plot_experiment(
             show=False,
         ),
     }
+
+    # Keeps plot_experiment() and execution_stages() from silently drifting
+    # apart -- see the PLOT_STEMS docstring above.
+    assert set(figures) == set(PLOT_STEMS), (
+        f"figures {sorted(set(figures) ^ set(PLOT_STEMS))} out of sync with "
+        "PLOT_STEMS; update both together."
+    )
 
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)

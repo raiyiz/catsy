@@ -102,12 +102,28 @@ def _render_stages(stages: list[dict[str, object]], run_root: Path) -> str:
             f"<span>{esc(stage.get('inspect', ''))}</span></div>"
             f'<div class="callout"><span class="lbl">Diagnostic</span>'
             f"<span>{esc(stage.get('result', ''))}</span></div>"
-            '<div class="insight"><strong>Recorded execution</strong>'
-            f"Stage {number:02d} comes from the execution journal, not a "
-            "manually added display-only step.</div>"
+            f"{_render_insight(stage, number)}"
             "</div></article>"
         )
     return '<div class="stages">' + "".join(cards) + "</div>"
+
+
+def _render_insight(stage: dict[str, object], number: int) -> str:
+    """Render the "why it matters" callout for one stage.
+
+    Prefers the stage's own ``insight`` text (carried through from
+    ``execution_stages()`` in the example script) so the specific physical
+    commentary survives being synced from the journal. Falls back to a
+    generic note for older journals that don't provide one yet.
+    """
+    insight = stage.get("insight")
+    if insight:
+        return f'<div class="insight"><strong>Why it matters</strong>{esc(insight)}</div>'
+    return (
+        '<div class="insight"><strong>Recorded execution</strong>'
+        f"Stage {number:02d} comes from the execution journal, not a "
+        "manually added display-only step.</div>"
+    )
 
 
 def sync(report_path: Path, journal_path: Path, run_root: Path) -> None:
