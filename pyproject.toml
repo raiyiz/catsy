@@ -29,13 +29,6 @@ dev = [
 python_version = "3.13"
 files = ["src/catsy"]
 
-[tool.pytest.ini_options]
-# Repo root on sys.path so tests can import `scripts.*` (e.g.
-# test_simulation_explorer_execution.py exercising
-# scripts/sync_complex_execution_stages.py) without scripts/ needing to be
-# an installed package.
-pythonpath = ["."]
-
 check_untyped_defs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
@@ -44,6 +37,13 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_return_any = true
 strict_equality = true
+
+[tool.pytest.ini_options]
+# Repo root on sys.path so tests can import `scripts.*` (e.g.
+# test_simulation_explorer_execution.py exercising
+# scripts/sync_complex_execution_stages.py) without scripts/ needing to be
+# an installed package.
+pythonpath = ["."]
 
 [[tool.mypy.overrides]]
 module = [
