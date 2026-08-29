@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,7 +70,7 @@ def plot_mzi_scan(
     axes: tuple[plt.Axes, plt.Axes] | None = None,
     figsize: tuple[float, float] = (13.5, 5.5),
     show: bool = False,
-) -> plt.FigureBase:
+) -> plt.Figure:
     """Render MZI interference fringes beside an optional Fock-state panel."""
     theta = np.asarray(results["theta"], dtype=float)
     if theta.ndim != 1 or len(theta) == 0:
@@ -81,12 +82,12 @@ def plot_mzi_scan(
         raise ValueError("resolution must be positive.")
 
     if axes is None:
-        fig, (scan_ax, state_ax) = plt.subplots(
+        _, (scan_ax, state_ax) = plt.subplots(
             1, 2, figsize=figsize, constrained_layout=True
         )
     else:
         scan_ax, state_ax = axes
-        fig = scan_ax.figure
+    fig = cast(plt.Figure, scan_ax.figure)
 
     x_phase = theta / np.pi
     scan_ax.plot(x_phase, results["n1"], label="Output port 1", lw=2)
