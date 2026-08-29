@@ -69,7 +69,7 @@ def plot_mzi_scan(
     axes: tuple[plt.Axes, plt.Axes] | None = None,
     figsize: tuple[float, float] = (13.5, 5.5),
     show: bool = False,
-) -> plt.Figure:
+) -> plt.FigureBase:
     """Render MZI interference fringes beside an optional Fock-state panel."""
     theta = np.asarray(results["theta"], dtype=float)
     if theta.ndim != 1 or len(theta) == 0:
