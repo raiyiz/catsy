@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Catsy Complex simulation report for 43f1a6697d21">
+<title>Complex simulation · 43f1a6697d21</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0a0d13; --surface:#10141c; --surface-2:#171c27; --line:#242b39;
+  --text:#e7e9f0; --muted:#8a91a6;
+  --gaussian:#5fd3e8; --fock:#f0568e; --interferometer:#e8b34c; --measurement:#b3a6f2;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.65 'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,sans-serif}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.container{width:min(1120px,calc(100% - 40px));margin:auto}
+h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.02em;margin:0}
+
+.topbar{position:sticky;top:0;z-index:20;background:rgba(10,13,19,.92);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topbar-inner{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.brand{font-family:'Fraunces',serif;font-weight:600;font-size:16px;display:flex;align-items:center;gap:8px}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--gaussian);box-shadow:0 0 8px var(--gaussian)}
+.crumbs{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumbs a:hover{color:var(--text)}
+.crumbs .sep{opacity:.5}
+.nav{display:flex;gap:20px;color:var(--muted);font-size:12.5px;flex:none}
+.nav a:hover{color:var(--text)}
+
+.hero{padding:60px 0 44px;border-bottom:1px solid var(--line);
+  background:radial-gradient(640px 320px at 88% -10%,rgba(95,211,232,.09),transparent 60%),
+             radial-gradient(520px 280px at 100% 40%,rgba(240,86,142,.07),transparent 60%)}
+.eyebrow{color:var(--gaussian);text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:600;
+  font-family:'IBM Plex Mono',monospace}
+.hero h1{max-width:820px;margin:10px 0 14px;font-size:clamp(30px,4.4vw,46px);line-height:1.08}
+.lead{max-width:72ch;color:#b7bfcb;font-size:15.5px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 0}
+.badge{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 11px;font-size:12px;color:#b8c1cc}
+.badge strong{color:var(--text)}
+.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);
+  border-radius:7px;padding:8px 13px;font-size:12.5px;transition:border-color .15s,color .15s}
+.button:hover{border-color:#3a4257;color:var(--text)}
+
+.section{padding:48px 0}
+.section.alt{background:var(--surface);border-block:1px solid var(--line)}
+.section-head{margin-bottom:22px;max-width:60ch}
+.section-head h2{font-size:24px}
+.section-head p{margin:8px 0 0;color:var(--muted);font-size:14.5px}
+
+.circuit-card{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:26px 24px 20px;overflow-x:auto}
+.section.alt .circuit-card{background:var(--surface-2)}
+svg.circuit{width:100%;min-width:640px;height:auto;display:block}
+.c-wire{stroke:var(--line);stroke-width:2}
+.c-link{stroke:var(--gaussian);stroke-width:2;opacity:.5}
+.c-box{fill:rgba(95,211,232,.10);stroke:var(--gaussian);stroke-width:1.4}
+.c-box.meas{fill:rgba(179,166,242,.14);stroke:var(--measurement)}
+.c-label{font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--text)}
+.c-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:var(--muted)}
+.c-row-label{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.c-vac{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--muted)}
+.c-port{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:var(--muted)}
+.circuit-legend{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap}
+.circuit-legend span{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.circuit-legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+.pipeline{display:grid;grid-template-columns:repeat(11,1fr);gap:6px}
+.pipeline-step{min-height:92px;padding:12px 10px;border:1px solid var(--line);border-radius:9px;
+  background:var(--bg);border-left:3px solid var(--step-color);transition:border-color .15s,transform .15s}
+.section.alt .pipeline-step{background:var(--surface-2)}
+.pipeline-step:hover{transform:translateY(-2px)}
+.pipeline-step .n{font:700 10px 'IBM Plex Mono',monospace;color:var(--step-color)}
+.pipeline-step strong{display:block;margin-top:7px;font-size:10.5px;line-height:1.3;font-family:'IBM Plex Sans',sans-serif;font-weight:600}
+.pipeline-step small{display:block;margin-top:5px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace}
+
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+.filter{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:7px 14px;font-size:12px;color:var(--muted);transition:all .15s}
+.filter.active{color:var(--bg);background:var(--text);border-color:var(--text);font-weight:600}
+.section.alt .filter{background:var(--surface-2)}
+
+.stages{display:grid;gap:14px}
+.stage{display:grid;grid-template-columns:42px minmax(220px,36%) 1fr;border:1px solid var(--line);
+  border-radius:12px;background:var(--surface);overflow:hidden}
+.section.alt .stage{background:var(--surface-2)}
+.stage-index{padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  background:linear-gradient(180deg,var(--stage-color) 0%,transparent 2px)}
+.stage-index .num{font:700 12px 'IBM Plex Mono',monospace;color:var(--stage-color)}
+.stage-index .cat{writing-mode:vertical-rl;text-orientation:mixed;font-size:9.5px;color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase}
+.stage-plot{width:100%;min-height:220px;border:0;padding:0;background:#080b10;cursor:zoom-in;overflow:hidden;border-inline:1px solid var(--line)}
+.stage-plot img{display:block;width:100%;height:100%;min-height:220px;object-fit:cover;transition:transform .3s}
+.stage-plot:hover img{transform:scale(1.03)}
+.stage-plot.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#52606f;font-size:22px;gap:6px}
+.stage-plot.empty small{font-size:10px;color:var(--muted);text-align:center;padding:0 16px}
+.stage-copy{padding:18px 22px}
+.stage-copy h3{font-size:17px;margin-bottom:6px}
+.stage-copy p{margin:0 0 14px;color:var(--muted);font-size:13px}
+.callout{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:11.5px}
+.callout .lbl{color:#b7c0cb;font-weight:600;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+.callout span:last-child{color:var(--muted)}
+.insight{margin-top:2px;padding:11px 13px;border-radius:8px;background:color-mix(in srgb, var(--stage-color) 12%, transparent);
+  border:1px solid color-mix(in srgb, var(--stage-color) 30%, transparent);font-size:12px;color:var(--text)}
+.insight strong{color:var(--stage-color);font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;
+  letter-spacing:.08em;display:block;margin-bottom:4px}
+
+.metrics-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;max-width:820px}
+.metric{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.section.alt .metric{background:var(--surface-2)}
+.metric .value{font-family:'Fraunces',serif;font-size:22px;font-weight:600}
+.metric .label{margin-top:3px;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;font-family:'IBM Plex Mono',monospace}
+
+.journal{display:grid;gap:8px;max-width:820px}
+.journal-file{display:flex;align-items:center;gap:13px;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--bg)}
+.section.alt .journal-file{background:var(--surface-2)}
+.journal-file:hover{border-color:#3a4257}
+.file-type{width:38px;height:32px;display:grid;place-items:center;border-radius:6px;
+  background:rgba(95,211,232,.12);color:var(--gaussian);font:700 9.5px 'IBM Plex Mono',monospace}
+.journal-file strong,.journal-file small{display:block}
+.journal-file strong{font-size:12px;font-family:'IBM Plex Mono',monospace}
+.journal-file small{color:var(--muted);font-size:10.5px;margin-top:2px}
+
+.modal{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:24px;background:rgba(6,8,12,.9);backdrop-filter:blur(3px)}
+.modal.open{display:grid}
+.modal-inner{width:min(1180px,96vw);max-height:94vh}
+.modal-head,.modal-foot{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:8px 0}
+.modal-title{font-weight:600;font-family:'Fraunces',serif}
+.modal-close{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 10px;cursor:pointer}
+.modal img{display:block;width:100%;max-height:80vh;object-fit:contain;background:#05070a;border:1px solid var(--line);border-radius:6px}
+.modal-foot{color:var(--muted);font-size:10.5px}
+
+.footer{padding:32px 0 56px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px}
+
+@media(max-width:950px){.pipeline{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:680px){.container{width:calc(100% - 24px)}.nav{display:none}
+  .stage{grid-template-columns:30px 1fr}
+  .stage-index .cat{display:none}
+  .stage-plot{grid-column:2;min-height:190px}
+  .stage-copy{grid-column:2}
+  .pipeline{grid-template-columns:repeat(2,1fr)}}
+
+/* archive / index pages */
+.archive-list{margin-top:30px;display:grid;gap:10px}
+.run-card{display:grid;grid-template-columns:12px 1fr;gap:15px;border:1px solid var(--line);
+  background:linear-gradient(135deg,rgba(17,24,39,.5),rgba(10,16,27,.35));
+  padding:18px 20px;border-radius:14px;transition:.2s}
+.run-card:hover{border-color:rgba(95,211,232,.5);transform:translateX(4px)}
+.run-dot{width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--gaussian);box-shadow:0 0 16px rgba(95,211,232,.7)}
+.run-copy{display:grid;gap:2px}
+.run-time{color:var(--gaussian);font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.03em}
+.run-card strong{font:600 16px 'IBM Plex Mono',monospace}
+.run-detail{color:var(--muted);font-size:11.5px}
+.empty-state{margin-top:24px;padding:20px 22px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px}
+
+.example-grid{margin-top:34px;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.example-card{display:block;border:1px solid var(--line);border-radius:16px;padding:24px 22px;
+  background:linear-gradient(160deg,rgba(17,24,39,.6),rgba(10,16,27,.4));transition:.2s}
+.example-card:hover{border-color:rgba(95,211,232,.5);transform:translateY(-3px)}
+.example-card .kind{font:600 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--gaussian)}
+.example-card h2{margin-top:8px;font-size:21px}
+.example-card p{margin-top:8px;color:var(--muted);font-size:13px}
+.example-card .stat-row{margin-top:16px;display:flex;gap:16px;font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.example-card .stat-row strong{color:var(--text)}
+</style></head><body>
+
+<header class="topbar"><div class="container topbar-inner"><div class="crumbs"><a href="../../../">catsy · lab</a><span class="sep">/</span><a href="../../">Complex simulation</a><span class="sep">/</span><span>43f1a6697d21</span></div><nav class="nav"><a href="../../../">all examples</a><a href="../../">this example</a><a href="#pipeline">pipeline</a><a href="#stages">stages</a><a href="#journal">journal</a></nav></div></header>
+<main>
+<section class="hero"><div class="container">
+  <div class="eyebrow">Complex simulation · 2026-08-29 · 11:21 UTC</div>
+  <h1>Gaussian preparation, non-Gaussian processing, interferometry and readout.</h1>
+  <p class="lead">Gaussian preparation, non-Gaussian processing, interferometry, and dual readout. Each diagnostic sits beside the physical stage it documents.</p>
+  <div class="meta">
+    <span class="badge">commit <strong>43f1a6697d21</strong></span>
+    <span class="badge">ref <strong>33/merge</strong></span>
+    <span class="badge"><strong>11</strong> diagnostics</span>
+    <span class="badge"><strong>1</strong> journal files</span>
+  </div>
+  <div class="links">
+    <a class="button" href="https://github.com/raiyiz/catsy/commit/43f1a6697d21b658a9955112dee14279d86b6bd6" target="_blank" rel="noopener">source commit ↗</a>
+    <a class="button" href="https://github.com/raiyiz/catsy/actions/runs/33249865793" target="_blank" rel="noopener">CI run ↗</a>
+    <a class="button" href="../../">this example's runs</a>
+    <a class="button" href="../../../">all examples</a>
+  </div>
+</div></section>
+
+<section class="section alt" id="circuit"><div class="container">
+  <div class="section-head"><div class="eyebrow">Circuit topology</div>
+  <h2>What the three modes actually go through</h2>
+  <p>Sourced from <span class="mono">build_circuit()</span> and this run's own config values —
+  each wire is a mode starting in vacuum; each box is the operation applied to it, in execution order.</p></div>
+  <div class="circuit-card"><svg class="circuit" viewBox="0 0 1170 320" role="img" aria-label="Signal, idler, and reference mode wires through the Gaussian circuit."><line class="c-wire" x1="40" y1="56" x2="1092" y2="56"></line><text class="c-row-label" x="40" y="40">signal</text><text class="c-vac" x="40" y="60">|0⟩</text><line class="c-wire" x1="40" y1="156" x2="1092" y2="156"></line><text class="c-row-label" x="40" y="140">idler</text><text class="c-vac" x="40" y="160">|0⟩</text><line class="c-wire" x1="40" y1="256" x2="1092" y2="256"></line><text class="c-row-label" x="40" y="240">reference</text><text class="c-vac" x="40" y="260">|0⟩</text><rect class="c-box" x="120.0" y="33.0" width="96" height="46" rx="8"></rect><text class="c-label" x="168" y="53" text-anchor="middle">Squeeze</text><text class="c-sub" x="168" y="69" text-anchor="middle">r = 0.80</text><rect class="c-box" x="228.0" y="33.0" width="96" height="46" rx="8"></rect><text class="c-label" x="276" y="53" text-anchor="middle">Displace</text><text class="c-sub" x="276" y="69" text-anchor="middle">α</text><line class="c-wire c-link" x1="384" y1="56" x2="384" y2="156"></line><rect class="c-box" x="336.0" y="83.0" width="96" height="46" rx="8"></rect><text class="c-label" x="384" y="103.0" text-anchor="middle">Beam splitter</text><text class="c-sub" x="384" y="119.0" text-anchor="middle">η = 0.75</text><rect class="c-box" x="444.0" y="133.0" width="96" height="46" rx="8"></rect><text class="c-label" x="492" y="153" text-anchor="middle">Rotate</text><text class="c-sub" x="492" y="169" text-anchor="middle">φ = 0.35</text><rect class="c-box" x="552.0" y="133.0" width="96" height="46" rx="8"></rect><text class="c-label" x="600" y="153" text-anchor="middle">Thermal loss</text><text class="c-sub" x="600" y="169" text-anchor="middle">η = 0.90, n̄ = 0.15</text><rect class="c-box" x="660.0" y="233.0" width="96" height="46" rx="8"></rect><text class="c-label" x="708" y="253" text-anchor="middle">Squeeze</text><text class="c-sub" x="708" y="269" text-anchor="middle">r = 0.35, θ = π/4</text><line class="c-wire c-link" x1="816" y1="156" x2="816" y2="256"></line><rect class="c-box" x="768.0" y="183.0" width="96" height="46" rx="8"></rect><text class="c-label" x="816" y="203.0" text-anchor="middle">Beam splitter</text><text class="c-sub" x="816" y="219.0" text-anchor="middle">η = 0.50</text><rect class="c-box" x="876.0" y="33.0" width="96" height="46" rx="8"></rect><text class="c-label" x="924" y="53" text-anchor="middle">Loss</text><text class="c-sub" x="924" y="69" text-anchor="middle">η = 0.92</text><text class="c-port" x="1022" y="160" text-anchor="end">→ readout</text><text class="c-port" x="1022" y="260" text-anchor="end">→ readout</text><path class="c-wire" d="M 972.0 56 C 1008.0 56, 1008.0 4, 1044.0 4" fill="none"></path><rect class="c-box meas" x="1044.0" y="-19.0" width="96" height="46" rx="8"></rect><text class="c-label" x="1092.0" y="1" text-anchor="middle">Homodyne</text><text class="c-sub" x="1092.0" y="17" text-anchor="middle">φ = π/6</text><path class="c-wire" d="M 972.0 56 C 1008.0 56, 1008.0 108, 1044.0 108" fill="none"></path><rect class="c-box meas" x="1044.0" y="85.0" width="96" height="46" rx="8"></rect><text class="c-label" x="1092.0" y="105" text-anchor="middle">Heterodyne</text><text class="c-sub" x="1092.0" y="121" text-anchor="middle">x, p</text></svg></div>
+  <div class="circuit-legend">
+    <span><span class="sw" style="background:var(--gaussian)"></span>Gaussian operation</span>
+    <span><span class="sw" style="background:var(--measurement)"></span>measurement</span>
+  </div>
+</div></section>
+
+<section class="section" id="pipeline"><div class="container">
+  <div class="section-head"><div class="eyebrow">Experiment map</div>
+  <h2>From state preparation to measurement</h2>
+  <p>Each step links to the diagnostic and its physical interpretation below.</p></div>
+  <div class="pipeline"><a class="pipeline-step" href="#stage-01" style="--step-color:var(--gaussian)"><span class="n">01</span><strong>Gaussian preparation</strong><small>Gaussian</small></a><a class="pipeline-step" href="#stage-02" style="--step-color:var(--gaussian)"><span class="n">02</span><strong>Covariance structure</strong><small>Gaussian</small></a><a class="pipeline-step" href="#stage-03" style="--step-color:var(--gaussian)"><span class="n">03</span><strong>Mode correlations</strong><small>Gaussian</small></a><a class="pipeline-step" href="#stage-04" style="--step-color:var(--fock)"><span class="n">04</span><strong>Even cat preparation</strong><small>Fock</small></a><a class="pipeline-step" href="#stage-05" style="--step-color:var(--fock)"><span class="n">05</span><strong>Cat-state diagnostics</strong><small>Fock</small></a><a class="pipeline-step" href="#stage-06" style="--step-color:var(--fock)"><span class="n">06</span><strong>Photon subtraction</strong><small>Fock</small></a><a class="pipeline-step" href="#stage-07" style="--step-color:var(--fock)"><span class="n">07</span><strong>Photon addition</strong><small>Fock</small></a><a class="pipeline-step" href="#stage-08" style="--step-color:var(--interferometer)"><span class="n">08</span><strong>Mach–Zehnder scan</strong><small>Interferometer</small></a><a class="pipeline-step" href="#stage-09" style="--step-color:var(--measurement)"><span class="n">09</span><strong>Homodyne readout</strong><small>Measurement</small></a><a class="pipeline-step" href="#stage-10" style="--step-color:var(--measurement)"><span class="n">10</span><strong>Heterodyne readout</strong><small>Measurement</small></a><a class="pipeline-step" href="#stage-11" style="--step-color:var(--measurement)"><span class="n">11</span><strong>Measurement comparison</strong><small>Measurement</small></a></div>
+</div></section>
+
+<section class="section alt" id="stages"><div class="container">
+  <div class="section-head"><div class="eyebrow">Stage diagnostics</div>
+  <h2>What happened at each step</h2>
+  <p>Plots are shown once, beside the operation they document.</p></div>
+  <div class="filters"><button class="filter active" data-filter="all" type="button">all</button><button class="filter" data-filter="gaussian" type="button">Gaussian</button><button class="filter" data-filter="fock" type="button">Fock</button><button class="filter" data-filter="interferometer" type="button">Interferometer</button><button class="filter" data-filter="measurement" type="button">Measurement</button></div>
+  <div class="stages"><article class="stage" data-category="gaussian" id="stage-01"><div class="stage-index" style="--stage-color:var(--gaussian)"><span class="num">01</span><span class="cat">Gaussian</span></div><button class="stage-plot" data-src="plots/01_final_signal_phase_space.png" data-title="Gaussian preparation" type="button"><img src="plots/01_final_signal_phase_space.png" alt="Gaussian preparation" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--gaussian)"><h3>Gaussian preparation</h3><p>Prepare and couple the three-mode Gaussian state.</p><div class="callout"><span class="lbl">Look for</span><span>Check the initial signal phase-space geometry before the non-Gaussian operations.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Gaussian state / signal mode</span></div><div class="insight"><strong>Why it matters</strong>The phase-space ellipse is the state&#x27;s uncertainty region before anything non-Gaussian happens to it.</div></div></article><article class="stage" data-category="gaussian" id="stage-02"><div class="stage-index" style="--stage-color:var(--gaussian)"><span class="num">02</span><span class="cat">Gaussian</span></div><button class="stage-plot" data-src="plots/02_final_covariance_matrix.png" data-title="Covariance structure" type="button"><img src="plots/02_final_covariance_matrix.png" alt="Covariance structure" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--gaussian)"><h3>Covariance structure</h3><p>Inspect second-order moments of the final Gaussian circuit state.</p><div class="callout"><span class="lbl">Look for</span><span>Look for squeezing, variances, and cross-mode covariance structure.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Covariance matrix</span></div><div class="insight"><strong>Why it matters</strong>Read the diagonal as single-mode variances and the off-diagonal blocks as inter-mode covariance.</div></div></article><article class="stage" data-category="gaussian" id="stage-03"><div class="stage-index" style="--stage-color:var(--gaussian)"><span class="num">03</span><span class="cat">Gaussian</span></div><button class="stage-plot" data-src="plots/03_final_mode_correlations.png" data-title="Mode correlations" type="button"><img src="plots/03_final_mode_correlations.png" alt="Mode correlations" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--gaussian)"><h3>Mode correlations</h3><p>Visualize correlations established between signal, idler, and reference.</p><div class="callout"><span class="lbl">Look for</span><span>Use this as the correlation baseline for the later conditioned measurements.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Inter-mode correlations</span></div><div class="insight"><strong>Why it matters</strong>Correlated quadratures here are the Gaussian coupling the later conditioned measurements will draw on.</div></div></article><article class="stage" data-category="fock" id="stage-04"><div class="stage-index" style="--stage-color:var(--fock)"><span class="num">04</span><span class="cat">Fock</span></div><button class="stage-plot" data-src="plots/04_even_cat_wigner.png" data-title="Even cat preparation" type="button"><img src="plots/04_even_cat_wigner.png" alt="Even cat preparation" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--fock)"><h3>Even cat preparation</h3><p>Prepare the non-Gaussian even Schrödinger cat state.</p><div class="callout"><span class="lbl">Look for</span><span>Look for the characteristic interference structure distinguishing the cat from a Gaussian state.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Wigner representation</span></div><div class="insight"><strong>Why it matters</strong>A two-lobed Wigner function with interference fringes is the signature a Gaussian description cannot produce.</div></div></article><article class="stage" data-category="fock" id="stage-05"><div class="stage-index" style="--stage-color:var(--fock)"><span class="num">05</span><span class="cat">Fock</span></div><button class="stage-plot" data-src="plots/05_even_cat_state.png" data-title="Cat-state diagnostics" type="button"><img src="plots/05_even_cat_state.png" alt="Cat-state diagnostics" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--fock)"><h3>Cat-state diagnostics</h3><p>Inspect the prepared cat in the complementary state representations.</p><div class="callout"><span class="lbl">Look for</span><span>Compare occupation structure and phase-space features before heralding.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Fock / phase-space diagnostics</span></div><div class="insight"><strong>Why it matters</strong>Occupation structure in Fock space is the complementary view of the same non-Gaussian state.</div></div></article><article class="stage" data-category="fock" id="stage-06"><div class="stage-index" style="--stage-color:var(--fock)"><span class="num">06</span><span class="cat">Fock</span></div><button class="stage-plot" data-src="plots/06_after_photon_subtraction.png" data-title="Photon subtraction" type="button"><img src="plots/06_after_photon_subtraction.png" alt="Photon subtraction" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--fock)"><h3>Photon subtraction</h3><p>Apply realistic photon subtraction with finite tap reflectivity and detector efficiency.</p><div class="callout"><span class="lbl">Look for</span><span>Assess how the heralded operation changes the non-Gaussian state.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Conditioned Fock state</span></div><div class="insight"><strong>Why it matters</strong>Finite tap reflectivity and detector efficiency make this a realistic conditional operation, not an ideal one.</div></div></article><article class="stage" data-category="fock" id="stage-07"><div class="stage-index" style="--stage-color:var(--fock)"><span class="num">07</span><span class="cat">Fock</span></div><button class="stage-plot" data-src="plots/07_after_photon_addition.png" data-title="Photon addition" type="button"><img src="plots/07_after_photon_addition.png" alt="Photon addition" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--fock)"><h3>Photon addition</h3><p>Follow subtraction with realistic photon addition.</p><div class="callout"><span class="lbl">Look for</span><span>Compare the state with the subtraction output and track the effect of the second heralded operation.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Conditioned Fock state</span></div><div class="insight"><strong>Why it matters</strong>Compare directly against subtraction to see how heralded photon-number engineering reshapes the state.</div></div></article><article class="stage" data-category="interferometer" id="stage-08"><div class="stage-index" style="--stage-color:var(--interferometer)"><span class="num">08</span><span class="cat">Interferometer</span></div><div class="stage-plot empty"><span>—</span><small>response recorded in journal, not plotted</small></div><div class="stage-copy" style="--stage-color:var(--interferometer)"><h3>Mach–Zehnder scan</h3><p>Probe the processed state through a lossy 33-point phase scan.</p><div class="callout"><span class="lbl">Look for</span><span>The journal records the phase-dependent interferometric response; this stage is the bridge from state preparation to readout.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>33 phase points</span></div><div class="insight"><strong>Why it matters</strong>The phase scan is the bridge from state preparation to a readout that depends on interferometer phase.</div></div></article><article class="stage" data-category="measurement" id="stage-09"><div class="stage-index" style="--stage-color:var(--measurement)"><span class="num">09</span><span class="cat">Measurement</span></div><button class="stage-plot" data-src="plots/08_after_homodyne_idler.png" data-title="Homodyne readout" type="button"><img src="plots/08_after_homodyne_idler.png" alt="Homodyne readout" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--measurement)"><h3>Homodyne readout</h3><p>Condition the Gaussian state on a signal quadrature measurement.</p><div class="callout"><span class="lbl">Look for</span><span>Inspect the conditioned idler state and the effect of selecting one quadrature outcome.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Quadrature measurement</span></div><div class="insight"><strong>Why it matters</strong>Homodyne selects one quadrature; the conditioned idler state reflects only that partial information.</div></div></article><article class="stage" data-category="measurement" id="stage-10"><div class="stage-index" style="--stage-color:var(--measurement)"><span class="num">10</span><span class="cat">Measurement</span></div><button class="stage-plot" data-src="plots/09_after_heterodyne_idler.png" data-title="Heterodyne readout" type="button"><img src="plots/09_after_heterodyne_idler.png" alt="Heterodyne readout" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--measurement)"><h3>Heterodyne readout</h3><p>Condition the Gaussian state on simultaneous x/p detection.</p><div class="callout"><span class="lbl">Look for</span><span>Compare the conditioned state with homodyne, noting the different measurement information retained.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Phase-space measurement</span></div><div class="insight"><strong>Why it matters</strong>Heterodyne samples both quadratures at once, trading precision for a genuinely two-dimensional outcome.</div></div></article><article class="stage" data-category="measurement" id="stage-11"><div class="stage-index" style="--stage-color:var(--measurement)"><span class="num">11</span><span class="cat">Measurement</span></div><button class="stage-plot" data-src="plots/10_measurement_conditioning.png" data-title="Measurement comparison" type="button"><img src="plots/10_measurement_conditioning.png" alt="Measurement comparison" loading="lazy"></button><div class="stage-copy" style="--stage-color:var(--measurement)"><h3>Measurement comparison</h3><p>Compare the states produced by the two measurement schemes.</p><div class="callout"><span class="lbl">Look for</span><span>Use this final diagnostic to connect the measurement outcomes with their conditioned states.</span></div><div class="callout"><span class="lbl">Diagnostic</span><span>Homodyne vs heterodyne</span></div><div class="insight"><strong>Why it matters</strong>Same input state, two measurement models — the difference is what each scheme lets you infer.</div></div></article></div>
+</div></section>
+
+<section class="section" id="journal"><div class="container">
+  <div class="section-head"><div class="eyebrow">Reproducibility</div>
+  <h2>Experiment journal</h2>
+  <p>Machine-readable records remain beside the visual diagnostics.</p></div>
+  <div class="journal"><a class="journal-file" href="entry_20260829T112000Z_efd0c26d.json" target="_blank" rel="noopener"><span class="file-type">JSON</span><span><strong>entry_20260829T112000Z_efd0c26d.json</strong><small>7,398 bytes · open raw file ↗</small></span></a></div>
+</div></section>
+</main>
+
+<div class="modal" id="viewer" role="dialog" aria-modal="true" aria-label="Plot viewer">
+  <div class="modal-inner">
+    <div class="modal-head"><span class="modal-title" id="viewer-title"></span>
+    <button class="modal-close" id="viewer-close" type="button">close</button></div>
+    <img id="viewer-image" alt="">
+    <div class="modal-foot"><span>Esc to close · click outside to close</span>
+    <a id="viewer-open" href="#" target="_blank" rel="noopener">open original ↗</a></div>
+  </div>
+</div>
+
+<footer class="footer"><div class="container">
+  Complex simulation · commit <span class="mono">43f1a6697d21b658a9955112dee14279d86b6bd6</span><br>
+  Static report generated by CI. Visualizations are produced through catsy's plotting helpers.
+</div></footer>
+<script>
+(function(){
+  const modal=document.getElementById('viewer');
+  if(!modal) return;
+  const img=document.getElementById('viewer-image'),title=document.getElementById('viewer-title'),
+        openLink=document.getElementById('viewer-open');
+  function close(){modal.classList.remove('open');img.src='';document.body.style.overflow='';}
+  document.querySelectorAll('[data-src]').forEach(function(el){
+    el.addEventListener('click',function(){
+      img.src=el.dataset.src;img.alt=el.dataset.title;title.textContent=el.dataset.title;
+      openLink.href=el.dataset.src;modal.classList.add('open');document.body.style.overflow='hidden';
+    });
+  });
+  const closeBtn=document.getElementById('viewer-close');
+  if(closeBtn) closeBtn.addEventListener('click',close);
+  modal.addEventListener('click',function(e){if(e.target===modal)close();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+  document.querySelectorAll('.filter').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.filter').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      const f=btn.dataset.filter;
+      document.querySelectorAll('.stage').forEach(function(s){
+        s.style.display=(f==='all'||s.dataset.category===f)?'grid':'none';
+      });
+    });
+  });
+})();
+</script>
+</body></html>
