@@ -104,7 +104,7 @@ def plot_mzi_scan(mzi_scan: dict[str, np.ndarray]):
     figure, axis = plt.subplots(figsize=(8.5, 5.5), constrained_layout=True)
     axis.plot(theta, mzi_scan["n1"], linewidth=2.2, label="Output port 1")
     axis.plot(theta, mzi_scan["n2"], linewidth=2.2, label="Output port 2")
-    axis.set_xlabel(r"Interferometer phase $\\theta$ [rad]")
+    axis.set_xlabel(r"Interferometer phase $\theta$ [rad]")
     axis.set_ylabel("Mean photon number")
     axis.set_xlim(theta[0], theta[-1])
     axis.grid(alpha=0.25)
