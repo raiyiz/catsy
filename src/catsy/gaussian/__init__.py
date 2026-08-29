@@ -27,6 +27,7 @@ from catsy.core import (
     _json_load,
     _json_save,
     _normalize_phase_vector,
+    _qutip_passive_unitary,
     _symplectic_form,
     _validate_finite_array,
     _validate_gaussian_channel,
@@ -47,37 +48,6 @@ logger = logging.getLogger("catsy")
 # ========================================================================
 # Gaussian
 # ========================================================================
-
-
-def _qutip_passive_unitary(O: np.ndarray, a_ops: list[qt.Qobj]) -> qt.Qobj:
-    """Build a QuTiP unitary implementing an orthogonal symplectic O."""
-    n_modes = len(a_ops)
-    A = O[0::2, 0::2]
-    B = O[0::2, 1::2]
-    C = O[1::2, 0::2]
-    D = O[1::2, 1::2]
-
-    U = 0.5 * (A + D + 1j * (C - B))
-    u, _, vh = np.linalg.svd(U)
-    U = u @ vh
-
-    h = 1j * scipy.linalg.logm(U)
-    h = 0.5 * (h + h.conj().T)
-
-    # Starts as a plain int and, once any term is added below, becomes a
-    # QuTiP Qobj -- qutip ships no type stubs, so its true dynamic type is
-    # opaque to mypy regardless.
-    H: qt.Qobj | None = None
-    for i in range(n_modes):
-        for j in range(n_modes):
-            hij = h[i, j]
-            if abs(hij) > TOL_PHYSICALITY:
-                term = hij * a_ops[i].dag() * a_ops[j]
-                H = term if H is None else H + term
-
-    if H is None:
-        return qt.tensor(*[qt.qeye(a.dims[0][0]) for a in a_ops])
-    return (-1j * H).expm()
 
 
 @dataclass

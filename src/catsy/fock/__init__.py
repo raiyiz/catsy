@@ -58,8 +58,8 @@ from catsy.core import (
     _check_positive_int,
     _check_unit_interval,
     _normalize_phase_vector,
+    _qutip_passive_unitary,
 )
-from catsy.gaussian import _qutip_passive_unitary
 from catsy.types import Modes
 
 logger = logging.getLogger("catsy")

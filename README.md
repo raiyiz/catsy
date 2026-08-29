@@ -167,14 +167,14 @@ circuit.beam_splitter(signal, idler, eta=0.5)
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
-| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian/__init__.py#L84) |
-| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian/__init__.py#L84) |
+| Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian/__init__.py#L54) |
+| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian/__init__.py#L54) |
 | Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L127), [`Mode`](src/catsy/optics.py#L72) |
-| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian/__init__.py#L491), [`GaussianChannel`](src/catsy/gaussian/__init__.py#L428) |
-| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian/__init__.py#L622) |
-| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian/__init__.py#L84) |
-| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L749) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian/__init__.py#L283) |
+| Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian/__init__.py#L461), [`GaussianChannel`](src/catsy/gaussian/__init__.py#L398) |
+| Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian/__init__.py#L592) |
+| Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian/__init__.py#L54) |
+| Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L719) |
+| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian/__init__.py#L253) |
 | Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L670), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L594) |
 | Visualize a truncated Fock-space state      | [`plot_fock_dashboard()`](src/catsy/fock/visualization.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
