@@ -85,12 +85,12 @@ class Circuit:
     """An ordered executable optical circuit over owned physical modes."""
 
     name: str = "Untitled Circuit"
-    modes: ModeNamespace | tuple[str, ...] = field(default_factory=ModeNamespace)
+    modes: ModeNamespace = field(default_factory=ModeNamespace)
     _mode_registry: dict[str, Mode] = field(default_factory=dict, init=False)
     _gates: list[Gate] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
-        requested_modes = self.modes
+        requested_modes: Any = self.modes
         if isinstance(requested_modes, ModeNamespace):
             requested_modes = tuple(requested_modes)
         self.modes = ModeNamespace()
