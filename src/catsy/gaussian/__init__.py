@@ -34,6 +34,7 @@ from catsy.core import (
     _validate_physical_covariance,
     _williamson_decomposition,
 )
+from catsy.fock import FockState
 from catsy.types import (
     FloatArray,
     GaussianChannelData,
@@ -250,22 +251,31 @@ class GaussianState:
 
     # -- Fock-space bridge --------------------------------------------------
 
-    def to_qutip(self, N_cutoff: int = 15) -> qt.Qobj:
-        """Convert this Gaussian state to a truncated QuTiP density matrix.
+    def to_fock(self, N_cutoff: int = 15) -> FockState:
+        """Embed this Gaussian state into a truncated Fock-space representation.
 
-        The conversion uses a numerically stable Williamson decomposition of the
-        covariance matrix, followed by a polar decomposition of the resulting
-        symplectic matrix.  The thermal Williamson modes are prepared with
-        ``qutip.thermal_dm``; the passive part is implemented with a
-        number-conserving quadratic Hamiltonian and the positive symplectic part
-        with a quadratic quadrature Hamiltonian.  The displacement is applied
-        with QuTiP's ``displace`` primitive.
+        The conversion uses a numerically stable Williamson decomposition of
+        the covariance matrix, followed by a polar decomposition of the
+        resulting symplectic matrix.  The thermal Williamson modes are
+        prepared with ``qutip.thermal_dm``; the passive part is implemented
+        with a number-conserving quadratic Hamiltonian and the positive
+        symplectic part with a quadratic quadrature Hamiltonian.  The
+        displacement is applied with QuTiP's ``displace`` primitive.
 
-        Williamson's decomposition is exact mathematically; this implementation
-        verifies the reconstructed symplectic transformation and covariance to
-        floating-point tolerance. The returned density matrix is nevertheless
-        represented in a finite Fock-space cutoff, so the final phase-space to
-        Hilbert-space conversion can still incur truncation error.
+        Williamson's decomposition is exact mathematically; this
+        implementation verifies the reconstructed symplectic transformation
+        and covariance to floating-point tolerance. The returned state is
+        nevertheless represented in a finite Fock-space cutoff, so the final
+        phase-space to Hilbert-space conversion can still incur truncation
+        error.
+
+        This is an *embedding*, not a reversible change of representation:
+        every ``GaussianState`` has an exact (up to truncation) image in
+        Fock space, but not every Fock state has a Gaussian phase-space
+        description, so there is deliberately no ``FockState.to_gaussian()``
+        counterpart -- see :mod:`catsy.fock`. Once a computation needs the
+        resulting :class:`~catsy.fock.FockState`, it stays in that
+        representation.
         """
 
         _check_positive_int(N_cutoff, "N_cutoff")
@@ -362,7 +372,16 @@ class GaussianState:
             D_op = qt.tensor(*op_list)
             rho = D_op * rho * D_op.dag()
 
-        return rho
+        return FockState(modes=self.modes, rho=rho, N_cutoff=N_cutoff)
+
+    def to_qutip(self, N_cutoff: int = 15) -> qt.Qobj:
+        """Deprecated alias for ``to_fock(N_cutoff).rho``.
+
+        Kept for backward compatibility; new code should call
+        :meth:`to_fock`, which additionally carries the state's mode names
+        and is what `Circuit` uses to auto-promote into Fock space.
+        """
+        return self.to_fock(N_cutoff).rho
 
     # -- Serialization ----------------------------------------------------
 
