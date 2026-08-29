@@ -22,16 +22,6 @@ class Mode:
     index: int | None = None
     owner: Circuit | None = None
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError("Mode name must be a non-empty string.")
-        if self.index is not None and (not isinstance(self.index, int) or self.index < 0):
-            raise ValueError("Mode index must be a non-negative integer or None.")
-        if self.owner is None and self.index is not None:
-            raise ValueError("A standalone mode must not have a circuit index.")
-        if self.owner is not None and self.index is None:
-            raise ValueError("A circuit-owned mode must have a canonical index.")
-
     def __repr__(self) -> str:
         if self.owner is None:
             return f"Mode({self.name!r})"
