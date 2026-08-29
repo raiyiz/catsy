@@ -1,9 +1,9 @@
 {
   "schema_version": "2.1.0",
   "metadata": {
-    "entry_id": "20260829T001359Z_62bbbabf",
+    "entry_id": "20260829T112655Z_3248fb74",
     "title": "Three-mode Gaussian preparation, heralded Fock processing, and interferometric readout",
-    "timestamp": "2026-08-29T00:13:59.158769",
+    "timestamp": "2026-08-29T11:26:55.360422",
     "tags": [
       "example",
       "gaussian",
@@ -20,9 +20,9 @@
   },
   "runs": [
     {
-      "run_id": "e714ddb4e77d47f086ee29dd1d575c0a",
+      "run_id": "2b9b9b6f9d9c48e8aa733cbe7d86bef1",
       "run_name": "gaussian_state_preparation",
-      "timestamp": "2026-08-29T00:13:59.158879",
+      "timestamp": "2026-08-29T11:26:55.360508",
       "circuit": {
         "name": "Three-mode Gaussian demo",
         "modes": [
@@ -117,8 +117,8 @@
           "idler",
           "reference"
         ],
-        "displacement_npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__final_state__displacement",
-        "covariance_npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__final_state__covariance"
+        "displacement_npz_key": "2b9b9b6f9d9c48e8aa733cbe7d86bef1__final_state__displacement",
+        "covariance_npz_key": "2b9b9b6f9d9c48e8aa733cbe7d86bef1__final_state__covariance"
       },
       "scalar_results": {
         "num_modes": 3,
@@ -127,7 +127,7 @@
       },
       "data_payloads": {
         "displacement": {
-          "npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__displacement",
+          "npz_key": "2b9b9b6f9d9c48e8aa733cbe7d86bef1__displacement",
           "description": "Final first moments.",
           "unit": "quadrature",
           "dimensions": [
@@ -139,7 +139,7 @@
           "dtype": "float64"
         },
         "covariance": {
-          "npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__covariance",
+          "npz_key": "2b9b9b6f9d9c48e8aa733cbe7d86bef1__covariance",
           "description": "Final covariance matrix.",
           "unit": "quadrature^2",
           "dimensions": [
@@ -155,32 +155,32 @@
       }
     },
     {
-      "run_id": "1f606b15dd9141e48dc983b6df6fca40",
+      "run_id": "561478afba1a4fc5851476faf6b4a3f4",
       "run_name": "heralded_fock_processing",
-      "timestamp": "2026-08-29T00:13:59.158968",
+      "timestamp": "2026-08-29T11:26:55.360593",
       "circuit": null,
       "final_state_cv": null,
       "scalar_results": {
-        "cat_trace": 0.9999999999999999,
-        "subtracted_trace": 0.9999999999999996,
-        "added_trace": 1.0000000000000004
+        "cat_trace": 1.0000000000000002,
+        "subtracted_trace": 0.9999999999999998,
+        "added_trace": 1.0000000000000007
       },
       "data_payloads": {}
     },
     {
-      "run_id": "a03617a9909f42c58a9d79d4e0352e01",
+      "run_id": "f782f7dd452f43248b82fb14b1488249",
       "run_name": "lossy_mach_zehnder_scan",
-      "timestamp": "2026-08-29T00:13:59.158995",
+      "timestamp": "2026-08-29T11:26:55.360620",
       "circuit": null,
       "final_state_cv": null,
       "scalar_results": {
-        "max_output_n1": 2.622179871592906,
-        "max_output_n2": 2.6221798715929054,
-        "max_parity1": 0.9988207709709402
+        "max_output_n1": 2.6221798715929063,
+        "max_output_n2": 2.6221798715929068,
+        "max_parity1": 0.9988207709709404
       },
       "data_payloads": {
         "theta": {
-          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__theta",
+          "npz_key": "f782f7dd452f43248b82fb14b1488249__theta",
           "description": "Scanned phase in the lossy MZI arm.",
           "unit": "radians",
           "dimensions": [
@@ -192,7 +192,7 @@
           "dtype": "float64"
         },
         "n1": {
-          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__n1",
+          "npz_key": "f782f7dd452f43248b82fb14b1488249__n1",
           "description": "Mean photon number at MZI output port 1.",
           "unit": "photons",
           "dimensions": [
@@ -204,7 +204,7 @@
           "dtype": "float64"
         },
         "n2": {
-          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__n2",
+          "npz_key": "f782f7dd452f43248b82fb14b1488249__n2",
           "description": "Mean photon number at MZI output port 2.",
           "unit": "photons",
           "dimensions": [
@@ -216,7 +216,7 @@
           "dtype": "float64"
         },
         "parity1": {
-          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__parity1",
+          "npz_key": "f782f7dd452f43248b82fb14b1488249__parity1",
           "description": "Parity signal at MZI output port 1.",
           "unit": "dimensionless",
           "dimensions": [
@@ -230,17 +230,17 @@
       }
     },
     {
-      "run_id": "9daf698b9e1b4bfd95730c153b06f8e8",
+      "run_id": "e81eed771b544a9ab99d7951f5e4349c",
       "run_name": "homodyne_signal_readout",
-      "timestamp": "2026-08-29T00:13:59.159034",
+      "timestamp": "2026-08-29T11:26:55.360659",
       "circuit": null,
       "final_state_cv": {
         "modes": [
           "idler",
           "reference"
         ],
-        "displacement_npz_key": "9daf698b9e1b4bfd95730c153b06f8e8__final_state__displacement",
-        "covariance_npz_key": "9daf698b9e1b4bfd95730c153b06f8e8__final_state__covariance"
+        "displacement_npz_key": "e81eed771b544a9ab99d7951f5e4349c__final_state__displacement",
+        "covariance_npz_key": "e81eed771b544a9ab99d7951f5e4349c__final_state__covariance"
       },
       "scalar_results": {
         "outcome": 0.1468259487731242,
@@ -250,17 +250,17 @@
       "data_payloads": {}
     },
     {
-      "run_id": "6c5c300fc35a4089977a60fa1aa5d3ab",
+      "run_id": "48643d82c4de4db0af86eba8133f2685",
       "run_name": "heterodyne_signal_readout",
-      "timestamp": "2026-08-29T00:13:59.159045",
+      "timestamp": "2026-08-29T11:26:55.360669",
       "circuit": null,
       "final_state_cv": {
         "modes": [
           "idler",
           "reference"
         ],
-        "displacement_npz_key": "6c5c300fc35a4089977a60fa1aa5d3ab__final_state__displacement",
-        "covariance_npz_key": "6c5c300fc35a4089977a60fa1aa5d3ab__final_state__covariance"
+        "displacement_npz_key": "48643d82c4de4db0af86eba8133f2685__final_state__displacement",
+        "covariance_npz_key": "48643d82c4de4db0af86eba8133f2685__final_state__covariance"
       },
       "scalar_results": {
         "outcome_x": 0.4828579987985858,

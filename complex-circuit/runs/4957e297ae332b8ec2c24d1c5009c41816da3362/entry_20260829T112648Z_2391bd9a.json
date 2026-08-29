@@ -1,9 +1,9 @@
 {
   "schema_version": "2.1.0",
   "metadata": {
-    "entry_id": "20260829T001355Z_c1b576cc",
+    "entry_id": "20260829T112648Z_2391bd9a",
     "title": "Three-mode Gaussian circuit",
-    "timestamp": "2026-08-29T00:13:55.229442",
+    "timestamp": "2026-08-29T11:26:48.511311",
     "tags": [
       "example",
       "gaussian",
@@ -17,9 +17,9 @@
   },
   "runs": [
     {
-      "run_id": "a89c7810dc764028a036f94ba5fe29be",
+      "run_id": "d94196ef15c2483db62e753a882c3855",
       "run_name": "demo",
-      "timestamp": "2026-08-29T00:13:55.229490",
+      "timestamp": "2026-08-29T11:26:48.511370",
       "circuit": {
         "name": "Three-mode Gaussian demo (basic)",
         "modes": [
@@ -114,8 +114,8 @@
           "idler",
           "reference"
         ],
-        "displacement_npz_key": "a89c7810dc764028a036f94ba5fe29be__final_state__displacement",
-        "covariance_npz_key": "a89c7810dc764028a036f94ba5fe29be__final_state__covariance"
+        "displacement_npz_key": "d94196ef15c2483db62e753a882c3855__final_state__displacement",
+        "covariance_npz_key": "d94196ef15c2483db62e753a882c3855__final_state__covariance"
       },
       "scalar_results": {
         "num_modes": 3,
@@ -124,7 +124,7 @@
       },
       "data_payloads": {
         "displacement": {
-          "npz_key": "a89c7810dc764028a036f94ba5fe29be__displacement",
+          "npz_key": "d94196ef15c2483db62e753a882c3855__displacement",
           "description": "Final first moments.",
           "unit": "quadrature",
           "dimensions": [
@@ -136,7 +136,7 @@
           "dtype": "float64"
         },
         "covariance": {
-          "npz_key": "a89c7810dc764028a036f94ba5fe29be__covariance",
+          "npz_key": "d94196ef15c2483db62e753a882c3855__covariance",
           "description": "Final covariance matrix.",
           "unit": "quadrature^2",
           "dimensions": [
