@@ -35,7 +35,7 @@ def test_cat_mzi_phase_scan_helpers_produce_a_two_panel_figure(
     assert len(figure.axes) == 2
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
-    plt.close(figure)
+    plt.show(figure)
 
 
 def test_generic_mzi_phase_scan_reuses_an_existing_fock_state():
