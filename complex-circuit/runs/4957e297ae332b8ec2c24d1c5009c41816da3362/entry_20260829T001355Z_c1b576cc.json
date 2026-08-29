@@ -1,0 +1,155 @@
+{
+  "schema_version": "2.1.0",
+  "metadata": {
+    "entry_id": "20260829T001355Z_c1b576cc",
+    "title": "Three-mode Gaussian circuit",
+    "timestamp": "2026-08-29T00:13:55.229442",
+    "tags": [
+      "example",
+      "gaussian",
+      "three-mode"
+    ],
+    "notes": "Representative circuit showing persistence and structured output paths.",
+    "custom": {
+      "circuit_name": "Three-mode Gaussian demo (basic)",
+      "output_dir": "runs/complex_circuit_basic"
+    }
+  },
+  "runs": [
+    {
+      "run_id": "a89c7810dc764028a036f94ba5fe29be",
+      "run_name": "demo",
+      "timestamp": "2026-08-29T00:13:55.229490",
+      "circuit": {
+        "name": "Three-mode Gaussian demo (basic)",
+        "modes": [
+          "signal",
+          "idler",
+          "reference"
+        ],
+        "gates": [
+          {
+            "gate": "Squeezer",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "r": 0.6,
+              "theta": 0.0
+            }
+          },
+          {
+            "gate": "Displacer",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "x": 0.12928050806263228,
+              "p": -0.4412278883093312
+            }
+          },
+          {
+            "gate": "BeamSplitter",
+            "modes": [
+              "signal",
+              "idler"
+            ],
+            "kwargs": {
+              "eta": 0.65
+            }
+          },
+          {
+            "gate": "Rotator",
+            "modes": [
+              "idler"
+            ],
+            "kwargs": {
+              "phi": 0.35
+            }
+          },
+          {
+            "gate": "ThermalLoss",
+            "modes": [
+              "idler"
+            ],
+            "kwargs": {
+              "eta": 0.9,
+              "n_thermal": 0.15
+            }
+          },
+          {
+            "gate": "Squeezer",
+            "modes": [
+              "reference"
+            ],
+            "kwargs": {
+              "r": 0.35,
+              "theta": 0.7853981633974483
+            }
+          },
+          {
+            "gate": "BeamSplitter",
+            "modes": [
+              "idler",
+              "reference"
+            ],
+            "kwargs": {
+              "eta": 0.5
+            }
+          },
+          {
+            "gate": "Noise",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "eta": 0.92
+            }
+          }
+        ]
+      },
+      "final_state_cv": {
+        "modes": [
+          "signal",
+          "idler",
+          "reference"
+        ],
+        "displacement_npz_key": "a89c7810dc764028a036f94ba5fe29be__final_state__displacement",
+        "covariance_npz_key": "a89c7810dc764028a036f94ba5fe29be__final_state__covariance"
+      },
+      "scalar_results": {
+        "num_modes": 3,
+        "mean_abs_displacement": 0.1585752970747988,
+        "covariance_trace": 4.025297538598097
+      },
+      "data_payloads": {
+        "displacement": {
+          "npz_key": "a89c7810dc764028a036f94ba5fe29be__displacement",
+          "description": "Final first moments.",
+          "unit": "quadrature",
+          "dimensions": [
+            "quadrature"
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float64"
+        },
+        "covariance": {
+          "npz_key": "a89c7810dc764028a036f94ba5fe29be__covariance",
+          "description": "Final covariance matrix.",
+          "unit": "quadrature^2",
+          "dimensions": [
+            "quadrature",
+            "quadrature"
+          ],
+          "shape": [
+            6,
+            6
+          ],
+          "dtype": "float64"
+        }
+      }
+    }
+  ]
+}

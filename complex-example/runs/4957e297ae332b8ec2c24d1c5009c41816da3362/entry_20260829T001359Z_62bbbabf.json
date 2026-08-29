@@ -1,0 +1,273 @@
+{
+  "schema_version": "2.1.0",
+  "metadata": {
+    "entry_id": "20260829T001359Z_62bbbabf",
+    "title": "Three-mode Gaussian preparation, heralded Fock processing, and interferometric readout",
+    "timestamp": "2026-08-29T00:13:59.158769",
+    "tags": [
+      "example",
+      "gaussian",
+      "fock",
+      "interferometer",
+      "measurement",
+      "plotting"
+    ],
+    "notes": "Prepares a three-mode Gaussian state, independently explores an even cat through heralded photon subtraction and addition, scans a lossy Mach-Zehnder interferometer, and compares homodyne with heterodyne conditioning of the Gaussian signal mode.",
+    "custom": {
+      "circuit_name": "Three-mode Gaussian demo",
+      "output_dir": "runs/complex_circuit"
+    }
+  },
+  "runs": [
+    {
+      "run_id": "e714ddb4e77d47f086ee29dd1d575c0a",
+      "run_name": "gaussian_state_preparation",
+      "timestamp": "2026-08-29T00:13:59.158879",
+      "circuit": {
+        "name": "Three-mode Gaussian demo",
+        "modes": [
+          "signal",
+          "idler",
+          "reference"
+        ],
+        "gates": [
+          {
+            "gate": "Squeezer",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "r": 0.8,
+              "theta": 0.0
+            }
+          },
+          {
+            "gate": "Displacer",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "x": 0.1278139223626388,
+              "p": 0.05094661069452787
+            }
+          },
+          {
+            "gate": "BeamSplitter",
+            "modes": [
+              "signal",
+              "idler"
+            ],
+            "kwargs": {
+              "eta": 0.75
+            }
+          },
+          {
+            "gate": "Rotator",
+            "modes": [
+              "idler"
+            ],
+            "kwargs": {
+              "phi": 0.35
+            }
+          },
+          {
+            "gate": "ThermalLoss",
+            "modes": [
+              "idler"
+            ],
+            "kwargs": {
+              "eta": 0.9,
+              "n_thermal": 0.15
+            }
+          },
+          {
+            "gate": "Squeezer",
+            "modes": [
+              "reference"
+            ],
+            "kwargs": {
+              "r": 0.35,
+              "theta": 0.7853981633974483
+            }
+          },
+          {
+            "gate": "BeamSplitter",
+            "modes": [
+              "idler",
+              "reference"
+            ],
+            "kwargs": {
+              "eta": 0.5
+            }
+          },
+          {
+            "gate": "Noise",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "eta": 0.92
+            }
+          }
+        ]
+      },
+      "final_state_cv": {
+        "modes": [
+          "signal",
+          "idler",
+          "reference"
+        ],
+        "displacement_npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__final_state__displacement",
+        "covariance_npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__final_state__covariance"
+      },
+      "scalar_results": {
+        "num_modes": 3,
+        "mean_abs_displacement": 0.0464694841622448,
+        "covariance_trace": 4.728548996774262
+      },
+      "data_payloads": {
+        "displacement": {
+          "npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__displacement",
+          "description": "Final first moments.",
+          "unit": "quadrature",
+          "dimensions": [
+            "quadrature"
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float64"
+        },
+        "covariance": {
+          "npz_key": "e714ddb4e77d47f086ee29dd1d575c0a__covariance",
+          "description": "Final covariance matrix.",
+          "unit": "quadrature^2",
+          "dimensions": [
+            "quadrature",
+            "quadrature"
+          ],
+          "shape": [
+            6,
+            6
+          ],
+          "dtype": "float64"
+        }
+      }
+    },
+    {
+      "run_id": "1f606b15dd9141e48dc983b6df6fca40",
+      "run_name": "heralded_fock_processing",
+      "timestamp": "2026-08-29T00:13:59.158968",
+      "circuit": null,
+      "final_state_cv": null,
+      "scalar_results": {
+        "cat_trace": 0.9999999999999999,
+        "subtracted_trace": 0.9999999999999996,
+        "added_trace": 1.0000000000000004
+      },
+      "data_payloads": {}
+    },
+    {
+      "run_id": "a03617a9909f42c58a9d79d4e0352e01",
+      "run_name": "lossy_mach_zehnder_scan",
+      "timestamp": "2026-08-29T00:13:59.158995",
+      "circuit": null,
+      "final_state_cv": null,
+      "scalar_results": {
+        "max_output_n1": 2.622179871592906,
+        "max_output_n2": 2.6221798715929054,
+        "max_parity1": 0.9988207709709402
+      },
+      "data_payloads": {
+        "theta": {
+          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__theta",
+          "description": "Scanned phase in the lossy MZI arm.",
+          "unit": "radians",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        },
+        "n1": {
+          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__n1",
+          "description": "Mean photon number at MZI output port 1.",
+          "unit": "photons",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        },
+        "n2": {
+          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__n2",
+          "description": "Mean photon number at MZI output port 2.",
+          "unit": "photons",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        },
+        "parity1": {
+          "npz_key": "a03617a9909f42c58a9d79d4e0352e01__parity1",
+          "description": "Parity signal at MZI output port 1.",
+          "unit": "dimensionless",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        }
+      }
+    },
+    {
+      "run_id": "9daf698b9e1b4bfd95730c153b06f8e8",
+      "run_name": "homodyne_signal_readout",
+      "timestamp": "2026-08-29T00:13:59.159034",
+      "circuit": null,
+      "final_state_cv": {
+        "modes": [
+          "idler",
+          "reference"
+        ],
+        "displacement_npz_key": "9daf698b9e1b4bfd95730c153b06f8e8__final_state__displacement",
+        "covariance_npz_key": "9daf698b9e1b4bfd95730c153b06f8e8__final_state__covariance"
+      },
+      "scalar_results": {
+        "outcome": 0.1468259487731242,
+        "phase": 0.5235987755982988,
+        "remaining_modes": 2
+      },
+      "data_payloads": {}
+    },
+    {
+      "run_id": "6c5c300fc35a4089977a60fa1aa5d3ab",
+      "run_name": "heterodyne_signal_readout",
+      "timestamp": "2026-08-29T00:13:59.159045",
+      "circuit": null,
+      "final_state_cv": {
+        "modes": [
+          "idler",
+          "reference"
+        ],
+        "displacement_npz_key": "6c5c300fc35a4089977a60fa1aa5d3ab__final_state__displacement",
+        "covariance_npz_key": "6c5c300fc35a4089977a60fa1aa5d3ab__final_state__covariance"
+      },
+      "scalar_results": {
+        "outcome_x": 0.4828579987985858,
+        "outcome_p": 0.6759785594960475,
+        "remaining_modes": 2
+      },
+      "data_payloads": {}
+    }
+  ]
+}
