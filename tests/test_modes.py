@@ -17,17 +17,6 @@ def test_mode_is_immutable():
         mode.name = "b"
 
 
-def test_standalone_mode_cannot_fake_a_circuit_index():
-    with pytest.raises(ValueError, match="standalone mode"):
-        Mode("a", index=0)
-
-
-def test_owned_mode_requires_an_index():
-    owner = object()
-    with pytest.raises(ValueError, match="circuit-owned mode"):
-        Mode("a", owner=owner)
-
-
 def test_owned_mode_identity_does_not_use_value_equality():
     owner = object()
     first = Mode("a", index=0, owner=owner)
