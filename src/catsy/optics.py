@@ -426,13 +426,13 @@ def squeeze(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
             r=cast(float, kwargs["r"]),
             theta=cast(float, kwargs.get("theta", 0.0)),
         )
-    return _gaussian_squeeze(cast(GaussianState, state), modes, **kwargs)
+    return _gaussian_squeeze(state, modes, **kwargs)
 
 
 def rotate(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
     if isinstance(state, FockState):
         return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
-    return _gaussian_rotate(cast(GaussianState, state), modes, **kwargs)
+    return _gaussian_rotate(state, modes, **kwargs)
 
 
 def displace(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
@@ -443,7 +443,7 @@ def displace(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
             x=cast(float, kwargs["x"]) if "x" in kwargs else None,
             p=cast(float, kwargs["p"]) if "p" in kwargs else None,
         )
-    return _gaussian_displace(cast(GaussianState, state), modes, **kwargs)
+    return _gaussian_displace(state, modes, **kwargs)
 
 
 def beam_splitter(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
@@ -451,13 +451,13 @@ def beam_splitter(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVS
         return state.beam_splitter(
             mode_a=modes[0], mode_b=modes[1], eta=cast(float, kwargs["eta"])
         )
-    return _gaussian_beam_splitter(cast(GaussianState, state), modes, **kwargs)
+    return _gaussian_beam_splitter(state, modes, **kwargs)
 
 
 def loss(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
     if isinstance(state, FockState):
         return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
-    return _gaussian_loss(cast(GaussianState, state), modes, **kwargs)
+    return _gaussian_loss(state, modes, **kwargs)
 
 
 # ---------------------------------------------------------------------------
