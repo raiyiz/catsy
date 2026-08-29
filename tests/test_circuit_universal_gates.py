@@ -9,7 +9,9 @@ CUTOFF = 16
 TOLERANCE = 1e-5
 
 
-def _assert_rho_equivalent(left: qt.Qobj, right: qt.Qobj, atol: float = TOLERANCE) -> None:
+def _assert_rho_equivalent(
+    left: qt.Qobj, right: qt.Qobj, atol: float = TOLERANCE
+) -> None:
     assert left.tr() == pytest.approx(1.0, abs=atol)
     assert right.tr() == pytest.approx(1.0, abs=atol)
     assert qt.fidelity(left, right) == pytest.approx(1.0, abs=atol)

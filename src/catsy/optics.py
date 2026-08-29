@@ -47,7 +47,9 @@ class GateTransform(Protocol):
     agnostic and never inspects `state`'s type.
     """
 
-    def __call__(self, state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState: ...
+    def __call__(
+        self, state: CVState, modes: Modes, **kwargs: ParameterValue
+    ) -> CVState: ...
 
 
 @dataclass(frozen=True)
@@ -485,7 +487,9 @@ def _ensure_fock(state: CVState, kwargs: dict[str, ParameterValue]) -> FockState
     return cast(GaussianState, state).to_fock(cast(int, kwargs["N_cutoff"]))
 
 
-def photon_subtraction(state: CVState, modes: Modes, **kwargs: ParameterValue) -> FockState:
+def photon_subtraction(
+    state: CVState, modes: Modes, **kwargs: ParameterValue
+) -> FockState:
     return _ensure_fock(state, kwargs).photon_subtraction(mode=modes[0])
 
 
