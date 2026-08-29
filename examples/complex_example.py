@@ -98,7 +98,7 @@ def run_heterodyne(
     return np.asarray(outcome), conditioned
 
 
-def plot_mzi_scan(mzi_scan: dict[str, np.ndarray]):
+def plot_mzi_scan(mzi_scan: dict[str, np.ndarray]) -> plt.Figure:
     """Create a lab-book-ready figure of the lossy Mach-Zehnder scan."""
     theta = mzi_scan["theta"]
     figure, axis = plt.subplots(figsize=(8.5, 5.5), constrained_layout=True)
@@ -162,13 +162,14 @@ def plot_experiment(
         "07_after_photon_addition": plot_fock_dashboard(
             added, xlim=(-4.5, 4.5), resolution=120, show=False
         ),
-        "08_after_homodyne_idler": plot_phase_space(
+        "08_mach_zehnder_scan": plot_mzi_scan(mzi_scan),
+        "09_after_homodyne_idler": plot_phase_space(
             homodyne_reordered, "idler", show=False
         ),
-        "09_after_heterodyne_idler": plot_phase_space(
+        "10_after_heterodyne_idler": plot_phase_space(
             heterodyne_reordered, "idler", show=False
         ),
-        "10_measurement_conditioning": plot_phase_space_trajectory(
+        "11_measurement_conditioning": plot_phase_space_trajectory(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
     }
@@ -203,20 +204,10 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
 
     LOGGER.info("Running Gaussian circuit %r on modes %s", circuit.name, circuit.modes)
     cat, subtracted, added, mzi_scan = run_fock_chain()
-
-    # The MZI is part of the Fock experiment, so its figure is emitted as an
-    # experiment artifact on every run, alongside the numerical scan data.
-    plots_dir = output_dir / "plots"
-    plots_dir.mkdir(parents=True, exist_ok=True)
-    mzi_figure = plot_mzi_scan(mzi_scan)
-    mzi_figure.savefig(plots_dir / "11_mach_zehnder_scan.png", dpi=150)
-    plt.close(mzi_figure)
-
     LOGGER.info(
         "Fock chain complete: even cat -> photon subtraction -> photon addition -> MZI; "
-        "max output photon number %.3f; saved MZI plot to %s",
+        "max output photon number %.3f",
         float(np.max(mzi_scan["n1"])),
-        plots_dir / "11_mach_zehnder_scan.png",
     )
 
     homodyne_outcome, homodyne_state = run_homodyne(final_state, rng)
@@ -236,7 +227,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         subtracted,
         added,
         mzi_scan,
-        plots_dir,
+        output_dir / "plots",
     )
 
     entry = journal.new_entry(
