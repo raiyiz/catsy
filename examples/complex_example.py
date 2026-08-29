@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 
@@ -97,6 +98,35 @@ def run_heterodyne(
     return np.asarray(outcome), conditioned
 
 
+def plot_mzi_scan(mzi_scan: dict[str, np.ndarray]):
+    """Create a lab-book-ready figure of the lossy Mach-Zehnder scan."""
+    theta = mzi_scan["theta"]
+    figure, axis = plt.subplots(figsize=(8.5, 5.5), constrained_layout=True)
+    axis.plot(theta, mzi_scan["n1"], linewidth=2.2, label="Output port 1")
+    axis.plot(theta, mzi_scan["n2"], linewidth=2.2, label="Output port 2")
+    axis.set_xlabel(r"Interferometer phase $\theta$ [rad]")
+    axis.set_ylabel("Mean photon number")
+    axis.set_xlim(theta[0], theta[-1])
+    axis.grid(alpha=0.25)
+
+    parity_axis = axis.twinx()
+    parity_axis.plot(
+        theta,
+        mzi_scan["parity1"],
+        linestyle="--",
+        linewidth=1.8,
+        label="Parity, port 1",
+    )
+    parity_axis.set_ylabel("Parity")
+    parity_axis.set_ylim(-1.05, 1.05)
+
+    handles, labels = axis.get_legend_handles_labels()
+    parity_handles, parity_labels = parity_axis.get_legend_handles_labels()
+    axis.legend(handles + parity_handles, labels + parity_labels, loc="best")
+    axis.set_title("Lossy Mach–Zehnder interferometer: cat-state readout")
+    return figure
+
+
 def plot_experiment(
     final_state: GaussianState,
     homodyne_state: GaussianState,
@@ -145,6 +175,7 @@ def plot_experiment(
 
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)
+        plt.close(figure)
 
     LOGGER.info(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
@@ -172,10 +203,20 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
 
     LOGGER.info("Running Gaussian circuit %r on modes %s", circuit.name, circuit.modes)
     cat, subtracted, added, mzi_scan = run_fock_chain()
+
+    # The MZI is part of the Fock experiment, so its figure is emitted as an
+    # experiment artifact on every run, alongside the numerical scan data.
+    plots_dir = output_dir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    mzi_figure = plot_mzi_scan(mzi_scan)
+    mzi_figure.savefig(plots_dir / "11_mach_zehnder_scan.png", dpi=150)
+    plt.close(mzi_figure)
+
     LOGGER.info(
         "Fock chain complete: even cat -> photon subtraction -> photon addition -> MZI; "
-        "max output photon number %.3f",
+        "max output photon number %.3f; saved MZI plot to %s",
         float(np.max(mzi_scan["n1"])),
+        plots_dir / "11_mach_zehnder_scan.png",
     )
 
     homodyne_outcome, homodyne_state = run_homodyne(final_state, rng)
@@ -195,7 +236,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         subtracted,
         added,
         mzi_scan,
-        output_dir / "plots",
+        plots_dir,
     )
 
     entry = journal.new_entry(
