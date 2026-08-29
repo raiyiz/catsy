@@ -40,9 +40,7 @@ def _load_stages(journal_path: Path) -> list[dict[str, object]]:
             raise SystemExit(f"execution stage {index} is not an object")
         missing = {"id", "title", "category"} - stage.keys()
         if missing:
-            raise SystemExit(
-                f"execution stage {index} is missing {sorted(missing)}"
-            )
+            raise SystemExit(f"execution stage {index} is missing {sorted(missing)}")
         category = str(stage["category"])
         if category not in CATEGORY_LABELS:
             raise SystemExit(f"Unknown execution stage category: {category!r}")
@@ -58,8 +56,8 @@ def _render_pipeline(stages: list[dict[str, object]]) -> str:
             f'<a class="pipeline-step" href="#stage-{number:02d}" '
             f'style="--step-color:var(--{esc(category)})">'
             f'<span class="n">{number:02d}</span>'
-            f'<strong>{esc(stage["title"])}</strong>'
-            f'<small>{esc(CATEGORY_LABELS[category])}</small></a>'
+            f"<strong>{esc(stage['title'])}</strong>"
+            f"<small>{esc(CATEGORY_LABELS[category])}</small></a>"
         )
     return '<div class="pipeline">' + "".join(cards) + "</div>"
 
@@ -87,7 +85,7 @@ def _render_stages(stages: list[dict[str, object]], run_root: Path) -> str:
         else:
             visual = (
                 '<div class="stage-plot empty"><span>—</span>'
-                '<small>response recorded in journal, not plotted</small></div>'
+                "<small>response recorded in journal, not plotted</small></div>"
             )
 
         cards.append(
@@ -96,20 +94,20 @@ def _render_stages(stages: list[dict[str, object]], run_root: Path) -> str:
             f'<div class="stage-index" style="--stage-color:var(--{esc(category)})">'
             f'<span class="num">{number:02d}</span>'
             f'<span class="cat">{esc(CATEGORY_LABELS[category])}</span></div>'
-            f'{visual}'
+            f"{visual}"
             f'<div class="stage-copy" style="--stage-color:var(--{esc(category)})">'
-            f'<h3>{esc(stage["title"])}</h3>'
-            f'<p>{esc(stage.get("description", ""))}</p>'
+            f"<h3>{esc(stage['title'])}</h3>"
+            f"<p>{esc(stage.get('description', ''))}</p>"
             f'<div class="callout"><span class="lbl">Look for</span>'
-            f'<span>{esc(stage.get("inspect", ""))}</span></div>'
+            f"<span>{esc(stage.get('inspect', ''))}</span></div>"
             f'<div class="callout"><span class="lbl">Diagnostic</span>'
-            f'<span>{esc(stage.get("result", ""))}</span></div>'
+            f"<span>{esc(stage.get('result', ''))}</span></div>"
             '<div class="insight"><strong>Recorded execution</strong>'
-            f'Stage {number:02d} comes from the execution journal, not a '
+            f"Stage {number:02d} comes from the execution journal, not a "
             "manually added display-only step.</div>"
-            '</div></article>'
+            "</div></article>"
         )
-    return '<div class="stages">' + "".join(cards) + '</div>'
+    return '<div class="stages">' + "".join(cards) + "</div>"
 
 
 def sync(report_path: Path, journal_path: Path, run_root: Path) -> None:

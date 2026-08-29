@@ -218,19 +218,29 @@ def plot_experiment(
     heterodyne_reordered = heterodyne_state.reorder_modes(remaining_modes)
 
     figures = {
-        "01_final_signal_phase_space": plot_phase_space(final_state, "signal", show=False),
+        "01_final_signal_phase_space": plot_phase_space(
+            final_state, "signal", show=False
+        ),
         "02_final_covariance_matrix": plot_covariance_matrix(final_state, show=False),
         "03_final_mode_correlations": plot_mode_correlation_map(final_state, show=False),
-        "04_even_cat_wigner": plot_wigner(cat, xlim=(-4.5, 4.5), resolution=150, show=False),
-        "05_even_cat_state": plot_fock_dashboard(cat, xlim=(-4.5, 4.5), resolution=120, show=False),
+        "04_even_cat_wigner": plot_wigner(
+            cat, xlim=(-4.5, 4.5), resolution=150, show=False
+        ),
+        "05_even_cat_state": plot_fock_dashboard(
+            cat, xlim=(-4.5, 4.5), resolution=120, show=False
+        ),
         "06_after_photon_subtraction": plot_fock_dashboard(
             subtracted, xlim=(-4.5, 4.5), resolution=120, show=False
         ),
         "07_after_photon_addition": plot_fock_dashboard(
             added, xlim=(-4.5, 4.5), resolution=120, show=False
         ),
-        "08_after_homodyne_idler": plot_phase_space(homodyne_reordered, "idler", show=False),
-        "09_after_heterodyne_idler": plot_phase_space(heterodyne_reordered, "idler", show=False),
+        "08_after_homodyne_idler": plot_phase_space(
+            homodyne_reordered, "idler", show=False
+        ),
+        "09_after_heterodyne_idler": plot_phase_space(
+            heterodyne_reordered, "idler", show=False
+        ),
         "10_measurement_conditioning": plot_phase_space_trajectory(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),

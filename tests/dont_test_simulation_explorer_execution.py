@@ -40,4 +40,4 @@ def test_execution_stage_trace_preserves_fock_operations(tmp_path):
     ]
     assert "Photon subtraction" in pipeline
     assert "Photon addition" in pipeline
-    assert pipeline.count("class=\"pipeline-step\"") == 3
+    assert pipeline.count('class="pipeline-step"') == 3
