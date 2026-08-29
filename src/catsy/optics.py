@@ -50,13 +50,14 @@ class Gate:
 
     name: str
     transform: GateTransform
-    modes: tuple[Mode | str, ...]
+    modes: tuple[Mode, ...]
     kwargs: GateParameters
 
     def apply(self, state: Any | None) -> GaussianState:
         """Apply the gate using mode names at the backend boundary."""
         mode_names = tuple(
-            mode.name if isinstance(mode, Mode) else mode for mode in self.modes
+            mode.name if isinstance(mode, Mode) else cast(str, mode)
+            for mode in self.modes
         )
         return self.transform(cast("GaussianState", state), mode_names, **self.kwargs)
 
@@ -109,7 +110,9 @@ class Circuit:
         if mode.name in self._mode_registry:
             raise ValueError(f"Mode '{mode.name}' is already registered in this circuit.")
         if mode.index != len(self._mode_registry):
-            raise ValueError("Circuit modes must have consecutive indices in circuit order.")
+            raise ValueError(
+                "Circuit modes must have consecutive indices in circuit order."
+            )
         self._mode_registry[mode.name] = mode
         self.modes = ModeNamespace((*self.modes._modes, mode))
         return mode
@@ -195,7 +198,9 @@ class Circuit:
             ) from exc
 
     def add_gate(self, gate: Gate) -> Circuit:
-        normalized_modes = tuple(self._resolve_mode(mode) for mode in gate.modes)
+        normalized_modes = tuple(
+            self._resolve_mode(mode) for mode in gate.modes
+        )
         if not normalized_modes:
             raise ValueError("A circuit gate must target at least one mode.")
         if len({mode.name for mode in normalized_modes}) != len(normalized_modes):
@@ -278,7 +283,9 @@ class Circuit:
                 Gate(
                     name=name,
                     transform=transform,
-                    modes=tuple(circuit._resolve_mode(mode) for mode in gate_data["modes"]),
+                    modes=tuple(
+                        circuit._resolve_mode(mode) for mode in gate_data["modes"]
+                    ),
                     kwargs=dict(gate_data["kwargs"]),
                 )
             )
