@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 
@@ -97,6 +98,35 @@ def run_heterodyne(
     return np.asarray(outcome), conditioned
 
 
+def plot_mzi_scan(mzi_scan: dict[str, np.ndarray]):
+    """Create a lab-book-ready figure of the lossy Mach-Zehnder scan."""
+    theta = mzi_scan["theta"]
+    figure, axis = plt.subplots(figsize=(8.5, 5.5), constrained_layout=True)
+    axis.plot(theta, mzi_scan["n1"], linewidth=2.2, label="Output port 1")
+    axis.plot(theta, mzi_scan["n2"], linewidth=2.2, label="Output port 2")
+    axis.set_xlabel(r"Interferometer phase $\\theta$ [rad]")
+    axis.set_ylabel("Mean photon number")
+    axis.set_xlim(theta[0], theta[-1])
+    axis.grid(alpha=0.25)
+
+    parity_axis = axis.twinx()
+    parity_axis.plot(
+        theta,
+        mzi_scan["parity1"],
+        linestyle="--",
+        linewidth=1.8,
+        label="Parity, port 1",
+    )
+    parity_axis.set_ylabel("Parity")
+    parity_axis.set_ylim(-1.05, 1.05)
+
+    handles, labels = axis.get_legend_handles_labels()
+    parity_handles, parity_labels = parity_axis.get_legend_handles_labels()
+    axis.legend(handles + parity_handles, labels + parity_labels, loc="best")
+    axis.set_title("Lossy Mach–Zehnder interferometer: cat-state readout")
+    return figure
+
+
 def plot_experiment(
     final_state: GaussianState,
     homodyne_state: GaussianState,
@@ -107,7 +137,7 @@ def plot_experiment(
     mzi_scan: dict[str, np.ndarray],
     output_dir: Path,
 ) -> None:
-    """Create diagnostics using only Catsy's public plotting helpers."""
+    """Create diagnostics using Catsy's public plotting helpers."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     remaining_modes = tuple(mode for mode in final_state.modes if mode != "signal")
@@ -141,10 +171,12 @@ def plot_experiment(
         "10_measurement_conditioning": plot_phase_space_trajectory(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
+        "11_mach_zehnder_scan": plot_mzi_scan(mzi_scan),
     }
 
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)
+        plt.close(figure)
 
     LOGGER.info(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
