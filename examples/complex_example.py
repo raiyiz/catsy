@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 
@@ -147,6 +148,7 @@ def plot_experiment(
 
     for name, figure in figures.items():
         figure.savefig(output_dir / f"{name}.png", dpi=150)
+        plt.close(figure)  # none of these are shown; free them as we go
 
     LOGGER.info(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",

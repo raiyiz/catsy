@@ -340,7 +340,7 @@ FONT_LINK = (
 PAGE_STYLE = """
 :root{
   color-scheme:dark;
-  --bg:#0a0d13; --surface:#10141c; --surface-2:#171c27; --line:#242b39;
+  --bg:#14161c; --surface:#191d26; --surface-2:#1f232e; --line:#2a303e;
   --text:#e7e9f0; --muted:#8a91a6;
   --gaussian:#5fd3e8; --fock:#f0568e; --interferometer:#e8b34c; --measurement:#b3a6f2;
 }
@@ -354,11 +354,11 @@ button{font:inherit;color:inherit}
 .container{width:min(1120px,calc(100% - 40px));margin:auto}
 h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.02em;margin:0}
 
-.topbar{position:sticky;top:0;z-index:20;background:rgba(10,13,19,.92);
+.topbar{position:sticky;top:0;z-index:20;background:rgba(20,22,28,.92);
   backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .topbar-inner{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:14px}
 .brand{font-family:'Fraunces',serif;font-weight:600;font-size:16px;display:flex;align-items:center;gap:8px}
-.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--gaussian);box-shadow:0 0 8px var(--gaussian)}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--gaussian)}
 .crumbs{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .crumbs a:hover{color:var(--text)}
 .crumbs .sep{opacity:.5}
@@ -366,8 +366,7 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.02em;mar
 .nav a:hover{color:var(--text)}
 
 .hero{padding:60px 0 44px;border-bottom:1px solid var(--line);
-  background:radial-gradient(640px 320px at 88% -10%,rgba(95,211,232,.09),transparent 60%),
-             radial-gradient(520px 280px at 100% 40%,rgba(240,86,142,.07),transparent 60%)}
+  background:radial-gradient(480px 240px at 88% -10%,rgba(95,211,232,.05),transparent 60%)}
 .eyebrow{color:var(--gaussian);text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:600;
   font-family:'IBM Plex Mono',monospace}
 .hero h1{max-width:820px;margin:10px 0 14px;font-size:clamp(30px,4.4vw,46px);line-height:1.08}
@@ -425,7 +424,7 @@ svg.circuit{width:100%;min-width:640px;height:auto;display:block}
 .stage-index .num{font:700 12px 'IBM Plex Mono',monospace;color:var(--stage-color)}
 .stage-index .cat{writing-mode:vertical-rl;text-orientation:mixed;font-size:9.5px;color:var(--muted);
   letter-spacing:.1em;text-transform:uppercase}
-.stage-plot{width:100%;min-height:220px;border:0;padding:0;background:#080b10;cursor:zoom-in;overflow:hidden;border-inline:1px solid var(--line)}
+.stage-plot{width:100%;min-height:220px;border:0;padding:0;background:#101318;cursor:zoom-in;overflow:hidden;border-inline:1px solid var(--line)}
 .stage-plot img{display:block;width:100%;height:100%;min-height:220px;object-fit:cover;transition:transform .3s}
 .stage-plot:hover img{transform:scale(1.03)}
 .stage-plot.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#52606f;font-size:22px;gap:6px}
@@ -457,13 +456,13 @@ svg.circuit{width:100%;min-width:640px;height:auto;display:block}
 .journal-file strong{font-size:12px;font-family:'IBM Plex Mono',monospace}
 .journal-file small{color:var(--muted);font-size:10.5px;margin-top:2px}
 
-.modal{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:24px;background:rgba(6,8,12,.9);backdrop-filter:blur(3px)}
+.modal{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:24px;background:rgba(14,16,21,.9);backdrop-filter:blur(3px)}
 .modal.open{display:grid}
 .modal-inner{width:min(1180px,96vw);max-height:94vh}
 .modal-head,.modal-foot{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:8px 0}
 .modal-title{font-weight:600;font-family:'Fraunces',serif}
 .modal-close{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 10px;cursor:pointer}
-.modal img{display:block;width:100%;max-height:80vh;object-fit:contain;background:#05070a;border:1px solid var(--line);border-radius:6px}
+.modal img{display:block;width:100%;max-height:80vh;object-fit:contain;background:#0c0e12;border:1px solid var(--line);border-radius:6px}
 .modal-foot{color:var(--muted);font-size:10.5px}
 
 .footer{padding:32px 0 56px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px}
@@ -482,7 +481,7 @@ svg.circuit{width:100%;min-width:640px;height:auto;display:block}
   background:linear-gradient(135deg,rgba(17,24,39,.5),rgba(10,16,27,.35));
   padding:18px 20px;border-radius:14px;transition:.2s}
 .run-card:hover{border-color:rgba(95,211,232,.5);transform:translateX(4px)}
-.run-dot{width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--gaussian);box-shadow:0 0 16px rgba(95,211,232,.7)}
+.run-dot{width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--gaussian)}
 .run-copy{display:grid;gap:2px}
 .run-time{color:var(--gaussian);font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.03em}
 .run-card strong{font:600 16px 'IBM Plex Mono',monospace}
@@ -553,15 +552,20 @@ def _topbar(crumbs: list[tuple[str, str]], nav_links: list[tuple[str, str]]) -> 
     )
 
 
-def _page(title: str, description: str, body: str) -> str:
+def _page(title: str, description: str, body: str, asset_prefix: str = "") -> str:
+    """asset_prefix is the relative path back to OUTPUT_ROOT (e.g. "../../../"
+    for a run page, "" for the top-level index), so every page links the one
+    shared stylesheet/script instead of inlining its own copy -- the browser
+    then caches both once instead of re-downloading them on every run/example
+    page navigated to while browsing the archive."""
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="{esc(description)}">
 <title>{esc(title)}</title>
 {FONT_LINK}
-<style>{PAGE_STYLE}</style></head><body>
+<link rel="stylesheet" href="{asset_prefix}assets/style.css"></head><body>
 {body}
-<script>{RUN_SCRIPT}</script>
+<script src="{asset_prefix}assets/viewer.js" defer></script>
 </body></html>"""
 
 
@@ -736,6 +740,7 @@ def build_rich_run_page(
             f"{spec.title} · {short_commit}",
             f"Catsy {spec.title} report for {short_commit}",
             body,
+            asset_prefix="../../../",
         ),
         encoding="utf-8",
     )
@@ -839,6 +844,7 @@ def build_journal_only_run_page(
             f"{spec.title} · {short_commit}",
             f"Catsy {spec.title} report for {short_commit}",
             body,
+            asset_prefix="../../../",
         ),
         encoding="utf-8",
     )
@@ -951,7 +957,12 @@ def build_example_archive_page(site_example_root: Path) -> None:
   <div class="archive-list">{cards or '<div class="empty-state">No runs yet.</div>'}</div>
 </div></main>"""
     (site_example_root / "index.html").write_text(
-        _page(f"{meta['title']} · runs", f"Run history for {meta['title']}", body),
+        _page(
+            f"{meta['title']} · runs",
+            f"Run history for {meta['title']}",
+            body,
+            asset_prefix="../",
+        ),
         encoding="utf-8",
     )
 
@@ -999,12 +1010,25 @@ def build_top_level_index(output_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _write_shared_assets(output_root: Path) -> None:
+    """Write the one shared stylesheet/script every page links to. Written
+    once per build rather than inlined per page, so a browser walking the
+    archive (many run + example pages) fetches each only once and caches it,
+    instead of re-downloading an identical copy on every navigation."""
+    assets_dir = output_root / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "style.css").write_text(PAGE_STYLE, encoding="utf-8")
+    (assets_dir / "viewer.js").write_text(RUN_SCRIPT, encoding="utf-8")
+
+
 def main() -> None:
     commit = os.environ.get("REPORT_COMMIT", os.environ.get("GITHUB_SHA", "unknown"))
     ref = os.environ.get("REPORT_REF", "unknown")
     run_id = os.environ.get("REPORT_RUN_ID", "")
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d · %H:%M UTC")
     timestamp = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    _write_shared_assets(OUTPUT_ROOT)
 
     built_any = False
     for spec in EXAMPLES:
