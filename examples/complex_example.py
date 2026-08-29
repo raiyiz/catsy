@@ -9,19 +9,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 
-from catsy import (
-    Circuit,
-    GaussianMeasurements,
-    GaussianState,
-    MachZehnderInterferometer,
-    SimulationJournal,
-)
+from catsy import Circuit, GaussianMeasurements, GaussianState, SimulationJournal
 from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
+from catsy.fock.mzi_visualization import plot_mzi_scan, run_mzi_phase_scan
 from catsy.fock.visualization import plot_fock_dashboard, plot_wigner
 from catsy.gaussian.visualization import (
     plot_covariance_matrix,
     plot_mode_correlation_map,
-    plot_mzi_scan,
     plot_phase_space,
     plot_phase_space_trajectory,
 )
@@ -75,8 +69,13 @@ def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
         ancilla_cutoff=6,
     )
     theta = np.linspace(0.0, 2.0 * np.pi, 33)
-    interferometer = MachZehnderInterferometer(kappa=0.08, N_cutoff=18, loss_time=0.75)
-    scan = interferometer.scan(added, theta)
+    scan = run_mzi_phase_scan(
+        added,
+        cutoff=18,
+        theta_list=theta,
+        kappa=0.08,
+        loss_time=0.75,
+    )
     return cat, subtracted, added, {key: np.asarray(value) for key, value in scan.items()}
 
 
@@ -244,7 +243,13 @@ def plot_experiment(
         "10_measurement_conditioning": plot_phase_space_trajectory(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
-        "11_mach_zehnder_scan": plot_mzi_scan(mzi_scan, show=False),
+        "11_mach_zehnder_scan": plot_mzi_scan(
+            mzi_scan,
+            state=added,
+            state_title="State entering MZI",
+            phase=float(mzi_scan["theta"][0]),
+            show=False,
+        ),
     }
 
     for name, figure in figures.items():
@@ -353,18 +358,9 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             },
         },
     )
-    entry.log_run(
-        "even_cat_preparation",
-        metrics={"trace": float(cat.tr())},
-    )
-    entry.log_run(
-        "photon_subtraction",
-        metrics={"trace": float(subtracted.tr())},
-    )
-    entry.log_run(
-        "photon_addition",
-        metrics={"trace": float(added.tr())},
-    )
+    entry.log_run("even_cat_preparation", metrics={"trace": float(cat.tr())})
+    entry.log_run("photon_subtraction", metrics={"trace": float(subtracted.tr())})
+    entry.log_run("photon_addition", metrics={"trace": float(added.tr())})
     entry.log_run(
         "lossy_mach_zehnder_scan",
         metrics={
@@ -417,10 +413,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
             "remaining_modes": len(heterodyne_state.modes),
         },
     )
-    entry.log_run(
-        "measurement_comparison",
-        metrics={"homodyne_vs_heterodyne": True},
-    )
+    entry.log_run("measurement_comparison", metrics={"homodyne_vs_heterodyne": True})
 
     saved_path = entry.save(output_dir)
     LOGGER.info("Saved journal entry to %s", saved_path)
