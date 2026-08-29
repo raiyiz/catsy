@@ -71,6 +71,9 @@ def test_photon_statistics_for_fock_state_has_single_peak():
     figure = plot_photon_statistics(rho)
     heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
 
+    # Also covers cutoff inference: with no explicit n_max, the plotted
+    # range still extends to the full N_cutoff=10 Hilbert space.
+    assert len(heights) == 10
     assert heights[3] == pytest.approx(1.0)
     assert np.count_nonzero(heights > 1e-12) == 1
 
@@ -91,16 +94,6 @@ def test_photon_statistics_respects_explicit_n_max():
     assert len(heights) == 10
     assert heights[3] == pytest.approx(1.0)
     assert np.count_nonzero(heights > 1e-12) == 1
-
-
-def test_photon_statistics_infers_cutoff_beyond_occupied_support():
-    rho = qt.ket2dm(qt.fock(10, 3))
-    figure = plot_photon_statistics(rho)
-    heights = np.array([bar.get_height() for bar in figure.axes[0].patches])
-
-    assert len(heights) == 10
-    assert heights[3] == pytest.approx(1.0)
-    assert np.allclose(heights[4:], 0.0)
 
 
 def test_density_matrix_visualization_shows_coherences_for_cat_like_state():

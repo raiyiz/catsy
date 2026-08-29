@@ -9,14 +9,8 @@ from catsy.fock import (
     photon_addition,
     photon_subtraction,
 )
-from catsy.gaussian import (
-    GaussianState,
-    LossChannels,
-    beam_splitter,
-    squeeze,
-    thermal_loss,
-)
-from catsy.optics import Circuit, Gate
+from catsy.gaussian import GaussianState, LossChannels
+from catsy.optics import Circuit
 
 # Gaussian -> Fock bridge
 
@@ -41,35 +35,14 @@ def test_cv_channel_to_fock_purity_drops_with_loss():
 
 
 def test_qo_epr_purity_drops_below_one_after_loss():
-    circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.6, "theta": 0.0},
-        )
-    ).add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("b",),
-            kwargs={"r": 0.6, "theta": np.pi / 2},
-        )
-    ).add_gate(
-        Gate(
-            name="BeamSplitter",
-            transform=beam_splitter,
-            modes=("a", "b"),
-            kwargs={"eta": 0.5},
-        )
-    ).add_gate(
-        Gate(
-            name="ThermalLoss",
-            transform=thermal_loss,
-            modes=("b",),
-            kwargs={"eta": 0.7, "n_thermal": 0.3},
-        )
+    circuit = (
+        Circuit()
+        .add_mode("a")
+        .add_mode("b")
+        .squeeze("a", r=0.6, theta=0.0)
+        .squeeze("b", r=0.6, theta=np.pi / 2)
+        .beam_splitter("a", "b", eta=0.5)
+        .thermal_loss("b", eta=0.7, n_thermal=0.3)
     )
     final_cv_state = circuit.run(GaussianState.vacuum(("a", "b")))
     rho_qutip = final_cv_state.to_qutip(N_cutoff=15)
@@ -82,16 +55,7 @@ def test_qo_epr_purity_drops_below_one_after_loss():
 
 
 def test_photon_subtraction_state_and_rho_entry_points_agree():
-    circuit = Circuit().add_mode("a")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.55, "theta": 0.0},
-        )
-    )
-    gaussian_squeezed = circuit.run(GaussianState.vacuum(("a",)))
+    gaussian_squeezed = GaussianState.vacuum(("a",)).squeeze("a", r=0.55, theta=0.0)
 
     rho = gaussian_squeezed.to_qutip(N_cutoff=25)
     via_rho = FockGates.photon_subtraction(rho, mode_idx=0, N_cutoff=25)
@@ -404,16 +368,7 @@ def test_ideal_photon_operations_use_same_kraus_semantics():
 
 @pytest.mark.visualize
 def test_native_qutip_wigner_plot_demo(assert_no_empty_axes, assert_layout_can_render):
-    state = Circuit().add_mode("a")
-    state.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.6, "theta": 0.0},
-        )
-    )
-    cv_state = state.run(GaussianState.vacuum(("a",)))
+    cv_state = GaussianState.vacuum(("a",)).squeeze("a", r=0.6, theta=0.0)
     rho = cv_state.to_qutip(N_cutoff=15)
 
     xvec = np.linspace(-5, 5, 150)

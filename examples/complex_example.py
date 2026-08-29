@@ -20,6 +20,7 @@ from catsy.fock.visualization import plot_fock_dashboard, plot_wigner
 from catsy.gaussian.visualization import (
     plot_covariance_matrix,
     plot_mode_correlation_map,
+    plot_mzi_scan,
     plot_phase_space,
     plot_phase_space_trajectory,
 )
@@ -141,6 +142,7 @@ def plot_experiment(
         "10_measurement_conditioning": plot_phase_space_trajectory(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
+        "11_mach_zehnder_scan": plot_mzi_scan(mzi_scan, show=False),
     }
 
     for name, figure in figures.items():

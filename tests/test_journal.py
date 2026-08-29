@@ -5,13 +5,11 @@ import pytest
 
 from catsy.gaussian import (
     GaussianState,
-    beam_splitter,
     compute_duan_inseparability,
     compute_joint_correlation,
-    squeeze,
 )
 from catsy.journal import JournalEntry, SimulationJournal
-from catsy.optics import Circuit, Gate
+from catsy.optics import Circuit
 
 
 def test_log_run_can_record_a_run_without_a_circuit():
@@ -23,30 +21,13 @@ def test_log_run_can_record_a_run_without_a_circuit():
 
 
 def test_log_run_with_inline_circuit_embeds_full_definition():
-    circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.8, "theta": 0.0},
-        )
-    )
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("b",),
-            kwargs={"r": 0.8, "theta": np.pi / 2},
-        )
-    )
-    circuit.add_gate(
-        Gate(
-            name="BeamSplitter",
-            transform=beam_splitter,
-            modes=("a", "b"),
-            kwargs={"eta": 0.5},
-        )
+    circuit = (
+        Circuit()
+        .add_mode("a")
+        .add_mode("b")
+        .squeeze("a", r=0.8, theta=0.0)
+        .squeeze("b", r=0.8, theta=np.pi / 2)
+        .beam_splitter("a", "b", eta=0.5)
     )
     final_state = circuit.run(GaussianState.vacuum(("a", "b")))
 
@@ -414,30 +395,13 @@ def test_fetch_history_summary_does_not_open_companion_npz_files(tmp_path, monke
 
 
 def test_journal_records_a_full_circuit_experiment(tmp_path):
-    circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.8, "theta": 0.0},
-        )
-    )
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("b",),
-            kwargs={"r": 0.8, "theta": np.pi / 2},
-        )
-    )
-    circuit.add_gate(
-        Gate(
-            name="BeamSplitter",
-            transform=beam_splitter,
-            modes=("a", "b"),
-            kwargs={"eta": 0.5},
-        )
+    circuit = (
+        Circuit()
+        .add_mode("a")
+        .add_mode("b")
+        .squeeze("a", r=0.8, theta=0.0)
+        .squeeze("b", r=0.8, theta=np.pi / 2)
+        .beam_splitter("a", "b", eta=0.5)
     )
     result = circuit.run(GaussianState.vacuum(("a", "b")))
     duan_score = compute_duan_inseparability(result, "a", "b")

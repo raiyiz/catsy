@@ -522,37 +522,9 @@ def test_gaussian_state_roundtrips_through_dict():
 
 # Measurements
 
-
-def test_circuit_roundtrips_through_file(tmp_path):
-    circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.6, "theta": 0.0},
-        )
-    ).add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("b",),
-            kwargs={"r": 0.6, "theta": np.pi / 2},
-        )
-    ).add_gate(
-        Gate(
-            name="BeamSplitter",
-            transform=beam_splitter,
-            modes=("a", "b"),
-            kwargs={"eta": 0.5},
-        )
-    )
-    path = tmp_path / "circuit.json"
-    circuit.save(path)
-    restored = Circuit.load(path)
-    original_result = circuit.run(GaussianState.vacuum(("a", "b")))
-    restored_result = restored.run(GaussianState.vacuum(("a", "b")))
-    np.testing.assert_allclose(restored_result.covariance, original_result.covariance)
+# Circuit file roundtripping (save/load) is Circuit's own concern and is
+# covered in test_optics.py (test_circuit_roundtrips_through_file,
+# test_circuit_gate_roundtrip_agrees); no need to duplicate it here.
 
 
 def test_circuit_from_dict_rejects_unknown_gate():
@@ -700,28 +672,13 @@ def test_wigner_analytical_matches_gaussian_normalization():
 
 
 def _correlated_two_mode_state() -> GaussianState:
-    circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.6, "theta": 0.0},
-        )
-    ).add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("b",),
-            kwargs={"r": 0.6, "theta": np.pi},
-        )
-    ).add_gate(
-        Gate(
-            name="BeamSplitter",
-            transform=beam_splitter,
-            modes=("a", "b"),
-            kwargs={"eta": 0.5},
-        )
+    circuit = (
+        Circuit()
+        .add_mode("a")
+        .add_mode("b")
+        .squeeze("a", r=0.6, theta=0.0)
+        .squeeze("b", r=0.6, theta=np.pi)
+        .beam_splitter("a", "b", eta=0.5)
     )
     return circuit.run(GaussianState.vacuum(("a", "b")))
 
