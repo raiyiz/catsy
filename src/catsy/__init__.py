@@ -18,7 +18,11 @@ from .gaussian import (
 )
 from .journal import JournalEntry, SimulationJournal
 from .optics import Circuit, Gate, KerrCavity, MachZehnderInterferometer
+from . import optics as _optics
 from .modes import Mode, ModeNamespace
+
+# Keep the existing optics module API aligned with the canonical Mode class.
+_optics.Mode = Mode
 
 __all__ = [
     "Circuit",
