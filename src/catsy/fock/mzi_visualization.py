@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +18,27 @@ def make_even_cat(*, cutoff: int, alpha: complex) -> qt.Qobj:
     return (qt.coherent(cutoff, alpha) + qt.coherent(cutoff, -alpha)).unit()
 
 
+def run_mzi_phase_scan(
+    state: qt.Qobj,
+    *,
+    cutoff: int,
+    theta_list: Sequence[float] | None = None,
+    kappa: float = 0.0,
+    loss_time: float = 1.0,
+) -> ObservableScanData:
+    """Run a reusable Mach-Zehnder phase scan for an arbitrary Fock state."""
+    phases = (
+        np.linspace(0.0, 2.0 * np.pi, 200)
+        if theta_list is None
+        else np.asarray(theta_list, dtype=float)
+    )
+    return MachZehnderInterferometer(
+        kappa=kappa,
+        N_cutoff=cutoff,
+        loss_time=loss_time,
+    ).scan(state, phases)
+
+
 def run_cat_mzi_phase_scan(
     *,
     cutoff: int = 22,
@@ -26,26 +46,22 @@ def run_cat_mzi_phase_scan(
     theta_list: Sequence[float] | None = None,
     kappa: float = 0.0,
     loss_time: float = 1.0,
-) -> tuple[qt.Qobj, ObservableScanData]:
+) -> tuple[qt.QObj, ObservableScanData]:
     """Prepare an even cat and run it through a Mach-Zehnder phase scan."""
-    phases = (
-        np.linspace(0.0, 2.0 * np.pi, 200)
-        if theta_list is None
-        else np.asarray(theta_list, dtype=float)
-    )
     cat = make_even_cat(cutoff=cutoff, alpha=alpha)
-    results = MachZehnderInterferometer(
+    return cat, run_mzi_phase_scan(
+        cat,
+        cutoff=cutoff,
+        theta_list=theta_list,
         kappa=kappa,
-        N_cutoff=cutoff,
         loss_time=loss_time,
-    ).scan(cat, phases)
-    return cat, results
+    )
 
 
 def plot_mzi_scan(
     results: ObservableScanData,
     *,
-    state: qt.Qobj | None = None,
+    state: qt.QObj | None = None,
     state_title: str = "MZI input state",
     state_xlim: tuple[float, float] = (-6.0, 6.0),
     resolution: int = 120,
@@ -54,12 +70,7 @@ def plot_mzi_scan(
     figsize: tuple[float, float] = (13.5, 5.5),
     show: bool = False,
 ) -> plt.Figure:
-    """Render MZI interference fringes beside an optional Fock-state panel.
-
-    The left panel shows both output intensities and the quantum parity
-    signal. The right panel shows the supplied state in phase space; if no
-    state is supplied, that panel is replaced by a compact scan summary.
-    """
+    """Render MZI interference fringes beside an optional Fock-state panel."""
     theta = np.asarray(results["theta"], dtype=float)
     if theta.ndim != 1 or len(theta) == 0:
         raise ValueError("results['theta'] must be a non-empty 1D array.")
@@ -70,7 +81,9 @@ def plot_mzi_scan(
         raise ValueError("resolution must be positive.")
 
     if axes is None:
-        fig, (scan_ax, state_ax) = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
+        fig, (scan_ax, state_ax) = plt.subplots(
+            1, 2, figsize=figsize, constrained_layout=True
+        )
     else:
         scan_ax, state_ax = axes
         fig = scan_ax.figure
@@ -78,7 +91,13 @@ def plot_mzi_scan(
     x_phase = theta / np.pi
     scan_ax.plot(x_phase, results["n1"], label="Output port 1", lw=2)
     scan_ax.plot(x_phase, results["n2"], label="Output port 2", lw=2, ls="--")
-    scan_ax.plot(x_phase, results["parity1"], label="Parity, port 1", lw=2.2, alpha=0.85)
+    scan_ax.plot(
+        x_phase,
+        results["parity1"],
+        label="Parity, port 1",
+        lw=2.2,
+        alpha=0.85,
+    )
     scan_ax.axhline(0.0, lw=0.7, ls=":")
     scan_ax.set_xlabel(r"Phase shift $\theta$ ($\times \pi$)")
     scan_ax.set_ylabel("Observable")
@@ -116,4 +135,9 @@ def plot_mzi_scan(
     return fig
 
 
-__all__ = ["make_even_cat", "plot_mzi_scan", "run_cat_mzi_phase_scan"]
+__all__ = [
+    "make_even_cat",
+    "plot_mzi_scan",
+    "run_cat_mzi_phase_scan",
+    "run_mzi_phase_scan",
+]
