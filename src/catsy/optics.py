@@ -7,7 +7,7 @@ interferometer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol, TypedDict, cast
 
@@ -32,6 +32,7 @@ from .core import (
     _json_save,
     _normalize_phase_vector,
 )
+from .modes import Mode, ModeNamespace
 from .types import CircuitData, FloatArray, GateParameters, Modes, ParameterValue
 
 
@@ -45,19 +46,17 @@ class GateTransform(Protocol):
 
 @dataclass(frozen=True)
 class Gate:
-    """One fully bound transformation over named modes."""
+    """One fully bound transformation over physical mode objects."""
 
     name: str
     transform: GateTransform
-    modes: Modes
+    modes: tuple[Mode, ...]
     kwargs: GateParameters
 
     def apply(self, state: Any | None) -> GaussianState:
-        # `state` is None only when this is (or precedes) an InitialState
-        # gate; Circuit.run() enforces that invariant before calling apply()
-        # on any other gate, so the cast reflects an already-checked fact
-        # rather than papering over an unchecked one.
-        return self.transform(cast("GaussianState", state), self.modes, **self.kwargs)
+        """Apply the gate using mode names at the backend boundary."""
+        mode_names = tuple(mode.name for mode in self.modes)
+        return self.transform(cast("GaussianState", state), mode_names, **self.kwargs)
 
 
 class CircuitState(Protocol):
@@ -68,52 +67,10 @@ class CircuitState(Protocol):
     def reorder_modes(self, modes: Modes) -> Any: ...
 
 
-@dataclass(frozen=True, eq=False, slots=True)
-class Mode:
-    """A named mode, optionally owned by the :class:`Circuit` that produced it.
-
-    A ``Mode`` obtained from :meth:`Circuit.mode` is owned by that circuit,
-    and can only be used to build gates on that same circuit: passing it to a
-    different circuit, or mixing it into a gate on another circuit, is
-    rejected before a :class:`Gate` is even constructed -- so a mode meant
-    for one circuit can't accidentally end up wired into a different one.
-
-    A ``Mode`` with ``owner=None`` is "free"/standalone: not tied to any
-    circuit, e.g. for a one-off gate applied directly without building a
-    :class:`Circuit` at all.
-
-    Modes use object identity for equality: two `Mode("a")` instances are
-    never equal to each other, owned or free, even with the same name --
-    only a `Mode` obtained from `Circuit.mode(...)` is ever recognized as
-    belonging to that circuit.
-    """
-
-    name: str
-    owner: Circuit | None = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError("Mode name must be a non-empty string.")
-
-    def __repr__(self) -> str:
-        owned_by = f"owner={self.owner.name!r}" if self.owner is not None else "free"
-        return f"Mode({self.name!r}, {owned_by})"
-
-
 def _normalize_gate_kwargs(
     kwargs: dict[str, ParameterValue],
 ) -> dict[str, ParameterValue]:
-    """Canonicalize any `alpha` in gate kwargs into real-valued `x`/`p`.
-
-    `Gate.kwargs` is what `Circuit.to_dict()`/`save()` persists, and a raw
-    complex amplitude isn't JSON serializable -- so this runs at gate
-    *construction* time (in every place a `Gate` gets built from
-    user-supplied kwargs), not just when the gate later runs. Only
-    Displacer and InitialState(kind="coherent") ever pass `alpha`, and both
-    transforms already accept `x`/`p` as an equivalent form (see `displace`
-    and `initial_state` in `catsy.gaussian`), so this is a lossless,
-    format-only substitution. A no-op when `alpha` isn't present.
-    """
+    """Canonicalize any `alpha` in gate kwargs into real-valued `x`/`p`."""
     if "alpha" not in kwargs:
         return kwargs
     kwargs = dict(kwargs)
@@ -125,26 +82,39 @@ def _normalize_gate_kwargs(
 
 @dataclass
 class Circuit:
-    """An ordered executable optical circuit over named modes."""
+    """An ordered executable optical circuit over owned physical modes."""
 
     name: str = "Untitled Circuit"
-    modes: Modes = field(default_factory=tuple)
+    modes: ModeNamespace | tuple[str, ...] = field(default_factory=ModeNamespace)
     _mode_registry: dict[str, Mode] = field(default_factory=dict, init=False)
     _gates: list[Gate] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
-        # Re-derive `modes`/`_mode_registry` through `mode()` so a circuit
-        # constructed with `Circuit(modes=(...))` (e.g. from `from_dict`)
-        # gets the same owned-Mode handles and validation as one built up
-        # via `.mode(...)`/`.add_mode(...)`.
-        requested_modes, self.modes = self.modes, ()
-        for mode_name in requested_modes:
-            self.mode(mode_name)
+        requested_modes = self.modes
+        if isinstance(requested_modes, ModeNamespace):
+            requested_modes = tuple(requested_modes)
+        self.modes = ModeNamespace()
+        self._mode_registry = {}
+        for mode in requested_modes:
+            if isinstance(mode, Mode):
+                self._register_mode(mode)
+            else:
+                self.mode(mode)
+
+    def _register_mode(self, mode: Mode) -> Mode:
+        if mode.owner is not self:
+            raise ValueError(f"Mode {mode.name!r} is not owned by this circuit.")
+        if mode.name in self._mode_registry:
+            raise ValueError(f"Mode '{mode.name}' is already registered in this circuit.")
+        if mode.index != len(self._mode_registry):
+            raise ValueError("Circuit modes must have consecutive indices in circuit order.")
+        self._mode_registry[mode.name] = mode
+        self.modes = ModeNamespace((*tuple(self.modes), mode))
+        return mode
 
     @property
     def gates(self) -> tuple[Gate, ...]:
-        """The circuit's gates, in execution order. Read-only: use
-        :meth:`add_gate` (or a fluent builder method) to append one."""
+        """The circuit's gates, in execution order. Read-only."""
         return tuple(self._gates)
 
     @classmethod
@@ -186,36 +156,17 @@ class Circuit:
         return apply
 
     def mode(self, mode_name: str) -> Mode:
-        """Register a new mode on this circuit and return an owned handle for it.
-
-        The returned :class:`Mode` is owned by this circuit. Fluent gate
-        builder methods and :meth:`initial_state` accept either this handle
-        or the bare mode-name string, but a `Mode` owned by a *different*
-        circuit (or a free one, ``owner=None``) is rejected before a `Gate`
-        is even constructed -- see :class:`Mode`.
-        """
-        if mode_name in self._mode_registry:
-            raise ValueError(f"Mode '{mode_name}' is already registered in this circuit.")
-        new_mode = Mode(name=mode_name, owner=self)
-        self._mode_registry[mode_name] = new_mode
-        self.modes = (*self.modes, mode_name)
-        return new_mode
+        """Create and return a new immutable mode owned by this circuit."""
+        new_mode = Mode(name=mode_name, index=len(self._mode_registry), owner=self)
+        return self._register_mode(new_mode)
 
     def add_mode(self, mode_name: str) -> Circuit:
-        """Fluent convenience wrapper around :meth:`mode` for chaining, e.g.
-        ``Circuit().add_mode("a").add_mode("b")``. Discards the returned
-        handle -- use :meth:`mode` directly when you need it."""
+        """Fluent convenience wrapper around :meth:`mode`."""
         self.mode(mode_name)
         return self
 
-    def _resolve_mode(self, mode: str | Mode) -> str:
-        """Validate one gate-target mode and return its plain name.
-
-        A `Mode` must be owned by this circuit; a bare string must already
-        be a registered mode name on this circuit. Either way, an
-        unrecognized or wrongly-owned mode is rejected here, before a `Gate`
-        is constructed -- not deferred to `run()`.
-        """
+    def _resolve_mode(self, mode: str | Mode) -> Mode:
+        """Resolve a mode name/handle and require ownership by this circuit."""
         if isinstance(mode, Mode):
             if mode.owner is not self:
                 owner_desc = (
@@ -225,39 +176,27 @@ class Circuit:
                 )
                 raise ValueError(
                     f"Mode {mode.name!r} belongs to {owner_desc}, not to this "
-                    f"circuit ({self.name!r}). Use a Mode obtained from this "
-                    "circuit's .mode(...)."
+                    f"circuit ({self.name!r})."
                 )
-            return mode.name
-        if mode not in self._mode_registry:
+            return mode
+        try:
+            return self._mode_registry[mode]
+        except KeyError as exc:
             raise ValueError(
                 f"Mode '{mode}' is not registered on this circuit. "
                 f"Call circuit.mode({mode!r}) first."
-            )
-        return mode
+            ) from exc
 
     def add_gate(self, gate: Gate) -> Circuit:
-        normalized_modes = tuple(gate.modes)
+        normalized_modes = tuple(self._resolve_mode(mode) for mode in gate.modes)
         if not normalized_modes:
             raise ValueError("A circuit gate must target at least one mode.")
-        if any(
-            not isinstance(mode, str) or not mode.strip() for mode in normalized_modes
-        ):
-            raise ValueError("All circuit gate modes must be non-empty strings.")
-        if len(set(normalized_modes)) != len(normalized_modes):
+        if len({mode.name for mode in normalized_modes}) != len(normalized_modes):
             raise ValueError(
-                f"{gate.name} cannot target the same mode more than once: {normalized_modes!r}."
+                f"{gate.name} cannot target the same mode more than once: "
+                f"{tuple(mode.name for mode in normalized_modes)!r}."
             )
-        unknown_modes = [
-            mode for mode in normalized_modes if mode not in self._mode_registry
-        ]
-        if unknown_modes:
-            raise ValueError(
-                f"{gate.name} targets mode(s) {unknown_modes!r} not registered on "
-                f"this circuit ({self.name!r}); call circuit.mode(...) to register "
-                "them first."
-            )
-        self._gates.append(gate)
+        self._gates.append(replace(gate, modes=normalized_modes))
         return self
 
     def initial_state(
@@ -280,18 +219,17 @@ class Circuit:
 
     def run(self, initial_state: GaussianState | None = None) -> Any:
         """Run the ordered gate chain against an optional initial state."""
-        if not self.modes:
+        if len(self.modes) == 0:
             raise ValueError("Circuit has no registered modes.")
 
+        mode_names = tuple(mode.name for mode in self.modes)
         current_state: Any = None
         if initial_state is not None:
-            if set(initial_state.modes) != set(self.modes):
+            if set(initial_state.modes) != set(mode_names):
                 raise ValueError("Initial state's modes don't match the circuit's modes.")
-            current_state = initial_state.reorder_modes(self.modes)
+            current_state = initial_state.reorder_modes(mode_names)
 
         for idx, gate in enumerate(self._gates):
-            # Mode registration/ownership is validated once, in add_gate();
-            # every gate reaching this loop has already passed that check.
             if current_state is None and gate.name != "InitialState":
                 raise ValueError(
                     f"Gate #{idx} ({gate.name}) cannot run before an initial_state gate."
@@ -309,9 +247,13 @@ class Circuit:
     def to_dict(self) -> CircuitData:
         return {
             "name": self.name,
-            "modes": list(self.modes),
+            "modes": [mode.name for mode in self.modes],
             "gates": [
-                {"gate": gate.name, "modes": list(gate.modes), "kwargs": gate.kwargs}
+                {
+                    "gate": gate.name,
+                    "modes": [mode.name for mode in gate.modes],
+                    "kwargs": gate.kwargs,
+                }
                 for gate in self._gates
             ],
         }
@@ -329,7 +271,7 @@ class Circuit:
                 Gate(
                     name=name,
                     transform=transform,
-                    modes=tuple(gate_data["modes"]),
+                    modes=tuple(circuit._resolve_mode(mode) for mode in gate_data["modes"]),
                     kwargs=dict(gate_data["kwargs"]),
                 )
             )
@@ -356,7 +298,7 @@ class Circuit:
         input_states = input_states or {}
 
         lines = {
-            mode: f"{input_states.get(mode, '|0>'):<9} ──[{mode}]──"
+            mode: f"{input_states.get(mode.name, '|0>'):<9} ──[{mode.name}]──"
             for mode in ordered_modes
         }
 
@@ -553,7 +495,6 @@ class MachZehnderInterferometer:
 
         U_BS = ((1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())).expm()
 
-        # psi_cat_single may be a ket or a density matrix.
         if psi_cat_single.isket:
             psi_in = qt.tensor(psi_cat_single, qt.fock(N, 0))
             psi_after_BS1 = U_BS * psi_in
