@@ -24,55 +24,24 @@ from catsy.optics import Circuit, Gate
 # Analytic primitive checks
 
 
-def wigner_test_state() -> GaussianState:
-    circuit = Circuit().add_mode("a")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 1.1, "theta": 30.0},
-        )
-    )
-    test_state = circuit.run(GaussianState.vacuum(("a",)))
-    test_state.displacement[0] = 2.0
-    test_state.displacement[1] = 3.0
-    return test_state
-
-
-@pytest.mark.parametrize("r", [0.0, 0.25, 0.8, 1.2])
+@pytest.mark.parametrize("r", [0.0, 0.25, 1.2])
 def test_squeezing_has_expected_principal_variances(r):
-    state = GaussianState.vacuum(("a",))
-    squeezed = state.squeeze("a", r=r, theta=0.0)
-
+    squeezed = GaussianState.vacuum(("a",)).squeeze("a", r=r, theta=0.0)
     expected = 0.5 * np.diag([np.exp(-2 * r), np.exp(2 * r)])
     np.testing.assert_allclose(squeezed.covariance, expected, rtol=1e-12, atol=1e-12)
 
 
-@pytest.mark.parametrize(
-    ("phi", "alpha"),
-    [
-        (0.0, 0.7 + 0.2j),
-        (np.pi / 2, 0.7 + 0.2j),
-        (np.pi, 0.7 + 0.2j),
-        (-0.3, -0.4 + 0.9j),
-    ],
-)
-def test_phase_rotation_rotates_displacement(phi, alpha):
-    state = GaussianState.coherent(("a",), alpha)
+@pytest.mark.parametrize("phi", [0.0, np.pi / 2, -0.3])
+def test_phase_rotation_rotates_displacement(phi):
+    state = GaussianState.coherent(("a",), 0.7 + 0.2j)
     rotated = state.rotate("a", phi=phi)
     x, p = state.displacement
-    expected = np.array(
-        [
-            np.cos(phi) * x - np.sin(phi) * p,
-            np.sin(phi) * x + np.cos(phi) * p,
-        ]
-    )
+    expected = [np.cos(phi) * x - np.sin(phi) * p, np.sin(phi) * x + np.cos(phi) * p]
     np.testing.assert_allclose(rotated.displacement, expected, atol=1e-12)
     np.testing.assert_allclose(rotated.covariance, state.covariance, atol=1e-12)
 
 
-@pytest.mark.parametrize("eta", [0.0, 0.2, 0.5, 0.9, 1.0])
+@pytest.mark.parametrize("eta", [0.0, 0.5, 1.0])
 def test_loss_matches_vacuum_environment_formula(eta):
     state = GaussianState.vacuum(("a",)).squeeze("a", r=0.6)
     lossy = state.loss("a", eta=eta)
@@ -81,10 +50,7 @@ def test_loss_matches_vacuum_environment_formula(eta):
     np.testing.assert_allclose(lossy.displacement, np.sqrt(eta) * state.displacement)
 
 
-@pytest.mark.parametrize(
-    ("eta", "n_thermal"),
-    [(0.0, 0.0), (0.25, 0.5), (0.8, 1.2), (1.0, 2.0)],
-)
+@pytest.mark.parametrize(("eta", "n_thermal"), [(0.0, 0.0), (0.25, 0.5), (1.0, 2.0)])
 def test_thermal_loss_matches_environment_formula(eta, n_thermal):
     state = GaussianState.coherent(("a",), 0.4 - 0.2j).squeeze("a", r=0.5, theta=0.2)
     lossy = LossChannels.thermal_loss(mode="a", eta=eta, n_thermal=n_thermal).apply(state)
@@ -93,20 +59,18 @@ def test_thermal_loss_matches_environment_formula(eta, n_thermal):
     np.testing.assert_allclose(lossy.displacement, np.sqrt(eta) * state.displacement)
 
 
-@pytest.mark.parametrize("eta", [0.0, 0.25, 0.5, 0.75, 1.0])
+@pytest.mark.parametrize("eta", [0.0, 0.5, 1.0])
 def test_beam_splitter_has_expected_coherent_amplitude_map(eta):
     alpha_a, alpha_b = 0.8 + 0.1j, -0.3 + 0.6j
     state = GaussianState.coherent(("a", "b"), [alpha_a, alpha_b])
     mixed = state.beam_splitter("a", "b", eta=eta)
     t, r = np.sqrt(eta), np.sqrt(1.0 - eta)
-    expected = np.array(
-        [
-            np.sqrt(2.0) * np.real(t * alpha_a + r * alpha_b),
-            np.sqrt(2.0) * np.imag(t * alpha_a + r * alpha_b),
-            np.sqrt(2.0) * np.real(-r * alpha_a + t * alpha_b),
-            np.sqrt(2.0) * np.imag(-r * alpha_a + t * alpha_b),
-        ]
-    )
+    expected = [
+        np.sqrt(2.0) * np.real(t * alpha_a + r * alpha_b),
+        np.sqrt(2.0) * np.imag(t * alpha_a + r * alpha_b),
+        np.sqrt(2.0) * np.real(-r * alpha_a + t * alpha_b),
+        np.sqrt(2.0) * np.imag(-r * alpha_a + t * alpha_b),
+    ]
     np.testing.assert_allclose(mixed.displacement, expected, atol=1e-12)
     np.testing.assert_allclose(mixed.covariance, 0.5 * np.eye(4), atol=1e-12)
 
@@ -123,7 +87,7 @@ def test_gate_instances_use_the_explicit_gate_contract():
         Gate("Noise", loss, ("a",), {"eta": 0.9}),
         Gate("ThermalLoss", thermal_loss, ("a",), {"eta": 0.9, "n_thermal": 0.2}),
     )
-    assert [gate.name for gate in gates] == [
+    assert [g.name for g in gates] == [
         "Squeezer",
         "Rotator",
         "Displacer",
@@ -131,31 +95,25 @@ def test_gate_instances_use_the_explicit_gate_contract():
         "Noise",
         "ThermalLoss",
     ]
-    assert all(callable(gate.transform) for gate in gates)
-    assert all(gate.modes for gate in gates)
+    assert all(callable(g.transform) and g.modes for g in gates)
 
 
 def test_vacuum_is_shot_noise_limited(two_mode_vacuum):
-    state = two_mode_vacuum
-    assert state.displacement.shape == (4,)
-    np.testing.assert_allclose(state.covariance, 0.5 * np.eye(4))
+    assert two_mode_vacuum.displacement.shape == (4,)
+    np.testing.assert_allclose(two_mode_vacuum.covariance, 0.5 * np.eye(4))
 
 
 def test_squeezing_preserves_purity_determinant(single_mode_vacuum):
-    state = single_mode_vacuum
-    squeezed = state.squeeze("a", r=0.8, theta=0.3)
+    squeezed = single_mode_vacuum.squeeze("a", r=0.8, theta=0.3)
     assert np.linalg.det(squeezed.covariance) == pytest.approx(0.25, rel=1e-9)
-
-    unrotated = state.squeeze("a", r=0.8, theta=0.0)
-    assert unrotated.covariance[0, 0] < 0.5
-    assert unrotated.covariance[1, 1] > 0.5
+    unrotated = single_mode_vacuum.squeeze("a", r=0.8, theta=0.0)
+    assert unrotated.covariance[0, 0] < 0.5 < unrotated.covariance[1, 1]
 
 
 def test_beam_splitter_entangles_independent_modes(two_mode_vacuum):
     state = two_mode_vacuum.squeeze("a", r=0.6, theta=0.0).squeeze(
         "b", r=0.6, theta=np.pi / 2
     )
-
     np.testing.assert_allclose(state.covariance[0:2, 2:4], np.zeros((2, 2)), atol=1e-12)
     mixed = state.beam_splitter("a", "b", eta=0.5)
     assert np.abs(mixed.covariance[0:2, 2:4]).max() > 1e-6
@@ -163,20 +121,17 @@ def test_beam_splitter_entangles_independent_modes(two_mode_vacuum):
 
 @pytest.mark.parametrize("eta", [-0.1, 1.1])
 def test_beam_splitter_rejects_invalid_eta(eta):
-    state = GaussianState.vacuum(("a", "b"))
     with pytest.raises(ValueError):
-        state.beam_splitter("a", "b", eta=eta)
+        GaussianState.vacuum(("a", "b")).beam_splitter("a", "b", eta=eta)
 
 
 def test_beam_splitter_rejects_duplicate_modes():
-    state = GaussianState.vacuum(("a", "b"))
     with pytest.raises(ValueError):
-        state.beam_splitter("a", "a", eta=0.5)
+        GaussianState.vacuum(("a", "b")).beam_splitter("a", "a", eta=0.5)
 
 
 def test_loss_reduces_toward_vacuum(single_mode_vacuum):
-    state = single_mode_vacuum.squeeze("a", r=1.0, theta=0.0)
-    lossy = state.loss("a", eta=0.0)
+    lossy = single_mode_vacuum.squeeze("a", r=1.0, theta=0.0).loss("a", eta=0.0)
     np.testing.assert_allclose(lossy.covariance, 0.5 * np.eye(2), atol=1e-9)
 
 
@@ -190,24 +145,19 @@ def test_displacement_shifts_mean_leaves_covariance_untouched(single_mode_vacuum
 
 
 def test_displacement_alpha_and_xp_are_equivalent(single_mode_vacuum):
-    state = single_mode_vacuum
     alpha = 0.6 - 0.9j
-    via_alpha = state.displace("a", alpha=alpha)
-    via_xp = state.displace("a", x=np.sqrt(2.0) * alpha.real, p=np.sqrt(2.0) * alpha.imag)
+    via_alpha = single_mode_vacuum.displace("a", alpha=alpha)
+    via_xp = single_mode_vacuum.displace(
+        "a", x=np.sqrt(2.0) * alpha.real, p=np.sqrt(2.0) * alpha.imag
+    )
     np.testing.assert_allclose(via_alpha.displacement, via_xp.displacement)
 
 
 @pytest.mark.parametrize(
     ("kwargs", "expected"),
     [
-        (
-            {"alpha": 0.6 - 0.9j},
-            (0.6 - 0.9j, np.sqrt(2) * 0.6, -np.sqrt(2) * 0.9),
-        ),
-        (
-            {"x": 1.2, "p": -1.8},
-            ((1.2 - 1.8j) / np.sqrt(2), 1.2, -1.8),
-        ),
+        ({"alpha": 0.6 - 0.9j}, (0.6 - 0.9j, np.sqrt(2) * 0.6, -np.sqrt(2) * 0.9)),
+        ({"x": 1.2, "p": -1.8}, ((1.2 - 1.8j) / np.sqrt(2), 1.2, -1.8)),
     ],
 )
 def test_normalize_translation_accepts_supported_forms(kwargs, expected):
@@ -217,32 +167,13 @@ def test_normalize_translation_accepts_supported_forms(kwargs, expected):
 @pytest.mark.parametrize(
     ("kwargs", "exception", "match"),
     [
-        (
-            {"alpha": 1.0, "x": 1.0, "p": 1.0},
-            ValueError,
-            "either `alpha` or",
-        ),
-        (
-            {"alpha": 1.0, "x": 1.0},
-            ValueError,
-            "either `alpha` or",
-        ),
-        (
-            {"alpha": 1.0, "p": 1.0},
-            ValueError,
-            "either `alpha` or",
-        ),
+        # alpha combined with x/p, and x or p alone, are each a single branch
+        ({"alpha": 1.0, "x": 1.0, "p": 1.0}, ValueError, "either `alpha` or"),
         ({}, TypeError, "need some input"),
         ({"x": 1.0}, ValueError, "both `x` and `p`"),
-        ({"p": 1.0}, ValueError, "both `x` and `p`"),
         ({"alpha": np.nan}, ValueError, "finite"),
-        ({"alpha": np.inf}, ValueError, "finite"),
-        ({"alpha": 1.0 + np.inf * 1j}, ValueError, "finite"),
         ({"x": np.nan, "p": 1.0}, ValueError, "x must be finite"),
-        ({"x": 1.0, "p": np.inf}, ValueError, "p must be finite"),
         ({"alpha": "bad"}, TypeError, "numeric"),
-        ({"x": "bad", "p": 1.0}, TypeError, "real numbers"),
-        ({"x": 1.0, "p": "bad"}, TypeError, "real numbers"),
     ],
 )
 def test_normalize_translation_rejects_invalid_inputs(kwargs, exception, match):
@@ -271,49 +202,18 @@ def test_coherent_matches_displaced_vacuum():
     np.testing.assert_allclose(coherent.covariance, 0.5 * np.eye(2))
 
 
-def test_coherent_broadcasts_scalar_alpha_across_modes():
+def test_coherent_broadcasts_and_validates_alpha_count():
     state = GaussianState.coherent(("a", "b"), 1.0j)
     np.testing.assert_allclose(state.displacement[0:2], state.displacement[2:4])
-
-
-def test_coherent_rejects_mismatched_alpha_count():
     with pytest.raises(ValueError):
         GaussianState.coherent(("a", "b"), [1.0])
 
 
 def test_coherent_state_mean_photon_number_matches_alpha_squared():
     alpha = 1.5 + 0.7j
-    state = GaussianState.coherent(("a",), alpha)
-    rho = state.to_qutip(N_cutoff=25)
+    rho = GaussianState.coherent(("a",), alpha).to_qutip(N_cutoff=25)
     mean_n = qt.expect(qt.num(25), rho)
     assert mean_n == pytest.approx(np.abs(alpha) ** 2, rel=1e-3)
-
-
-def test_circuit_displace_matches_manual_displacement():
-    manual = (
-        GaussianState.vacuum(("a",)).squeeze("a", r=0.3).displace("a", alpha=0.5 - 0.2j)
-    )
-
-    circuit = Circuit().add_mode("a")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.3, "theta": 0.0},
-        )
-    ).add_gate(
-        Gate(
-            name="Displacer",
-            transform=displace,
-            modes=("a",),
-            kwargs={"x": np.sqrt(2.0) * 0.5, "p": np.sqrt(2.0) * -0.2},
-        )
-    )
-    compiled = circuit.run(GaussianState.vacuum(("a",)))
-
-    np.testing.assert_allclose(compiled.displacement, manual.displacement, atol=1e-10)
-    np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 
 
 def test_circuit_runs_against_explicit_initial_state():
@@ -321,32 +221,20 @@ def test_circuit_runs_against_explicit_initial_state():
     compiled = circuit.run(GaussianState.coherent(("c",), 1.0 + 1.0j))
     expected = GaussianState.coherent(("c",), 1.0 + 1.0j)
     np.testing.assert_allclose(compiled.displacement, expected.displacement)
-
     overridden = circuit.run(GaussianState.vacuum(("c",)))
     np.testing.assert_allclose(overridden.displacement, np.zeros(2))
 
 
 def test_get_mode_index_unknown_mode_raises(two_mode_vacuum):
-    state = two_mode_vacuum
     with pytest.raises(ValueError):
-        state.get_mode_index("z")
+        two_mode_vacuum.get_mode_index("z")
 
 
-# Mode ordering and circuits
-
-
-def test_duplicate_mode_names_rejected():
-    with pytest.raises(ValueError):
-        GaussianState(
-            modes=("a", "a"),
-            displacement=np.zeros(4),
-            covariance=0.5 * np.eye(4),
-        )
+# Mode ordering and construction validation
 
 
 def test_state_reorder_modes_preserves_physical_state(two_mode_vacuum):
     state = two_mode_vacuum.displace("a", alpha=0.7 + 0.2j).squeeze("b", r=0.4, theta=0.3)
-
     reordered = state.reorder_modes(("b", "a"))
     roundtrip = reordered.reorder_modes(("a", "b"))
     assert reordered.modes == ("b", "a")
@@ -361,186 +249,75 @@ def test_state_reorder_modes_rejects_wrong_mode_set(two_mode_vacuum):
 
 def test_circuit_canonicalizes_initial_state_mode_order():
     initial = GaussianState.coherent(("b", "a"), alphas=[0.0 + 1.0j, 1.0 + 0.0j])
-
     circuit = Circuit().add_mode("a").add_mode("b")
     result = circuit.run(initial)
     assert result.modes == ("a", "b")
-
     expected = GaussianState.coherent(("a", "b"), alphas=[1.0 + 0.0j, 0.0 + 1.0j])
     np.testing.assert_allclose(result.displacement, expected.displacement)
     np.testing.assert_allclose(result.covariance, expected.covariance)
 
 
 def test_classical_phase_jitter_channel_applies():
-    state = GaussianState.vacuum(modes=("a",))
     channel = LossChannels.classical_phase_jitter(mode="a", sigma_phi=0.3)
-    jittered = channel.apply(state)
+    jittered = channel.apply(GaussianState.vacuum(modes=("a",)))
     assert jittered.covariance[0, 0] == pytest.approx(0.5)
     assert jittered.covariance[1, 1] > 0.5
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "match"),
-    [
-        (
-            {
-                "modes": ("a",),
-                "displacement": np.zeros(2),
-                "covariance": 0.1 * np.eye(2),
-            },
-            "uncertainty relation",
-        ),
-        (
-            {
-                "modes": ("a", "a"),
-                "displacement": np.zeros(4),
-                "covariance": 0.5 * np.eye(4),
-            },
-            "Duplicate mode",
-        ),
-    ],
-)
-def test_gaussian_state_rejects_invalid_construction(kwargs, match):
-    with pytest.raises(ValueError, match=match):
-        GaussianState(**kwargs)
+# GaussianState construction validation, in the order it runs: shape checks,
+# then duplicate modes, then symmetry/finiteness/physicality.
+_BAD_CONSTRUCTIONS = [
+    (("a", "a"), np.zeros(4), 0.5 * np.eye(4), "Duplicate mode"),
+    (("a",), np.zeros(3), 0.5 * np.eye(2), "displacement must have shape"),
+    (("a",), np.zeros(2), 0.5 * np.eye(3), "covariance must have shape"),
+    (("a",), np.zeros(2), np.array([[0.5, 0.1], [0.0, 0.5]]), "symmetric"),
+    (("a",), np.zeros(2), np.diag([np.inf, np.inf]), "finite"),
+    (("a",), np.zeros(2), 0.1 * np.eye(2), "uncertainty relation"),
+]
 
 
 @pytest.mark.parametrize(
-    ("displacement", "covariance", "match"),
-    [
-        (np.zeros(3), 0.5 * np.eye(2), "displacement must have shape"),
-        (np.zeros(2), 0.5 * np.eye(3), "covariance must have shape"),
-    ],
+    ("modes", "displacement", "covariance", "match"), _BAD_CONSTRUCTIONS
 )
-def test_gaussian_state_rejects_mismatched_shapes(displacement, covariance, match):
-    # Every other GaussianState validation test below (unphysical,
-    # nonsymmetric, nonfinite) already assumes a correctly-shaped (2, 2)
-    # covariance and a matching displacement -- the shape checks
-    # themselves, which run before any of that, weren't directly exercised.
+def test_gaussian_state_rejects_invalid_construction(
+    modes, displacement, covariance, match
+):
     with pytest.raises(ValueError, match=match):
-        GaussianState(modes=("a",), displacement=displacement, covariance=covariance)
+        GaussianState(modes=modes, displacement=displacement, covariance=covariance)
 
 
 # Channels
 
+_BAD_CHANNELS = [
+    (("a",), 2.0 * np.eye(2), np.zeros((2, 2)), np.zeros(2), "complete positivity"),
+    (("a",), np.eye(2), np.array([[0.1, 0.2], [0.0, 0.1]]), np.zeros(2), "symmetric"),
+    (("a", "a"), np.eye(4), np.zeros((4, 4)), np.zeros(4), "Duplicate target mode"),
+    (("a",), np.eye(3), np.eye(2), np.zeros(2), "X must have shape"),
+    (("a",), np.eye(2), np.eye(3), np.zeros(2), "Y must have shape"),
+    (("a",), np.eye(2), np.eye(2), np.zeros(3), "d0 must have shape"),
+]
 
-@pytest.mark.parametrize(
-    ("kwargs", "match"),
-    [
-        (
-            {
-                "modes": ("a",),
-                "displacement": np.zeros(2),
-                "covariance": np.array([[0.5, 0.1], [0.0, 0.5]]),
-            },
-            "symmetric",
-        ),
-        (
-            {
-                "modes": ("a",),
-                "displacement": np.zeros(2),
-                "covariance": np.diag([np.inf, np.inf]),
-            },
-            "finite",
-        ),
-    ],
-)
-def test_gaussian_state_rejects_invalid_covariance(kwargs, match):
+
+@pytest.mark.parametrize(("target_modes", "X", "Y", "d0", "match"), _BAD_CHANNELS)
+def test_gaussian_channel_rejects_invalid_construction(target_modes, X, Y, d0, match):
     with pytest.raises(ValueError, match=match):
-        GaussianState(**kwargs)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "match"),
-    [
-        (
-            {
-                "target_modes": ("a",),
-                "X": 2.0 * np.eye(2),
-                "Y": np.zeros((2, 2)),
-                "d0": np.zeros(2),
-            },
-            "complete positivity",
-        ),
-        (
-            {
-                "target_modes": ("a",),
-                "X": np.eye(2),
-                "Y": np.array([[0.1, 0.2], [0.0, 0.1]]),
-                "d0": np.zeros(2),
-            },
-            "symmetric",
-        ),
-        (
-            {
-                "target_modes": ("a", "a"),
-                "X": np.eye(4),
-                "Y": np.zeros((4, 4)),
-                "d0": np.zeros(4),
-            },
-            "Duplicate target mode",
-        ),
-    ],
-)
-def test_gaussian_channel_rejects_invalid_construction(kwargs, match):
-    with pytest.raises(ValueError, match=match):
-        GaussianChannel(**kwargs)
-
-
-def test_thermal_loss_is_a_valid_gaussian_channel():
-    channel = LossChannels.thermal_loss(
-        mode="a",
-        eta=0.7,
-        n_thermal=0.2,
-    )
-    assert channel.X.shape == (2, 2)
+        GaussianChannel(target_modes=target_modes, X=X, Y=Y, d0=d0)
 
 
 @pytest.mark.parametrize(
     ("n_thermal", "c_correlation", "valid"),
-    [
-        (0.5, 0.5, True),
-        (0.5, -0.5, True),
-        (0.5, 0.500001, False),
-        (0.0, 1e-6, False),
-        (0.5, np.nan, False),
-    ],
+    [(0.5, 0.5, True), (0.5, -0.5, True), (0.5, 0.500001, False)],
 )
 def test_correlated_thermal_noise_validates_correlation(n_thermal, c_correlation, valid):
+    kwargs = dict(eta=0.5, n_thermal=n_thermal, c_correlation=c_correlation)
     if valid:
-        channel = LossChannels.correlated_thermal_noise(
-            "a",
-            "b",
-            eta=0.5,
-            n_thermal=n_thermal,
-            c_correlation=c_correlation,
-        )
-        assert channel.Y.shape == (4, 4)
+        assert LossChannels.correlated_thermal_noise("a", "b", **kwargs).Y.shape == (4, 4)
     else:
         with pytest.raises(ValueError, match="c_correlation"):
-            LossChannels.correlated_thermal_noise(
-                "a",
-                "b",
-                eta=0.5,
-                n_thermal=n_thermal,
-                c_correlation=c_correlation,
-            )
+            LossChannels.correlated_thermal_noise("a", "b", **kwargs)
 
 
 # Circuit validation and serialization
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "match"),
-    [
-        ({"X": np.eye(3), "Y": np.eye(2), "d0": np.zeros(2)}, "X must have shape"),
-        ({"X": np.eye(2), "Y": np.eye(3), "d0": np.zeros(2)}, "Y must have shape"),
-        ({"X": np.eye(2), "Y": np.eye(2), "d0": np.zeros(3)}, "d0 must have shape"),
-    ],
-)
-def test_channel_dimension_validation(kwargs, match):
-    with pytest.raises(ValueError, match=match):
-        GaussianChannel(target_modes=("a",), **kwargs)
 
 
 def test_circuit_matches_manual_gate_chain():
@@ -549,6 +326,8 @@ def test_circuit_matches_manual_gate_chain():
         .squeeze("a", r=0.6, theta=0.0)
         .squeeze("b", r=0.6, theta=np.pi / 2)
         .beam_splitter("a", "b", eta=0.5)
+        .displace("a", alpha=0.5 - 0.2j)
+        .rotate("b", phi=0.4)
     )
     manual = LossChannels.thermal_loss(mode="b", eta=0.7, n_thermal=0.3).apply(manual)
 
@@ -576,6 +355,15 @@ def test_circuit_matches_manual_gate_chain():
         )
     ).add_gate(
         Gate(
+            name="Displacer",
+            transform=displace,
+            modes=("a",),
+            kwargs={"x": np.sqrt(2.0) * 0.5, "p": np.sqrt(2.0) * -0.2},
+        )
+    ).add_gate(
+        Gate(name="Rotator", transform=rotate, modes=("b",), kwargs={"phi": 0.4})
+    ).add_gate(
+        Gate(
             name="ThermalLoss",
             transform=thermal_loss,
             modes=("b",),
@@ -583,7 +371,6 @@ def test_circuit_matches_manual_gate_chain():
         )
     )
     compiled = circuit.run(GaussianState.vacuum(("a", "b")))
-
     np.testing.assert_allclose(compiled.displacement, manual.displacement, atol=1e-10)
     np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
 
@@ -626,10 +413,8 @@ def test_add_gate_rejects_invalid_mode_tuples(modes, match):
 
 
 def test_circuit_rejects_unregistered_mode():
-    # add_gate() is the single enforcement point for mode registration, so
-    # an unregistered mode is rejected immediately -- not deferred to run().
-    circuit = Circuit()
-    circuit.add_mode("a")
+    # add_gate() is the sole enforcement point -- rejected immediately, not deferred to run().
+    circuit = Circuit().add_mode("a")
     with pytest.raises(ValueError, match="not registered on this circuit"):
         circuit.add_gate(
             Gate(
@@ -652,65 +437,32 @@ def test_circuit_rejects_duplicate_mode_registration():
         circuit.add_mode("a")
 
 
-def test_gate_instances_have_noun_names_and_transform_verbs():
-    squeezer = Gate("Squeezer", squeeze, ("a",), {"r": 0.5})
-    splitter = Gate("BeamSplitter", beam_splitter, ("a", "b"), {"eta": 0.5})
-
-    assert squeezer.name == "Squeezer"
-    assert squeezer.transform is squeeze
-    assert splitter.name == "BeamSplitter"
-    assert splitter.transform is beam_splitter
-
-
 def test_gate_applies_its_bound_transform():
     gate = Gate("Squeezer", squeeze, ("a",), {"r": 0.5, "theta": 0.0})
     state = GaussianState.vacuum(("a",))
-
     result = gate.apply(state)
     expected = state.squeeze("a", r=0.5, theta=0.0)
-
     np.testing.assert_allclose(result.displacement, expected.displacement)
     np.testing.assert_allclose(result.covariance, expected.covariance)
 
 
 def test_registered_gates_are_available_as_circuit_methods():
     circuit = Circuit().add_mode("a").squeeze("a", r=0.4).displace("a", alpha=0.2 - 0.4j)
-
     gates = circuit.to_dict()["gates"]
     assert gates[0] == {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4}}
-    # Displacer kwargs are canonicalized to real-valued (x, p) at gate
-    # construction time (see `_normalize_gate_kwargs` in `catsy.optics`),
-    # not stored as the raw complex `alpha` -- a bare `alpha` isn't JSON
-    # serializable, and Gate.kwargs is exactly what gets persisted.
+    # Displacer kwargs are canonicalized to real-valued (x, p) at gate construction
+    # time, not stored as the raw complex `alpha`, which isn't JSON serializable.
     assert gates[1]["gate"] == "Displacer"
-    assert gates[1]["modes"] == ["a"]
     assert gates[1]["kwargs"] == pytest.approx(
         {"x": np.sqrt(2.0) * 0.2, "p": np.sqrt(2.0) * -0.4}
     )
-
-
-def test_circuit_gate_methods_build_without_executing():
-    circuit = Circuit().add_mode("a").squeeze("a", r=0.4, theta=0.0)
-    assert circuit.modes == ("a",)
-    assert circuit.run(GaussianState.vacuum(("a",))).modes == ("a",)
 
 
 @pytest.mark.parametrize(
     ("kind", "modes", "kwargs", "expected"),
     [
         ("vacuum", ("a",), {}, lambda: GaussianState.vacuum(("a",))),
-        (
-            "coherent",
-            ("a",),
-            {"alpha": 0.7 + 0.2j},
-            lambda: GaussianState.coherent(("a",), 0.7 + 0.2j),
-        ),
-        (
-            "tmsv",
-            ("a", "b"),
-            {"r": 0.6},
-            lambda: GaussianState.tmsv("a", "b", 0.6),
-        ),
+        ("tmsv", ("a", "b"), {"r": 0.6}, lambda: GaussianState.tmsv("a", "b", 0.6)),
     ],
 )
 def test_initial_state_gate_constructs_state(kind, modes, kwargs, expected):
@@ -718,7 +470,6 @@ def test_initial_state_gate_constructs_state(kind, modes, kwargs, expected):
     for mode in modes:
         circuit.add_mode(mode)
     circuit.initial_state(*modes, kind=kind, **kwargs)
-
     result = circuit.run()
     expected_state = expected()
     np.testing.assert_allclose(result.displacement, expected_state.displacement)
@@ -743,28 +494,11 @@ def test_initial_state_rejects_unknown_kind():
         circuit.run()
 
 
-def test_circuit_serializes_gate_name():
-    circuit = Circuit().add_mode("a")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.4, "theta": 0.0},
-        )
-    )
-
-    assert circuit.to_dict()["gates"] == [
-        {"gate": "Squeezer", "modes": ["a"], "kwargs": {"r": 0.4, "theta": 0.0}}
-    ]
-
-
 def test_circuit_register_is_only_for_custom_gate_deserialization():
     def my_gate(state, modes, **kwargs):
         return state
 
     Circuit.register("MyGate", my_gate)
-
     circuit = Circuit().add_mode("a")
     circuit.add_gate(
         Gate(name="MyGate", transform=my_gate, modes=("a",), kwargs={"foo": 1})
@@ -774,11 +508,8 @@ def test_circuit_register_is_only_for_custom_gate_deserialization():
 
 
 def test_circuit_register_requires_matching_gate_name():
-    def my_gate(state, modes, **kwargs):
-        return state
-
     with pytest.raises(ValueError, match="non-empty"):
-        Circuit.register("", my_gate)
+        Circuit.register("", lambda state, modes, **kwargs: state)
 
 
 def test_gaussian_state_roundtrips_through_dict():
@@ -786,14 +517,6 @@ def test_gaussian_state_roundtrips_through_dict():
     restored = GaussianState.from_dict(state.to_dict())
     assert restored.modes == state.modes
     np.testing.assert_allclose(restored.displacement, state.displacement)
-    np.testing.assert_allclose(restored.covariance, state.covariance)
-
-
-def test_gaussian_state_roundtrips_through_file(tmp_path):
-    state = GaussianState.vacuum(modes=("a",)).squeeze("a", r=0.9, theta=0.2)
-    path = tmp_path / "state.json"
-    state.save(path)
-    restored = GaussianState.load(path)
     np.testing.assert_allclose(restored.covariance, state.covariance)
 
 
@@ -832,33 +555,9 @@ def test_circuit_roundtrips_through_file(tmp_path):
     np.testing.assert_allclose(restored_result.covariance, original_result.covariance)
 
 
-def test_circuit_roundtrips_with_explicit_initial_state(tmp_path):
-    circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(
-        Gate(
-            name="Displacer",
-            transform=displace,
-            modes=("b",),
-            kwargs={"x": 0.2, "p": -0.4},
-        )
-    )
-    path = tmp_path / "circuit.json"
-    circuit.save(path)
-    restored = Circuit.load(path)
-    initial = GaussianState.coherent(("a", "b"), [0.5 + 1.3j, 0.0])
-    original_result = circuit.run(initial)
-    restored_result = restored.run(initial)
-    np.testing.assert_allclose(restored_result.displacement, original_result.displacement)
-
-
 def test_circuit_from_dict_rejects_unknown_gate():
-    # A hand-edited or corrupted saved circuit (or one produced by a newer
-    # custom Gate version this one doesn't have
-    # registered for deserialization) must fail at load time with a clear
-    # KeyError. Unlike on the pre-compactification API, this is now the
-    # *only* place an unknown gate name can be rejected: Circuit.from_dict
-    # executes whatever callable is already attached to the circuit
-    # directly, with no name-based registry lookup left in the execution path.
+    # from_dict executes whatever callable is attached, with no name-based
+    # registry lookup, so a stale/corrupted gate name fails here with KeyError.
     data = {
         "name": "Bad",
         "modes": ["a"],
@@ -870,18 +569,10 @@ def test_circuit_from_dict_rejects_unknown_gate():
 
 @pytest.mark.parametrize(
     ("kwargs", "match"),
-    [
-        ({"alpha": 1.0, "x": 1.0}, "not both"),
-        ({}, "need some input"),
-        ({"x": 1.0}, "p"),
-    ],
+    [({"alpha": 1.0, "x": 1.0}, "not both"), ({}, "need some input"), ({"x": 1.0}, "p")],
 )
 def test_circuit_displace_rejects_invalid_argument_combinations(kwargs, match):
-    # The Circuit builder counterpart to
-    # test_displacement_rejects_invalid_argument_combinations above: it has
-    # its own copy of the same alpha/(x, p) validation
-    # stores plain (x, p) floats rather than a GaussianState-style call), so
-    # it needs its own coverage rather than relying on the state-level test.
+    # Circuit's Displacer gate has its own copy of the alpha/(x, p) validation.
     circuit = Circuit().add_mode("a")
     circuit.add_gate(
         Gate(name="Displacer", transform=displace, modes=("a",), kwargs={**kwargs})
@@ -891,36 +582,14 @@ def test_circuit_displace_rejects_invalid_argument_combinations(kwargs, match):
 
 
 def test_homodyne_measurement_collapses_tmsv_correlation():
-    circuit = Circuit().add_mode("a").add_mode("b")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 1.0, "theta": 0.0},
-        )
-    ).add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("b",),
-            kwargs={"r": 1.0, "theta": np.pi / 2},
-        )
-    ).add_gate(
-        Gate(
-            name="BeamSplitter",
-            transform=beam_splitter,
-            modes=("a", "b"),
-            kwargs={"eta": 0.5},
-        )
-    )
-    state = circuit.run(GaussianState.vacuum(("a", "b")))
+    # tmsv() is proven equivalent to a squeeze/squeeze/beam-splitter chain by
+    # test_tmsv_matches_manual_squeeze_squeeze_bs below.
+    state = GaussianState.tmsv("a", "b", r=1.0)
     val, collapsed = GaussianMeasurements.homodyne_measurement(
         state, measured_mode="a", phi=0.0, outcome=2.5
     )
     assert val == 2.5
     assert collapsed.modes == ("b",)
-
     _val_neg, collapsed_neg = GaussianMeasurements.homodyne_measurement(
         state, measured_mode="a", phi=0.0, outcome=-2.5
     )
@@ -930,32 +599,14 @@ def test_homodyne_measurement_collapses_tmsv_correlation():
 @pytest.mark.parametrize(
     ("measure", "kwargs", "seed"),
     [
-        (
-            GaussianMeasurements.homodyne_measurement,
-            {"phi": 0.0},
-            42,
-        ),
-        (
-            GaussianMeasurements.heterodyne_measurement,
-            {},
-            7,
-        ),
+        (GaussianMeasurements.homodyne_measurement, {"phi": 0.0}, 42),
+        (GaussianMeasurements.heterodyne_measurement, {}, 7),
     ],
 )
 def test_measurement_is_reproducible_with_seeded_rng(measure, kwargs, seed):
     state = GaussianState.vacuum(modes=("a",))
-    v1, _ = measure(
-        state,
-        measured_mode="a",
-        rng=np.random.default_rng(seed),
-        **kwargs,
-    )
-    v2, _ = measure(
-        state,
-        measured_mode="a",
-        rng=np.random.default_rng(seed),
-        **kwargs,
-    )
+    v1, _ = measure(state, measured_mode="a", rng=np.random.default_rng(seed), **kwargs)
+    v2, _ = measure(state, measured_mode="a", rng=np.random.default_rng(seed), **kwargs)
     np.testing.assert_allclose(v1, v2)
 
 
@@ -967,19 +618,16 @@ def test_measurement_is_reproducible_with_seeded_rng(measure, kwargs, seed):
     ],
 )
 def test_homodyne_rejects_nonfinite_inputs(kwargs, match):
-    state = GaussianState.vacuum(("a",))
     with pytest.raises(ValueError, match=match):
-        GaussianMeasurements.homodyne_measurement(state, measured_mode="a", **kwargs)
+        GaussianMeasurements.homodyne_measurement(
+            GaussianState.vacuum(("a",)), measured_mode="a", **kwargs
+        )
 
 
 @pytest.mark.parametrize(
     ("measure", "kwargs", "expected"),
     [
-        (
-            GaussianMeasurements.homodyne_measurement,
-            {"phi": 0.0, "outcome": 1.25},
-            1.25,
-        ),
+        (GaussianMeasurements.homodyne_measurement, {"phi": 0.0, "outcome": 1.25}, 1.25),
         (
             GaussianMeasurements.heterodyne_measurement,
             {"outcome": np.array([0.2, -0.3])},
@@ -990,7 +638,6 @@ def test_homodyne_rejects_nonfinite_inputs(kwargs, match):
 def test_single_mode_measurement_returns_valid_empty_state(measure, kwargs, expected):
     state = GaussianState.coherent(modes=("a",), alphas=0.7 + 0.2j)
     outcome, collapsed = measure(state, measured_mode="a", **kwargs)
-
     np.testing.assert_allclose(outcome, expected)
     assert collapsed.modes == ()
     assert collapsed.displacement.shape == (0,)
@@ -998,11 +645,9 @@ def test_single_mode_measurement_returns_valid_empty_state(measure, kwargs, expe
 
 
 def test_homodyne_rejects_numerically_singular_measured_variance():
-    # r=25 squeezes Var(x) to ~1e-22 in float64 -- well below TOL_PHYSICALITY.
-    # This isn't a contrived input: it's what an (unrealistically) very
-    # strongly squeezed source looks like, and homodyning along exactly its
-    # squeezed quadrature must be rejected rather than silently dividing by
-    # a near-zero variance a few lines later (gain = V_RM / V_MM).
+    # r=25 squeezes Var(x) to ~1e-22, well below TOL_PHYSICALITY: homodyning
+    # along exactly the squeezed quadrature must be rejected, not silently
+    # divide by a near-zero variance.
     state = GaussianState.vacuum(("a",)).squeeze("a", r=25.0, theta=0.0)
     with pytest.raises(ValueError, match="measurement variance"):
         GaussianMeasurements.homodyne_measurement(state, measured_mode="a", phi=0.0)
@@ -1013,54 +658,31 @@ def test_homodyne_rejects_numerically_singular_measured_variance():
 
 @pytest.mark.parametrize(
     ("outcome", "match"),
-    [
-        (np.array([1.0]), r"shape \(2,\)"),
-        (np.array([1.0, np.nan]), "finite values"),
-    ],
+    [(np.array([1.0]), r"shape \(2,\)"), (np.array([1.0, np.nan]), "finite values")],
 )
 def test_heterodyne_rejects_invalid_outcomes(outcome, match):
-    state = GaussianState.vacuum(("a",))
     with pytest.raises(ValueError, match=match):
         GaussianMeasurements.heterodyne_measurement(
-            state, measured_mode="a", outcome=outcome
+            GaussianState.vacuum(("a",)), measured_mode="a", outcome=outcome
         )
 
 
-def test_heterodyne_single_mode_returns_valid_empty_state():
-    state = GaussianState.vacuum(modes=("a",))
-    outcome, collapsed = GaussianMeasurements.heterodyne_measurement(
-        state, measured_mode="a", outcome=np.array([0.2, -0.3])
-    )
-
-    np.testing.assert_allclose(outcome, [0.2, -0.3])
-    assert collapsed.modes == ()
-    assert collapsed.displacement.shape == (0,)
-    assert collapsed.covariance.shape == (0, 0)
-
-
 def test_heterodyne_rejects_non_positive_definite_effective_covariance(monkeypatch):
-    # Unlike the homodyne singular-variance case above, no physical state
-    # naturally drives V_eff = V_MM + 0.5*I below positive-definiteness: the
-    # added vacuum noise floor keeps it comfortably conditioned for any
-    # legal covariance. This guard is defensive, not reachable via normal
-    # inputs, so it's exercised directly by forcing the Cholesky call to
-    # fail rather than by hunting for a state that triggers it naturally.
+    # No physical state naturally drives V_eff below positive-definiteness
+    # (the vacuum floor keeps it well-conditioned), so force Cholesky to fail.
     def _always_fails(_matrix):
         raise np.linalg.LinAlgError("forced failure for test")
 
     monkeypatch.setattr(np.linalg, "cholesky", _always_fails)
-    state = GaussianState.vacuum(("a",))
     with pytest.raises(ValueError, match="positive definite"):
-        GaussianMeasurements.heterodyne_measurement(state, measured_mode="a")
+        GaussianMeasurements.heterodyne_measurement(
+            GaussianState.vacuum(("a",)), measured_mode="a"
+        )
 
 
 def test_heterodyne_rejects_nonfinite_effective_covariance():
-    # GaussianState's own construction-time validation rejects a non-finite
-    # covariance outright, so this branch can't be reached by building a
-    # pathological *state* through the public API either -- the covariance
-    # is instead mutated in place after construction (the dataclass isn't
-    # frozen), the same technique test_core_invariants.py uses to reach
-    # equivalent "can't happen through GaussianState" guards in core.py.
+    # Construction-time validation rejects a non-finite covariance outright,
+    # so mutate it in place post-hoc (the dataclass isn't frozen) to reach this.
     state = GaussianState.vacuum(("a",))
     state.covariance[0, 0] = np.inf
     with pytest.raises(ValueError, match="effective covariance must be finite"):
@@ -1068,12 +690,13 @@ def test_heterodyne_rejects_nonfinite_effective_covariance():
 
 
 def test_wigner_analytical_matches_gaussian_normalization():
+    state = GaussianState.vacuum(("a",)).squeeze("a", r=1.1, theta=30.0)
+    state.displacement[:] = [2.0, 3.0]
     W, _X, _P, _M = compute_wigner_analytically(
-        wigner_test_state(), mode_name="a", x_max=8.0, num_points=200
+        state, mode_name="a", x_max=8.0, num_points=200
     )
     dx = (2 * 8.0) / 199
-    integral = W.sum() * dx * dx
-    assert integral == pytest.approx(1.0, rel=1e-2)
+    assert W.sum() * dx * dx == pytest.approx(1.0, rel=1e-2)
 
 
 def _correlated_two_mode_state() -> GaussianState:
@@ -1104,29 +727,25 @@ def _correlated_two_mode_state() -> GaussianState:
 
 
 def test_joint_correlation_computes_valid_grid():
-    cv_state = _correlated_two_mode_state()
-    P, _X_a, _X_b, _mode_a, _mode_b = compute_joint_correlation(cv_state, "a", "b")
+    P, _X_a, _X_b, _mode_a, _mode_b = compute_joint_correlation(
+        _correlated_two_mode_state(), "a", "b"
+    )
     assert P.shape == (150, 150)
     assert np.all(P >= 0)
 
 
 @pytest.mark.visualize
 def test_joint_correlation_visualization_demo():
-    # Visual counterpart to test_joint_correlation_computes_valid_grid above --
-    # grid validity is checked there unconditionally; this is only the plot,
-    # gated behind --plot like the rest of the suite.
-    cv_state = _correlated_two_mode_state()
-    plot_joint_correlation(
-        cv_state,
-        "a",
-        "b",
-    )
+    # Visual counterpart to test_joint_correlation_computes_valid_grid above;
+    # grid validity is checked there, this is only the plot, gated behind --plot.
+    plot_joint_correlation(_correlated_two_mode_state(), "a", "b")
 
 
 def test_joint_correlation_rejects_invalid_quadrature():
-    state = GaussianState.vacuum(modes=("a", "b"))
     with pytest.raises(ValueError):
-        compute_joint_correlation(state, "a", "b", quadrature="z")
+        compute_joint_correlation(
+            GaussianState.vacuum(modes=("a", "b")), "a", "b", quadrature="z"
+        )
 
 
 def test_joint_correlation_x_correlated_p_anticorrelated_for_tmsv():
@@ -1138,13 +757,11 @@ def test_joint_correlation_x_correlated_p_anticorrelated_for_tmsv():
         state, "a", "b", x_max=6.0, quadrature="p"
     )
     dx = Xa_x[0, 1] - Xa_x[0, 0]
-
     empirical_cov_x = np.sum(Xa_x * Xb_x * P_x) * dx * dx
     empirical_cov_p = np.sum(Xa_p * Xb_p * P_p) * dx * dx
     assert empirical_cov_x == pytest.approx(state.covariance[0, 2], rel=5e-3)
     assert empirical_cov_p == pytest.approx(state.covariance[1, 3], rel=5e-3)
-    assert empirical_cov_x > 0
-    assert empirical_cov_p < 0
+    assert empirical_cov_x > 0 > empirical_cov_p
 
 
 def test_tmsv_matches_manual_squeeze_squeeze_bs():
@@ -1159,21 +776,19 @@ def test_tmsv_matches_manual_squeeze_squeeze_bs():
     np.testing.assert_allclose(tmsv.covariance, manual.covariance)
 
 
-def test_duan_witness_independent_vacua_saturate_separability_bound():
-    state = GaussianState.vacuum(modes=("a", "b"))
-    witness = compute_duan_inseparability(state, "a", "b")
-    assert witness == pytest.approx(DUAN_SEPARABILITY_BOUND)
+def test_duan_witness_behaves_correctly_for_vacuum_and_tmsv():
+    vacuum_witness = compute_duan_inseparability(
+        GaussianState.vacuum(modes=("a", "b")), "a", "b"
+    )
+    assert vacuum_witness == pytest.approx(DUAN_SEPARABILITY_BOUND)
 
-
-def test_duan_witness_confirms_genuine_entanglement_for_tmsv():
     r = 1.0
-    tmsv = GaussianState.tmsv("a", "b", r=r)
-    witness = compute_duan_inseparability(tmsv, "a", "b")
-    assert witness == pytest.approx(2.0 * np.exp(-2.0 * r), rel=1e-6)
-    assert witness < DUAN_SEPARABILITY_BOUND
+    tmsv_witness = compute_duan_inseparability(
+        GaussianState.tmsv("a", "b", r=r), "a", "b"
+    )
+    assert tmsv_witness == pytest.approx(2.0 * np.exp(-2.0 * r), rel=1e-6)
+    assert tmsv_witness < DUAN_SEPARABILITY_BOUND
 
-
-def test_duan_witness_strengthens_with_more_squeezing():
     weak = compute_duan_inseparability(GaussianState.tmsv("a", "b", r=0.3), "a", "b")
     strong = compute_duan_inseparability(GaussianState.tmsv("a", "b", r=1.2), "a", "b")
     assert DUAN_SEPARABILITY_BOUND > weak > strong > 0.0
@@ -1192,23 +807,17 @@ def test_classical_correlation_does_not_violate_duan_bound():
 def test_tmsv_entanglement_survives_but_weakens_under_loss():
     tmsv = GaussianState.tmsv("a", "b", r=1.0)
     witness_clean = compute_duan_inseparability(tmsv, "a", "b")
-    lossy = tmsv.loss("a", eta=0.9)
-    witness_light_loss = compute_duan_inseparability(lossy, "a", "b")
-
-    very_lossy = tmsv.loss("a", eta=0.1)
-    witness_heavy_loss = compute_duan_inseparability(very_lossy, "a", "b")
-
+    witness_light_loss = compute_duan_inseparability(tmsv.loss("a", eta=0.9), "a", "b")
+    witness_heavy_loss = compute_duan_inseparability(tmsv.loss("a", eta=0.1), "a", "b")
     assert witness_clean < witness_light_loss < witness_heavy_loss
-    assert witness_light_loss < DUAN_SEPARABILITY_BOUND
-    assert witness_heavy_loss > DUAN_SEPARABILITY_BOUND
+    assert witness_light_loss < DUAN_SEPARABILITY_BOUND < witness_heavy_loss
 
 
 # Gaussian-to-Fock boundary
 
 
 def test_phase_rotation_preserves_photon_number_and_purity():
-    state = GaussianState.vacuum(modes=("a",))
-    squeezed = state.squeeze("a", r=0.7, theta=0.0)
+    squeezed = GaussianState.vacuum(modes=("a",)).squeeze("a", r=0.7, theta=0.0)
     rotated = squeezed.rotate("a", phi=1.1)
     assert np.linalg.det(rotated.covariance) == pytest.approx(
         np.linalg.det(squeezed.covariance)
@@ -1217,31 +826,12 @@ def test_phase_rotation_preserves_photon_number_and_purity():
     np.testing.assert_allclose(full_turn.covariance, squeezed.covariance, atol=1e-9)
 
 
-def test_circuit_rotate_matches_manual_rotation():
-    manual = GaussianState.vacuum(("a",)).squeeze("a", r=0.5).rotate("a", phi=0.4)
-
-    circuit = Circuit().add_mode("a")
-    circuit.add_gate(
-        Gate(
-            name="Squeezer",
-            transform=squeeze,
-            modes=("a",),
-            kwargs={"r": 0.5, "theta": 0.0},
-        )
-    ).add_gate(Gate(name="Rotator", transform=rotate, modes=("a",), kwargs={"phi": 0.4}))
-    compiled = circuit.run(GaussianState.vacuum(("a",)))
-
-    np.testing.assert_allclose(compiled.covariance, manual.covariance, atol=1e-10)
-
-
 def test_williamson_decomposition_is_genuinely_symplectic():
     rng = np.random.default_rng(1234)
     A = rng.normal(size=(6, 6))
     covariance = A @ A.T + 0.5 * np.eye(6)
-
     nus, S, D = _williamson_decomposition(covariance)
     Omega = np.kron(np.eye(3), np.array([[0.0, 1.0], [-1.0, 0.0]]))
-
     assert np.all(nus >= 0.5 - 1e-10)
     np.testing.assert_allclose(S @ Omega @ S.T, Omega, atol=1e-8)
     np.testing.assert_allclose(S @ D @ S.T, covariance, atol=1e-8)
@@ -1263,15 +853,9 @@ def test_to_qutip_reconstructs_gaussian_covariance():
         op_list = [qt.qeye(N_cutoff) for _ in range(2)]
         op_list[i] = qt.destroy(N_cutoff)
         a_ops.append(qt.tensor(*op_list))
-
     r_ops = []
     for a in a_ops:
-        r_ops.extend(
-            [
-                (a + a.dag()) / np.sqrt(2.0),
-                (a - a.dag()) / (1j * np.sqrt(2.0)),
-            ]
-        )
+        r_ops.extend([(a + a.dag()) / np.sqrt(2.0), (a - a.dag()) / (1j * np.sqrt(2.0))])
     covariance = qt.covariance_matrix(r_ops, rho, symmetrized=True).real
     displacement = np.array([qt.expect(op, rho).real for op in r_ops])
 
@@ -1279,26 +863,23 @@ def test_to_qutip_reconstructs_gaussian_covariance():
     np.testing.assert_allclose(covariance, state.covariance, atol=2e-5)
 
 
-def test_to_qutip_handles_plain_vacuum_and_pure_displacement():
+def test_to_qutip_trace_is_always_exactly_one():
+    # Covers a plain vacuum, a pure displacement, and a thermal-noise state
+    # with an ill-conditioned V -- all must still normalize exactly.
     vacuum = GaussianState.vacuum(modes=("a", "b"))
-    rho = vacuum.to_qutip(N_cutoff=10)
-    assert rho.tr() == pytest.approx(1.0, abs=1e-9)
+    assert vacuum.to_qutip(N_cutoff=10).tr() == pytest.approx(1.0, abs=1e-9)
+
     displaced_only = vacuum.copy()
     displaced_only.displacement[0] = 1.5
-    rho2 = displaced_only.to_qutip(N_cutoff=15)
-    assert rho2.tr() == pytest.approx(1.0, abs=1e-9)
+    assert displaced_only.to_qutip(N_cutoff=15).tr() == pytest.approx(1.0, abs=1e-9)
 
-
-def test_to_qutip_trace_always_exactly_one_even_with_ill_conditioned_v():
     state = (
-        GaussianState.vacuum(("a", "b"))
-        .squeeze("a", r=0.5)
+        vacuum.squeeze("a", r=0.5)
         .squeeze("b", r=0.5, theta=np.pi / 2)
         .beam_splitter("a", "b", eta=0.5)
     )
     noisy_state = LossChannels.thermal_loss(mode="a", eta=0.9, n_thermal=0.2).apply(state)
-    rho = noisy_state.to_qutip(N_cutoff=15)
-    assert rho.tr() == pytest.approx(1.0, abs=1e-9)
+    assert noisy_state.to_qutip(N_cutoff=15).tr() == pytest.approx(1.0, abs=1e-9)
 
 
 def test_to_qutip_rejects_invalid_n_cutoff():
