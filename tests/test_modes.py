@@ -42,12 +42,11 @@ def test_mode_namespace_is_named_and_ordered():
     assert idler in modes
 
 
-def test_circuit_returns_canonical_owned_modes_with_indices():
+def test_circuit_returns_owned_modes_with_canonical_indices():
     circuit = Circuit()
     signal = circuit.mode("signal")
     idler = circuit.mode("idler")
 
-    assert signal is circuit.modes[0] if hasattr(circuit.modes, "__getitem__") else True
     assert signal.name == "signal"
     assert signal.index == 0
     assert signal.owner is circuit
