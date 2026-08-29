@@ -346,12 +346,26 @@ def test_kerr_cavity_rejects_invalid_constructor_parameters(kwargs, match):
     ("run_kwargs", "match"),
     [
         ({"tlist": np.array([1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "at least 2"),
-        ({"tlist": np.array([[0.0, 1.0], [2.0, 3.0]]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "1D array"),
-        ({"tlist": np.array([0.0, np.nan, 1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0}, "finite values"),
+        (
+            {
+                "tlist": np.array([[0.0, 1.0], [2.0, 3.0]]),
+                "amp": 1.0,
+                "t0": 0.0,
+                "sigma": 1.0,
+            },
+            "1D array",
+        ),
+        (
+            {"tlist": np.array([0.0, np.nan, 1.0]), "amp": 1.0, "t0": 0.0, "sigma": 1.0},
+            "finite values",
+        ),
         ({"tlist": np.linspace(0, 1, 5), "amp": np.nan, "t0": 0.0, "sigma": 1.0}, "amp"),
         ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": np.inf, "sigma": 1.0}, "t0"),
         ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": -1.0}, "sigma"),
-        ({"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": np.nan}, "sigma"),
+        (
+            {"tlist": np.linspace(0, 1, 5), "amp": 1.0, "t0": 0.0, "sigma": np.nan},
+            "sigma",
+        ),
     ],
 )
 def test_kerr_cavity_run_rejects_invalid_pulse_parameters(run_kwargs, match):
@@ -364,7 +378,10 @@ def test_kerr_cavity_run_rejects_invalid_pulse_parameters(run_kwargs, match):
     ("kwargs", "match"),
     [
         ({"kappa": -0.1, "N_cutoff": 8}, "kappa must be finite and >= 0"),
-        ({"kappa": 0.1, "N_cutoff": 8, "loss_time": -1.0}, "loss_time must be finite and >= 0"),
+        (
+            {"kappa": 0.1, "N_cutoff": 8, "loss_time": -1.0},
+            "loss_time must be finite and >= 0",
+        ),
         ({"kappa": 0.1, "N_cutoff": 0}, "N_cutoff must be a positive integer"),
     ],
 )
@@ -420,7 +437,9 @@ def test_full_cavity_multipanel_plot_demo(assert_no_empty_axes, assert_layout_ca
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 60)
-    results = MachZehnderInterferometer(kappa=0.2, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
+    results = MachZehnderInterferometer(kappa=0.2, N_cutoff=N_cutoff).scan(
+        psi_cat, theta_list
+    )
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     axes[0].plot(theta_list, results["n1"])
@@ -477,8 +496,12 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
 
     theta_list = np.linspace(0, 2 * np.pi, 50)
-    results_clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
-    results_noisy = MachZehnderInterferometer(kappa=0.4, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
+    results_clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(
+        psi_cat, theta_list
+    )
+    results_noisy = MachZehnderInterferometer(kappa=0.4, N_cutoff=N_cutoff).scan(
+        psi_cat, theta_list
+    )
 
     tail = slice(len(theta_list) // 2, None)
     visibility_clean = np.ptp(np.array(results_clean["parity1"])[tail])
@@ -493,8 +516,12 @@ def test_mzi_phase_scan_is_independent_of_loss_when_exposure_time_is_zero():
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.array([-0.7, 0.0, 0.9])
 
-    clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
-    zero_exposure = MachZehnderInterferometer(kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0).scan(psi_cat, theta_list)
+    clean = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(
+        psi_cat, theta_list
+    )
+    zero_exposure = MachZehnderInterferometer(
+        kappa=10.0, N_cutoff=N_cutoff, loss_time=0.0
+    ).scan(psi_cat, theta_list)
 
     for key in ("n1", "n2", "parity1"):
         np.testing.assert_allclose(zero_exposure[key], clean[key], atol=1e-10, rtol=1e-10)
@@ -574,10 +601,12 @@ def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
         purity = (rho_cat * rho_cat).tr().real
         purities.append(purity)
 
-        result = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0).scan(
-            rho_cat, theta_list
+        result = MachZehnderInterferometer(
+            kappa=0.0, N_cutoff=N_cutoff, loss_time=0.0
+        ).scan(rho_cat, theta_list)
+        ax_fringes.plot(
+            theta_list / np.pi, result["parity1"], label=label, color=color, lw=2
         )
-        ax_fringes.plot(theta_list / np.pi, result["parity1"], label=label, color=color, lw=2)
 
     ax_purity.bar(labels, purities, color=["darkgreen", "darkorange", "crimson"])
     ax_purity.set_ylabel("Cavity output purity Tr(ρ²)")
@@ -629,7 +658,9 @@ def test_kerr_cat_state_generation(plot_enabled):
         fig, axes = plt.subplots(2, 2, figsize=(10, 10))
         xvec = np.linspace(-5, 5, 200)
         cont = None
-        for ax, idx, label in zip(axes.flat, snapshot_indices, snapshot_labels, strict=True):
+        for ax, idx, label in zip(
+            axes.flat, snapshot_indices, snapshot_labels, strict=True
+        ):
             W = qt.wigner(states[idx], xvec, xvec)
             cont = ax.contourf(xvec, xvec, W, 100, cmap="RdBu_r", vmin=-0.25, vmax=0.25)
             ax.set_title(label)
@@ -694,18 +725,35 @@ def test_cat_mzi_phase_scan_fringes(assert_no_empty_axes, assert_layout_can_rend
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 200)
 
-    results = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(psi_cat, theta_list)
+    results = MachZehnderInterferometer(kappa=0.0, N_cutoff=N_cutoff).scan(
+        psi_cat, theta_list
+    )
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-    ax1.plot(theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2)
-    ax1.plot(theta_list / np.pi, results["n2"], label="Output port 2", color="crimson", lw=2, ls="--")
+    ax1.plot(
+        theta_list / np.pi, results["n1"], label="Output port 1", color="darkblue", lw=2
+    )
+    ax1.plot(
+        theta_list / np.pi,
+        results["n2"],
+        label="Output port 2",
+        color="crimson",
+        lw=2,
+        ls="--",
+    )
     ax1.set_ylabel(r"Mean photon number $\langle n \rangle$")
     ax1.set_title("Mach-Zehnder interference fringes (intensity)")
     ax1.grid(True, ls="--")
     ax1.legend()
 
-    ax2.plot(theta_list / np.pi, results["parity1"], label="Parity, port 1", color="purple", lw=2.5)
+    ax2.plot(
+        theta_list / np.pi,
+        results["parity1"],
+        label="Parity, port 1",
+        color="purple",
+        lw=2.5,
+    )
     ax2.axhline(0, color="black", lw=0.5, ls="-")
     ax2.set_xlabel(r"Phase shift $\theta$ ($\times \pi$)")
     ax2.set_ylabel("Parity expectation value")

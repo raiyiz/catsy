@@ -169,7 +169,7 @@ circuit.beam_splitter(signal, idler, eta=0.5)
 | ------------------------------------------- | --------------------------------- |
 | Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian/__init__.py#L54) |
 | Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian/__init__.py#L54) |
-| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L127), [`Mode`](src/catsy/optics.py#L72) |
+| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L87), [`Mode`](src/catsy/modes.py#L14) |
 | Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian/__init__.py#L461), [`GaussianChannel`](src/catsy/gaussian/__init__.py#L398) |
 | Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian/__init__.py#L592) |
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian/__init__.py#L54) |

@@ -198,9 +198,7 @@ class Circuit:
             ) from exc
 
     def add_gate(self, gate: Gate) -> Circuit:
-        normalized_modes = tuple(
-            self._resolve_mode(mode) for mode in gate.modes
-        )
+        normalized_modes = tuple(self._resolve_mode(mode) for mode in gate.modes)
         if not normalized_modes:
             raise ValueError("A circuit gate must target at least one mode.")
         if len({mode.name for mode in normalized_modes}) != len(normalized_modes):
@@ -259,7 +257,7 @@ class Circuit:
     def to_dict(self) -> CircuitData:
         return {
             "name": self.name,
-            "modes": [mode.name for mode in self.modes],
+            "modes": tuple(mode for mode in self.modes),
             "gates": [
                 {
                     "gate": gate.name,
@@ -272,7 +270,7 @@ class Circuit:
 
     @classmethod
     def from_dict(cls, data: CircuitData) -> Circuit:
-        circuit = cls(name=data["name"], modes=tuple(data["modes"]))
+        circuit = cls(name=data["name"], modes=ModeNamespace(tuple(data["modes"])))
         for gate_data in data["gates"]:
             name = gate_data["gate"]
             try:

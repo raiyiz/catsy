@@ -7,6 +7,8 @@ from typing import TypedDict
 import numpy as np
 from numpy.typing import NDArray
 
+from catsy.modes import Mode
+
 FloatArray = NDArray[np.float64]
 ModeName = str
 Modes = tuple[ModeName, ...]
@@ -36,5 +38,5 @@ class GateData(TypedDict):
 
 class CircuitData(TypedDict):
     name: str
-    modes: list[str]
+    modes: tuple[Mode, ...]
     gates: list[GateData]
