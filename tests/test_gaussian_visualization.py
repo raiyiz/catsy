@@ -44,21 +44,6 @@ def _evolution() -> tuple[list[GaussianState], np.ndarray]:
     return states, np.linspace(0.0, 4.0, len(states))
 
 
-def _phase_space_trajectory_states() -> list[GaussianState]:
-    amplitudes = (
-        0.2,
-        0.45 + 0.15j,
-        0.75 + 0.35j,
-        1.0 + 0.65j,
-        1.2 + 0.8j,
-        0.95 + 0.95j,
-        0.7 + 1.1j,
-        0.45 + 1.15j,
-        0.3 + 1.1j,
-    )
-    return [GaussianState.coherent(("a",), alpha) for alpha in amplitudes]
-
-
 class TestEvolutionVisualizations:
     """Contract tests for Gaussian dynamics visualizations."""
 
@@ -114,15 +99,19 @@ class TestEvolutionVisualizations:
 
     @pytest.mark.visualize
     def test_timecoded_phase_space_showcase(self, assert_layout_can_render) -> None:
-        states = _phase_space_trajectory_states()
+        states, times = _evolution()
         figure = plot_phase_space_trajectory_timecoded(
             states,
             "a",
-            times=np.linspace(0.0, 3.0, len(states)),
+            times=times,
             ellipse_every=1,
         )
         ax = figure.axes[0]
-        assert "Time-coded phase-space evolution" in ax.get_title()
+        ax.set_title(
+            "Driven, lossy squeezed-state evolution — mode a",
+            pad=16,
+            fontweight="medium",
+        )
         assert len(ax.collections) >= 3
         assert len(ax.patches) == len(states)
         assert figure.axes[1].get_ylabel() == "time"
