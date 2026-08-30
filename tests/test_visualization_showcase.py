@@ -44,6 +44,8 @@ from catsy.gaussian.visualization import (
     plot_wigner,
 )
 
+_TMSV_COUPLING = 0.7  # kappa in H = i*kappa*(a^dagger b^dagger - a b)
+
 
 def _tmsv_hamiltonian_evolution() -> tuple[list[GaussianState], np.ndarray]:
     """Exact two-mode-squeezing evolution from vacuum under H = iκ(a†b† - ab).
@@ -55,8 +57,7 @@ def _tmsv_hamiltonian_evolution() -> tuple[list[GaussianState], np.ndarray]:
     check vs. hand-built narrative gallery).
     """
     times = np.linspace(0.0, 1.5, 17)
-    coupling = 0.7
-    states = [GaussianState.tmsv("a", "b", r=coupling * time) for time in times]
+    states = [GaussianState.tmsv("a", "b", r=_TMSV_COUPLING * time) for time in times]
     return states, times
 
 
@@ -202,7 +203,8 @@ def test_showcase_tmsv_hamiltonian_evolution_gallery(
     correlation_ax.legend(frameon=False, loc="best")
 
     figure.suptitle(
-        r"Two-mode squeezing evolution · $H=i\kappa(a^\dagger b^\dagger-ab)$",
+        rf"Two-mode squeezing evolution · $H=i\kappa(a^\dagger b^\dagger-ab)$, "
+        rf"$\kappa={_TMSV_COUPLING:g}$, $t\in[{times[0]:g}, {times[-1]:g}]$",
         fontsize=16,
         fontweight="medium",
     )
@@ -286,7 +288,8 @@ def test_showcase_cat_state_evolution_gallery(
         label="Wigner function",
     )
     figure.suptitle(
-        "Even cat evolution · Kerr nonlinearity and photon loss",
+        rf"Even cat evolution · Kerr $\chi={kerr_strength:g}$, "
+        rf"loss $\gamma={loss_rate:g}$, $t\in[{times[0]:g}, {times[-1]:g}]$",
         fontsize=16,
         fontweight="medium",
     )
@@ -330,7 +333,12 @@ def test_showcase_heralded_cat_processing_gallery(
     for column, (title, state) in enumerate(states):
         ax = figure.add_subplot(grid[0, column])
         plot_fock_wigner(state, xlim=(-6, 6), resolution=64, ax=ax)
-        ax.set_title(title)
+        # plot_fock_wigner's own title already reports the physically
+        # meaningful bits (mean photon number, parity/g^(2) classification);
+        # keep that and prefix it with which processing stage this is, or an
+        # optics-inclined viewer loses exactly the numbers that show what
+        # subtraction/addition actually did to the state.
+        ax.set_title(f"{title}\n{ax.get_title()}")
 
     figure.suptitle(
         "Heralded non-Gaussian processing · cat → subtraction → addition",
