@@ -17,6 +17,7 @@ make it a better showcase, just a longer file. The current arc, roughly in
 increasing order of "how far from a textbook Gaussian state":
 
     single entangled Gaussian state -> quantum vs. classical correlation
+    -> that entanglement building up in time under its own Hamiltonian
     -> Kerr-driven cat dynamics -> catsy's own heralded non-Gaussian gates
     -> a four-component compass state's full Fock diagnostics
     -> that state's interferometric (Mach-Zehnder) readout
@@ -42,6 +43,21 @@ from catsy.gaussian.visualization import (
     plot_phase_space,
     plot_wigner,
 )
+
+
+def _tmsv_hamiltonian_evolution() -> tuple[list[GaussianState], np.ndarray]:
+    """Exact two-mode-squeezing evolution from vacuum under H = iκ(a†b† - ab).
+
+    Kept in sync with the identically-named fixture in
+    test_gaussian_visualization.py, which uses it for
+    plot_multimode_evolution's own contract test -- this fixture is the
+    physical scenario, the two files just look at it differently (contract
+    check vs. hand-built narrative gallery).
+    """
+    times = np.linspace(0.0, 1.5, 17)
+    coupling = 0.7
+    states = [GaussianState.tmsv("a", "b", r=coupling * time) for time in times]
+    return states, times
 
 
 @pytest.mark.visualize
@@ -108,6 +124,97 @@ def test_showcase_gaussian_entanglement_gallery(
     figure.suptitle("Quantum entanglement versus classical correlation")
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
+
+
+@pytest.mark.visualize
+def test_showcase_tmsv_hamiltonian_evolution_gallery(
+    assert_no_empty_axes, assert_layout_can_render
+):
+    """Watch two-mode squeezing -- and the entanglement from the gallery
+    entry above -- actually build up under its generating Hamiltonian,
+    H = iκ(a†b† - ab), from vacuum.
+    """
+    states, times = _tmsv_hamiltonian_evolution()
+    dt = times[1] - times[0]
+
+    figure = plt.figure(figsize=(11.5, 9.0), constrained_layout=True)
+    grid = figure.add_gridspec(2, 2, height_ratios=(1.1, 0.9), hspace=0.18, wspace=0.16)
+    mode_axes = [figure.add_subplot(grid[0, 0]), figure.add_subplot(grid[0, 1])]
+    correlation_ax = figure.add_subplot(grid[1, :])
+
+    n_sigma = 2.0
+    for mode_index, (ax, mode_name) in enumerate(
+        zip(mode_axes, states[0].modes, strict=True)
+    ):
+        idx = 2 * mode_index
+        variances = np.array(
+            [state.covariance[idx : idx + 2, idx : idx + 2] for state in states]
+        )
+        radii = n_sigma * np.sqrt(np.maximum(variances[:, 0, 0], 0.0))
+        for frame, radius in enumerate(radii):
+            circle = plt.Circle(
+                (0.0, 0.0),
+                float(radius),
+                fill=False,
+                linewidth=2.0 if frame in (0, len(states) - 1) else 0.9,
+                alpha=0.65 if frame in (0, len(states) - 1) else 0.1,
+                edgecolor=(
+                    "tab:blue"
+                    if frame == 0
+                    else "tab:red"
+                    if frame == len(states) - 1
+                    else "black"
+                ),
+                zorder=3 if frame in (0, len(states) - 1) else 2,
+            )
+            ax.add_patch(circle)
+        ax.scatter(0.0, 0.0, s=38, zorder=4)
+        ax.set_xlim(-1.0, float(radii[-1]) * 1.2)
+        ax.set_ylim(-1.0, float(radii[-1]) * 1.2)
+        ax.set_aspect("equal")
+        ax.set_xlabel(r"$x$")
+        ax.set_ylabel(r"$p$")
+        ax.set_title(
+            f"Mode {mode_name} · local uncertainty\n"
+            f"start: t={times[0]:g} · end: t={times[-1]:g} · Δt={dt:g}",
+            fontweight="medium",
+        )
+
+    covariance = np.array([state.covariance for state in states])
+    correlation_x = covariance[:, 0, 2] / np.sqrt(
+        covariance[:, 0, 0] * covariance[:, 2, 2]
+    )
+    correlation_p = covariance[:, 1, 3] / np.sqrt(
+        covariance[:, 1, 1] * covariance[:, 3, 3]
+    )
+    correlation_ax.plot(times, correlation_x, lw=2.2, label=r"$C_{x_ax_b}$")
+    correlation_ax.plot(times, correlation_p, lw=2.2, label=r"$C_{p_ap_b}$")
+    correlation_ax.axhspan(-0.005, 0.005, alpha=0.12)
+    correlation_ax.set_ylim(-1.05, 1.05)
+    correlation_ax.set_xlabel("time")
+    correlation_ax.set_ylabel("normalized quadrature correlation")
+    correlation_ax.set_title(
+        f"TMSV correlation build-up · t={times[0]:g} → {times[-1]:g} · Δt={dt:g}",
+        fontweight="medium",
+    )
+    correlation_ax.grid(alpha=0.12, linewidth=0.5)
+    correlation_ax.spines[["top", "right"]].set_visible(False)
+    correlation_ax.legend(frameon=False, loc="best")
+
+    figure.suptitle(
+        r"Two-mode squeezing evolution · $H=i\kappa(a^\dagger b^\dagger-ab)$",
+        fontsize=16,
+        fontweight="medium",
+    )
+
+    assert len(figure.axes) == 3
+    assert_no_empty_axes(figure)
+    assert_layout_can_render(figure)
+    assert len(correlation_ax.lines) == 2
+    np.testing.assert_allclose(correlation_ax.get_lines()[0].get_xdata(), times)
+    np.testing.assert_allclose(correlation_ax.get_lines()[1].get_xdata(), times)
+    assert correlation_ax.get_lines()[0].get_ydata()[-1] > 0.0
+    assert correlation_ax.get_lines()[1].get_ydata()[-1] < 0.0
 
 
 def _even_cat(cutoff: int = 20, alpha: complex = 2.2) -> qt.Qobj:
