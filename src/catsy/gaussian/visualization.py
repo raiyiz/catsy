@@ -150,6 +150,12 @@ def plot_covariance_matrix(
     annotate: bool = True,
     show: bool = False,
 ) -> plt.Figure:
+    """Plot a state's full quadrature covariance matrix as a heatmap.
+
+    Rows and columns are the (x, p) quadratures of every mode in order, so
+    on- and off-diagonal blocks make single-mode variances and cross-mode
+    covariance both visible in one image.
+    """
     if ax is None:
         fig, ax = plt.subplots(
             figsize=(max(5.0, 0.9 * len(state.modes) + 2), 5.2), constrained_layout=True
@@ -240,6 +246,7 @@ def plot_phase_space(
     n_sigma: float = 2.0,
     show: bool = False,
 ) -> plt.Figure:
+    """Plot a mode's mean and n_sigma uncertainty ellipse in phase space."""
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")
     mean, covariance = _mode_geometry(state, mode_name)
@@ -279,6 +286,12 @@ def plot_phase_space_trajectory(
     ax: plt.Axes | None = None,
     show: bool = False,
 ) -> plt.Figure:
+    """Plot a mode's mean trajectory in phase space with sparse uncertainty ellipses.
+
+    Ellipses are drawn every ``ellipse_every`` steps (default: about six
+    evenly spaced) rather than at every point, so the trajectory itself
+    stays legible.
+    """
     sequence = _states(states)
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")
@@ -322,6 +335,12 @@ def animate_phase_space(
     ax: plt.Axes | None = None,
     show: bool = False,
 ) -> FuncAnimation:
+    """Animate a mode's phase-space point and uncertainty ellipse over time.
+
+    Returns a live ``FuncAnimation`` (not a static figure); the trajectory,
+    current-position marker, uncertainty ellipse, and its principal axes all
+    update frame by frame.
+    """
     sequence = _states(states)
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")
@@ -407,6 +426,7 @@ def plot_covariance_evolution(
     ax: plt.Axes | None = None,
     show: bool = False,
 ) -> plt.Figure:
+    """Plot a mode's covariance entries (Vxx, Vpp, Vxp) over time or steps."""
     sequence = _states(states)
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
@@ -448,6 +468,12 @@ def plot_diagnostics(
     ax: plt.Axes | None = None,
     show: bool = False,
 ) -> plt.Figure:
+    """Plot purity and the minimum symplectic eigenvalue over a state sequence.
+
+    Purity of 1 and a minimum symplectic eigenvalue of 1 both mark a pure,
+    vacuum-noise-limited state; departures from either flag mixedness or
+    excess noise.
+    """
     sequence = _states(states)
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
@@ -516,6 +542,13 @@ def plot_wigner(
     vmin: float | None = None,
     vmax: float | None = None,
 ) -> plt.Figure:
+    """Plot a mode's Wigner function as a 2D heatmap.
+
+    A Gaussian state's Wigner function is provably non-negative everywhere,
+    so this uses a sequential colormap; contrast with
+    ``catsy.fock.visualization.plot_wigner``, which can show negative
+    (nonclassical) regions and uses a diverging one instead.
+    """
     if x_max <= 0:
         raise ValueError("x_max must be positive.")
     if num_points < 2:
@@ -552,6 +585,7 @@ def plot_wigner_evolution(
     num_points: int = 120,
     show: bool = False,
 ) -> plt.Figure:
+    """Plot a mode's Wigner function at several selected steps, sharing one colorbar."""
     sequence = _states(states)
     if times is not None and len(times) != len(sequence):
         raise ValueError("times must have the same length as states.")
@@ -600,6 +634,9 @@ def plot_evolution(
     n_sigma: float = 2.0,
     show: bool = False,
 ) -> plt.Figure:
+    """Render a mode's full evolution: trajectory, covariance, a Wigner
+    snapshot, and purity/symplectic diagnostics in one four-panel figure.
+    """
     sequence = _states(states)
     if n_sigma <= 0:
         raise ValueError("n_sigma must be positive.")
@@ -649,6 +686,13 @@ def plot_joint_correlation(
     ax: plt.Axes | None = None,
     show: bool = False,
 ) -> plt.Figure:
+    """Plot the joint probability distribution of one quadrature across two modes.
+
+    Useful for contrasting genuine (quantum) entanglement against merely
+    correlated classical noise: both can correlate a quadrature across
+    modes, but produce visually and statistically different joint
+    distributions.
+    """
     P, X_a, X_b, _, _ = compute_joint_correlation(
         state, mode_a, mode_b, quadrature=quadrature
     )
@@ -673,6 +717,11 @@ def plot_state_dashboard(
     mode: str | None = None,
     show: bool = False,
 ) -> plt.Figure:
+    """Render a compact one-row dashboard for a single state.
+
+    Panels are covariance matrix, (for multimode states) mode correlation
+    map, phase space, and Wigner function -- all for the same ``mode``.
+    """
     mode_name = state.modes[0] if mode is None else mode
     if mode_name not in state.modes:
         raise ValueError(f"Mode '{mode_name}' is not present in this state.")
