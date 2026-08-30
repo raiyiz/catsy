@@ -45,12 +45,18 @@ def _evolution() -> tuple[list[GaussianState], np.ndarray]:
 
 
 def _phase_space_trajectory_states() -> list[GaussianState]:
-    return [
-        GaussianState.coherent(("a",), 0.2),
-        GaussianState.coherent(("a",), 0.8 + 0.4j),
-        GaussianState.coherent(("a",), 1.2 + 0.8j),
-        GaussianState.coherent(("a",), 0.3 + 1.1j),
-    ]
+    amplitudes = (
+        0.2,
+        0.45 + 0.15j,
+        0.75 + 0.35j,
+        1.0 + 0.65j,
+        1.2 + 0.8j,
+        0.95 + 0.95j,
+        0.7 + 1.1j,
+        0.45 + 1.15j,
+        0.3 + 1.1j,
+    )
+    return [GaussianState.coherent(("a",), alpha) for alpha in amplitudes]
 
 
 class TestEvolutionVisualizations:
@@ -112,15 +118,29 @@ class TestEvolutionVisualizations:
         figure = plot_phase_space_trajectory_timecoded(
             states,
             "a",
-            times=[0.0, 0.5, 1.5, 3.0],
+            times=np.linspace(0.0, 3.0, len(states)),
             ellipse_every=2,
         )
         ax = figure.axes[0]
         assert "Time-coded phase-space evolution" in ax.get_title()
         assert len(ax.collections) >= 3
-        assert len(ax.patches) >= 2
+        assert len(ax.patches) >= 4
         assert figure.axes[1].get_ylabel() == "time"
         assert np.isclose(ax.get_aspect(), 1.0)
+
+        for ellipse in ax.patches:
+            ellipse.set_alpha(0.12)
+            ellipse.set_linewidth(1.0)
+
+        initial_marker = ax.collections[1]
+        final_marker = ax.collections[2]
+        initial_marker.set_facecolor("tab:blue")
+        initial_marker.set_edgecolor("white")
+        initial_marker.set_sizes([90])
+        final_marker.set_facecolor("tab:red")
+        final_marker.set_edgecolor("white")
+        final_marker.set_sizes([120])
+
         assert_layout_can_render(figure)
 
 
