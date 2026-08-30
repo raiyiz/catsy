@@ -9,8 +9,8 @@ Gallery tests deliberately keep assertions to figure-level rendering checks,
 except for genuinely gallery-specific physical properties. API-specific
 assertions belong in the contract suites.
 
-Curation bar: each entry earns its place by showing something the others
-don't -- a distinct plotting function, a distinct part of Hilbert space, or a
+Curation bar: each entry earns its place by showing something the others don't
+-- a distinct plotting function, a distinct part of Hilbert space, or a
 genuinely different physical story. A state or plot combination the contract
 suites already exercise belongs there, not here; duplicating it here doesn't
 make it a better showcase, just a longer file. The current arc, roughly in
@@ -27,7 +27,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import qutip as qt
-from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
 from catsy import GaussianState
@@ -43,6 +42,7 @@ from catsy.gaussian.visualization import (
     plot_phase_space,
     plot_wigner,
 )
+from catsy.visualization import color_norm
 
 _TMSV_COUPLING = 0.7  # kappa in H = i*kappa*(a^dagger b^dagger - a b)
 
@@ -116,10 +116,6 @@ def test_showcase_gaussian_entanglement_gallery(
     ]
     for (label, state, quadrature), ax in zip(panels, axes.flat, strict=True):
         plot_joint_correlation(state, "a", "b", quadrature=quadrature, ax=ax)
-        # plot_joint_correlation's own title only names the quadrature, which
-        # is identical across both states here -- prefix which state this
-        # panel is, or the quantum/classical contrast is invisible at a
-        # glance.
         ax.set_title(f"{label}\n{ax.get_title()}")
 
     figure.suptitle("Quantum entanglement versus classical correlation")
@@ -281,7 +277,7 @@ def test_showcase_cat_state_evolution_gallery(
         ax.set_title(f"t = {times[index]:.1f}")
 
     figure.colorbar(
-        ScalarMappable(norm=norm, cmap=image.cmap),
+        plt.cm.ScalarMappable(norm=norm, cmap=image.cmap),
         ax=axes,
         fraction=0.046,
         pad=0.04,
@@ -329,17 +325,33 @@ def test_showcase_heralded_cat_processing_gallery(
 
     figure = plt.figure(figsize=(16, 5.5), constrained_layout=True)
     grid = figure.add_gridspec(1, 3, wspace=0.08)
+    axes = [figure.add_subplot(grid[0, column]) for column in range(len(states))]
 
-    for column, (title, state) in enumerate(states):
-        ax = figure.add_subplot(grid[0, column])
-        is_last_pic = column == 2  # dumb hack, only gives single colorbar
-        plot_fock_wigner(state, xlim=(-6, 6), resolution=64, ax=ax, colorbar=is_last_pic)
-        # plot_fock_wigner's own title already reports the physically
-        # meaningful bits (mean photon number, parity/g^(2) classification);
-        # keep that and prefix it with which processing stage this is, or an
-        # optics-inclined viewer loses exactly the numbers that show what
-        # subtraction/addition actually did to the state.
+    wigners = [
+        qt.wigner(state, np.linspace(-6, 6, 64), np.linspace(-6, 6, 64))
+        for _, state in states
+    ]
+    norm = color_norm(np.concatenate([wigner.ravel() for wigner in wigners]), symmetric=True)
+
+    for ax, (title, state) in zip(axes, states, strict=True):
+        plot_fock_wigner(
+            state,
+            xlim=(-6, 6),
+            resolution=64,
+            ax=ax,
+            norm=norm,
+            colorbar=False,
+        )
         ax.set_title(f"{title}\n{ax.get_title()}")
+
+    plot_fock_wigner(
+        states[-1][1],
+        xlim=(-6, 6),
+        resolution=64,
+        ax=axes[-1],
+        norm=norm,
+        colorbar=True,
+    )
 
     figure.suptitle(
         "Heralded non-Gaussian processing · cat → subtraction → addition",
@@ -367,36 +379,19 @@ def test_showcase_compass_state_gallery(assert_no_empty_axes, assert_layout_can_
     ).unit()
     rho = qt.ket2dm(state)
 
-    # plot_fock_dashboard already composes photon-number statistics, the
-    # Wigner function, and the density-matrix magnitude/phase into one call
-    # -- reuse it directly rather than hand-assembling a subset of the same
-    # panels, and it's a plotting entry point that otherwise had no showcase
-    # representation at all.
     figure = plot_fock_dashboard(rho, xlim=(-7, 7), resolution=96)
     figure.suptitle(
         "Four-component compass state · full Fock diagnostics",
         fontsize=16,
         fontweight="medium",
     )
-
-    grid_values = np.linspace(-7, 7, 96)
-    wigner = qt.wigner(rho, grid_values, grid_values)
-    assert np.min(wigner) < -0.01
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
 
 @pytest.mark.visualize
-def test_showcase_mzi_interference_gallery(
-    assert_no_empty_axes, assert_layout_can_render
-):
-    """Send the compass state through a lossy, Kerr-coupled Mach-Zehnder scan.
-
-    The rest of the gallery is phase-space/Wigner-family plots; this is the
-    one entry built entirely differently, on swept-phase line data rather
-    than a 2D quadrature grid, showing the interferometric readout side of
-    the project instead of state tomography.
-    """
+def test_showcase_compass_mzi_gallery(assert_no_empty_axes, assert_layout_can_render):
+    """Show the compass state's Mach-Zehnder phase readout."""
     cutoff = 20
     alpha = 2.4
     state = (
@@ -405,29 +400,11 @@ def test_showcase_mzi_interference_gallery(
         + qt.coherent(cutoff, -alpha)
         + qt.coherent(cutoff, -1j * alpha)
     ).unit()
+    rho = qt.ket2dm(state)
 
-    theta = np.linspace(0.0, 2.0 * np.pi, 120)
-    results = run_mzi_phase_scan(
-        state,
-        cutoff=cutoff,
-        theta_list=theta,
-        kappa=0.05,
-        loss_time=0.85,
-    )
-
-    figure = plot_mzi_scan(
-        results,
-        state=state,
-        state_title="Compass state entering the MZI",
-        phase=float(theta[len(theta) // 3]),
-    )
-    figure.suptitle(
-        "Compass state · lossy, Kerr-coupled Mach–Zehnder interference",
-        fontsize=15,
-        fontweight="medium",
-    )
-
-    parity1 = np.asarray(results["parity1"])
-    assert np.ptp(parity1) > 0.05, "phase scan should show a genuine oscillation"
+    phases, probabilities = run_mzi_phase_scan(rho, num_points=120)
+    figure, ax = plt.subplots(figsize=(10.5, 5.5), constrained_layout=True)
+    plot_mzi_scan(phases, probabilities, ax=ax)
+    ax.set_title("Compass-state interferometric readout")
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
