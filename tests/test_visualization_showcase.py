@@ -8,6 +8,18 @@ to make easy to explore.
 Gallery tests deliberately keep assertions to figure-level rendering checks,
 except for genuinely gallery-specific physical properties. API-specific
 assertions belong in the contract suites.
+
+Curation bar: each entry earns its place by showing something the others
+don't -- a distinct plotting function, a distinct part of Hilbert space, or a
+genuinely different physical story. A state or plot combination the contract
+suites already exercise belongs there, not here; duplicating it here doesn't
+make it a better showcase, just a longer file. The current arc, roughly in
+increasing order of "how far from a textbook Gaussian state":
+
+    single entangled Gaussian state -> quantum vs. classical correlation
+    -> Kerr-driven cat dynamics -> catsy's own heralded non-Gaussian gates
+    -> a four-component compass state's full Fock diagnostics
+    -> that state's interferometric (Mach-Zehnder) readout
 """
 
 import matplotlib.pyplot as plt
@@ -17,12 +29,12 @@ import qutip as qt
 
 from catsy import GaussianState
 from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
-from catsy.fock.visualization import plot_fock_density_matrix
+from catsy.fock.mzi_visualization import plot_mzi_scan, run_mzi_phase_scan
+from catsy.fock.visualization import plot_fock_dashboard
 from catsy.fock.visualization import plot_wigner as plot_fock_wigner
 from catsy.gaussian import LossChannels
 from catsy.gaussian.visualization import (
     plot_covariance_matrix,
-    plot_evolution,
     plot_joint_correlation,
     plot_mode_correlation_map,
     plot_phase_space,
@@ -77,40 +89,21 @@ def test_showcase_gaussian_entanglement_gallery(
     ).apply(GaussianState.vacuum(("a", "b")))
 
     figure, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
-    for (state, quadrature), ax in zip(
-        [(tmsv, "x"), (tmsv, "p"), (classical, "x"), (classical, "p")],
-        axes.flat,
-        strict=True,
-    ):
+    panels = [
+        ("Two-mode squeezed vacuum", tmsv, "x"),
+        ("Two-mode squeezed vacuum", tmsv, "p"),
+        ("Correlated classical noise", classical, "x"),
+        ("Correlated classical noise", classical, "p"),
+    ]
+    for (label, state, quadrature), ax in zip(panels, axes.flat, strict=True):
         plot_joint_correlation(state, "a", "b", quadrature=quadrature, ax=ax)
+        # plot_joint_correlation's own title only names the quadrature, which
+        # is identical across both states here -- prefix which state this
+        # panel is, or the quantum/classical contrast is invisible at a
+        # glance.
+        ax.set_title(f"{label}\n{ax.get_title()}")
 
     figure.suptitle("Quantum entanglement versus classical correlation")
-    assert_no_empty_axes(figure)
-    assert_layout_can_render(figure)
-
-
-@pytest.mark.visualize
-def test_showcase_gaussian_evolution_gallery(
-    assert_no_empty_axes, assert_layout_can_render
-):
-    """Show a nontrivial single-mode evolution at several representative times."""
-    state = (
-        GaussianState.vacuum(("a",))
-        .squeeze("a", r=1.0, theta=0.2)
-        .displace("a", 1.5 + 0.4j)
-    )
-    states = []
-    for step in range(17):
-        fraction = step / 16
-        states.append(
-            state.rotate("a", 3.4 * fraction)
-            .loss("a", eta=1.0 - 0.6 * fraction)
-            .displace("a", 0.5 * np.exp(1j * 2.4 * fraction))
-            .squeeze("a", r=0.25 * np.sin(np.pi * fraction), theta=0.6)
-        )
-    times = np.linspace(0.0, 4.0, len(states))
-
-    figure = plot_evolution(states, "a", times=times, wigner_indices=[0, 8, 16])
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
 
@@ -219,7 +212,7 @@ def test_showcase_heralded_cat_processing_gallery(
 
 @pytest.mark.visualize
 def test_showcase_compass_state_gallery(assert_no_empty_axes, assert_layout_can_render):
-    """Show a four-component compass state and its nonclassical interference."""
+    """Show a four-component compass state's full Fock-space diagnostics."""
     cutoff = 20
     alpha = 2.4
     state = (
@@ -230,17 +223,14 @@ def test_showcase_compass_state_gallery(assert_no_empty_axes, assert_layout_can_
     ).unit()
     rho = qt.ket2dm(state)
 
-    figure = plt.figure(figsize=(13, 6), constrained_layout=True)
-    grid = figure.add_gridspec(1, 3, width_ratios=(1.0, 1.0, 0.9), wspace=0.1)
-    wigner_ax = figure.add_subplot(grid[0, 0])
-    magnitude_ax = figure.add_subplot(grid[0, 1])
-    phase_ax = figure.add_subplot(grid[0, 2])
-
-    plot_fock_wigner(rho, xlim=(-7, 7), resolution=96, ax=wigner_ax)
-    plot_fock_density_matrix(rho, axes=(magnitude_ax, phase_ax))
-
+    # plot_fock_dashboard already composes photon-number statistics, the
+    # Wigner function, and the density-matrix magnitude/phase into one call
+    # -- reuse it directly rather than hand-assembling a subset of the same
+    # panels, and it's a plotting entry point that otherwise had no showcase
+    # representation at all.
+    figure = plot_fock_dashboard(rho, xlim=(-7, 7), resolution=96)
     figure.suptitle(
-        "Four-component compass state · phase-space interference and Fock coherence",
+        "Four-component compass state · full Fock diagnostics",
         fontsize=16,
         fontweight="medium",
     )
@@ -248,5 +238,52 @@ def test_showcase_compass_state_gallery(assert_no_empty_axes, assert_layout_can_
     grid_values = np.linspace(-7, 7, 96)
     wigner = qt.wigner(rho, grid_values, grid_values)
     assert np.min(wigner) < -0.01
+    assert_no_empty_axes(figure)
+    assert_layout_can_render(figure)
+
+
+@pytest.mark.visualize
+def test_showcase_mzi_interference_gallery(
+    assert_no_empty_axes, assert_layout_can_render
+):
+    """Send the compass state through a lossy, Kerr-coupled Mach-Zehnder scan.
+
+    The rest of the gallery is phase-space/Wigner-family plots; this is the
+    one entry built entirely differently, on swept-phase line data rather
+    than a 2D quadrature grid, showing the interferometric readout side of
+    the project instead of state tomography.
+    """
+    cutoff = 20
+    alpha = 2.4
+    state = (
+        qt.coherent(cutoff, alpha)
+        + qt.coherent(cutoff, 1j * alpha)
+        + qt.coherent(cutoff, -alpha)
+        + qt.coherent(cutoff, -1j * alpha)
+    ).unit()
+
+    theta = np.linspace(0.0, 2.0 * np.pi, 120)
+    results = run_mzi_phase_scan(
+        state,
+        cutoff=cutoff,
+        theta_list=theta,
+        kappa=0.05,
+        loss_time=0.85,
+    )
+
+    figure = plot_mzi_scan(
+        results,
+        state=state,
+        state_title="Compass state entering the MZI",
+        phase=float(theta[len(theta) // 3]),
+    )
+    figure.suptitle(
+        "Compass state · lossy, Kerr-coupled Mach–Zehnder interference",
+        fontsize=15,
+        fontweight="medium",
+    )
+
+    parity1 = np.asarray(results["parity1"])
+    assert np.ptp(parity1) > 0.05, "phase scan should show a genuine oscillation"
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)

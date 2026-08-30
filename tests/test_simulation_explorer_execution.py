@@ -5,7 +5,11 @@ import qutip as qt
 
 from catsy.gaussian import GaussianState
 from examples.complex_example import PLOT_STEMS, execution_stages
-from scripts.sync_complex_execution_stages import _load_stages, _render_pipeline, _render_stages
+from scripts.sync_complex_execution_stages import (
+    _load_stages,
+    _render_pipeline,
+    _render_stages,
+)
 
 
 def test_execution_stage_trace_preserves_fock_operations(tmp_path):
@@ -112,4 +116,3 @@ def test_sync_prefers_stage_specific_insight_over_generic_note(tmp_path):
     assert "Why it matters" in rendered
     # The stage without "insight" still gets a callout, just the generic one.
     assert "Recorded execution" in rendered
-
