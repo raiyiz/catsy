@@ -307,17 +307,17 @@ def test_showcase_heralded_cat_processing_gallery(
     assert_no_empty_axes, assert_layout_can_render
 ):
     """Show an even cat through realistic photon subtraction and addition."""
-    cat = _even_cat(cutoff=18, alpha=1.8 + 0.2j)
+    cat = _even_cat(cutoff=14, alpha=1.8 + 0.2j)
     subtracted = realistic_photon_subtraction(
         cat,
         tap_reflectivity=0.08,
-        detector_efficiency=0.75,
+        detector_efficiency=0.85,
         ancilla_cutoff=6,
     )
     added = realistic_photon_addition(
         subtracted,
         coupling_strength=0.045,
-        detector_efficiency=0.75,
+        detector_efficiency=0.85,
         ancilla_cutoff=6,
     )
 
@@ -332,7 +332,8 @@ def test_showcase_heralded_cat_processing_gallery(
 
     for column, (title, state) in enumerate(states):
         ax = figure.add_subplot(grid[0, column])
-        plot_fock_wigner(state, xlim=(-6, 6), resolution=64, ax=ax)
+        is_last_pic = column == 2  # dumb hack, only gives single colorbar
+        plot_fock_wigner(state, xlim=(-6, 6), resolution=64, ax=ax, colorbar=is_last_pic)
         # plot_fock_wigner's own title already reports the physically
         # meaningful bits (mean photon number, parity/g^(2) classification);
         # keep that and prefix it with which processing stage this is, or an

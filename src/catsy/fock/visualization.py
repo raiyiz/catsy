@@ -199,6 +199,7 @@ def plot_wigner(
     ax: plt.Axes | None = None,
     projection: str = "2d",
     show: bool = False,
+    colorbar=True,
 ) -> plt.Figure:
     """Plot a single-mode Wigner function using QuTiP's renderer.
 
@@ -255,7 +256,7 @@ def plot_wigner(
             projection=projection,
             fig=fig,
             ax=ax,
-            colorbar=True,
+            colorbar=colorbar,
         )
 
         wigner = qt.wigner(state, grid, grid)
