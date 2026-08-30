@@ -185,8 +185,10 @@ def test_wigner_surfaces_for_n_photon_states(
     grid = np.linspace(-4, 4, resolution)
 
     fig = plt.figure(figsize=(12, 9), constrained_layout=True)
+    wigner_axes = []
     for index, n in enumerate(n_values, start=1):
         ax = fig.add_subplot(2, 2, index, projection="3d")
+        wigner_axes.append(ax)
         state = qt.ket2dm(qt.fock(cutoff, n))
         plot_wigner(
             state,
@@ -196,17 +198,23 @@ def test_wigner_surfaces_for_n_photon_states(
             projection="3d",
         )
         expected_wigner = qt.wigner(state, grid, grid)
+        expected_limit = float(np.max(np.abs(expected_wigner)))
         surface = ax.collections[0]
 
-        assert surface.norm.vmin == pytest.approx(float(expected_wigner.min()))
-        assert surface.norm.vmax == pytest.approx(float(expected_wigner.max()))
+        # Symmetric about zero (not just data min/max) so the colormap's
+        # neutral color always sits at W=0 -- see plot_wigner's 3D branch.
+        assert surface.norm.vmin == pytest.approx(-expected_limit)
+        assert surface.norm.vmax == pytest.approx(expected_limit)
         ax.set_title(rf"$|{n}\rangle$")
 
     fig.suptitle("Wigner functions of n-photon states", fontweight="medium")
     fig.canvas.draw()
 
-    assert len(fig.axes) == len(n_values)
-    for ax in fig.axes:
+    # Each 3D panel now also gets its own colorbar axes (see plot_wigner's
+    # 3D branch), so len(fig.axes) is no longer len(n_values) -- check the
+    # data axes specifically instead of the whole figure.
+    assert len(wigner_axes) == len(n_values)
+    for ax in wigner_axes:
         assert ax.collections
     assert_no_empty_axes(fig)
     assert_layout_can_render(fig)

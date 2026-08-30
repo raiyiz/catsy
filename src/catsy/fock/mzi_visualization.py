@@ -10,6 +10,7 @@ import numpy as np
 import qutip as qt
 
 from catsy.optics import MachZehnderInterferometer, ObservableScanData
+from catsy.visualization import add_colorbar
 
 
 def make_even_cat(*, cutoff: int, alpha: complex) -> qt.Qobj:
@@ -121,7 +122,16 @@ def plot_mzi_scan(
     else:
         xvec = np.linspace(state_xlim[0], state_xlim[1], resolution)
         wigner = qt.wigner(state, xvec, xvec)
-        state_ax.contourf(xvec, xvec, wigner, 100, cmap="RdBu_r")
+        # Symmetric-about-zero normalization, matching
+        # catsy.fock.visualization.plot_wigner: with RdBu_r, an
+        # unnormalized (data-driven) range can leave zero off-center,
+        # which visually understates Wigner negativity -- the reason this
+        # inset is here in the first place.
+        wlim = float(np.max(np.abs(wigner)))
+        image = state_ax.contourf(
+            xvec, xvec, wigner, 100, cmap="RdBu_r", vmin=-wlim, vmax=wlim
+        )
+        add_colorbar(fig, image, ax=state_ax, label=r"$W(x,p)$")
         state_ax.set_xlabel("x")
         state_ax.set_ylabel("p")
         state_ax.set_aspect("equal", adjustable="box")
@@ -130,7 +140,7 @@ def plot_mzi_scan(
             title += rf" · $\theta={phase / np.pi:.2f}\pi$"
         state_ax.set_title(title)
 
-    fig.suptitle("Cat-state Mach–Zehnder scan", fontsize=15, fontweight="medium")
+    fig.suptitle("Mach–Zehnder interference scan", fontsize=15, fontweight="medium")
     if show:
         plt.show()
     return fig

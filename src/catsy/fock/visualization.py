@@ -157,7 +157,7 @@ def _draw_density_matrix(
     ax_mag.set_title(r"Magnitude $|\rho_{mn}|$")
     ax_phase.set_title(r"Phase $\arg(\rho_{mn})$")
     fig = cast(plt.Figure, ax_mag.figure)
-    add_colorbar(fig, image_mag, ax_mag)
+    add_colorbar(fig, image_mag, ax_mag, label=r"$|\rho_{mn}|$")
     phase_colorbar = add_colorbar(
         fig, image_phase, ax_phase, label=r"phase $\arg(\rho_{mn})$ [rad]"
     )
@@ -224,22 +224,29 @@ def plot_wigner(
     )
 
     if projection == "3d":
-        # QuTiP's 3D renderer does not expose the Wigner values' colour
-        # normalization. Compute the surface here so the colormap always
-        # spans the actual minimum and maximum of this Wigner function.
+        # Match the 2D branch's convention (delegated to QuTiP below): a
+        # diverging colormap, symmetric about zero, so the sign change that
+        # makes Wigner negativity visible is actually visible -- a sequential
+        # colormap with a data-driven (generally off-center) range would
+        # visually bury negative regions as "a bit darker", not "negative".
         wigner = qt.wigner(state, grid, grid)
         X, Y = np.meshgrid(grid, grid)
-        norm = Normalize(vmin=float(wigner.min()), vmax=float(wigner.max()))
+        wlim = float(np.max(np.abs(wigner)))
+        norm = Normalize(vmin=-wlim, vmax=wlim)
         ax3d = cast(Axes3D, ax)
-        ax3d.plot_surface(
+        surface = ax3d.plot_surface(
             X,
             Y,
             wigner,
-            cmap="viridis",
+            cmap="RdBu_r",
             norm=norm,
             linewidth=0,
             antialiased=True,
         )
+        ax3d.set_xlabel(r"$x$")
+        ax3d.set_ylabel(r"$p$")
+        ax3d.set_zlabel(r"$W(x,p)$")
+        add_colorbar(fig, surface, ax=ax3d, label=r"$W(x,p)$")
     else:
         qt.plot_wigner(
             state,

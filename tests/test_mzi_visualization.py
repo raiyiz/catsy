@@ -32,7 +32,8 @@ def test_cat_mzi_phase_scan_helpers_produce_a_two_panel_figure(
         resolution=64,
     )
 
-    assert len(figure.axes) == 2
+    # scan_ax + state_ax, plus the state panel's own Wigner colorbar axes.
+    assert len(figure.axes) == 3
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)
     plt.show(figure)
