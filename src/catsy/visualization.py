@@ -64,6 +64,23 @@ def annotate_box(
     ax.text(x, y, text, transform=ax.transAxes, bbox=bbox, **kwargs)
 
 
+def normalize_probabilities(
+    probabilities: np.ndarray | Iterable[float],
+) -> np.ndarray:
+    """Return non-negative probabilities normalized to unit total mass."""
+    values = np.asarray(list(probabilities) if not isinstance(probabilities, np.ndarray) else probabilities, dtype=float)
+    if values.ndim != 1:
+        raise ValueError("probabilities must be a one-dimensional sequence.")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("probabilities must contain only finite values.")
+    if np.any(values < 0.0):
+        raise ValueError("probabilities must be non-negative.")
+    total = float(values.sum())
+    if total <= np.finfo(float).eps:
+        raise ValueError("probabilities must contain positive total mass.")
+    return values / total
+
+
 def color_norm(
     values: np.ndarray | Iterable[float],
     *,
@@ -79,7 +96,7 @@ def color_norm(
     is appropriate for signed quantities such as Wigner functions; it expands
     the range to ``[-max(abs(values)), max(abs(values))]``.
 
-    This helper only controls the *display mapping*. It never normalizes the
+    This helper only controls the display mapping. It never normalizes the
     underlying physical data, so quantities such as thermal-state widths or
     absolute probabilities remain physically meaningful.
     """
@@ -138,5 +155,6 @@ __all__ = [
     "color_norm",
     "figure_and_axes",
     "finalize_figure",
+    "normalize_probabilities",
     "style_phase_axes",
 ]
