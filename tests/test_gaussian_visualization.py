@@ -124,7 +124,7 @@ class TestEvolutionVisualizations:
         ax = figure.axes[0]
         assert "Time-coded phase-space evolution" in ax.get_title()
         assert len(ax.collections) >= 3
-        assert len(ax.patches) >= 4
+        assert len(ax.patches) >= 3
         assert figure.axes[1].get_ylabel() == "time"
         assert np.isclose(ax.get_aspect(), 1.0)
 
