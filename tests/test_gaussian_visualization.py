@@ -44,6 +44,14 @@ def _evolution() -> tuple[list[GaussianState], np.ndarray]:
     return states, np.linspace(0.0, 4.0, len(states))
 
 
+def _tmsv_hamiltonian_evolution() -> tuple[list[GaussianState], np.ndarray]:
+    """Exact two-mode-squeezing evolution from vacuum under H = iκ(a†b† - ab)."""
+    times = np.linspace(0.0, 1.5, 17)
+    coupling = 0.7
+    states = [GaussianState.tmsv("a", "b", r=coupling * time) for time in times]
+    return states, times
+
+
 class TestEvolutionVisualizations:
     """Contract tests for Gaussian dynamics visualizations."""
 
@@ -63,16 +71,7 @@ class TestEvolutionVisualizations:
     def test_multimode_evolution_showcase(
         self, assert_no_empty_axes, assert_layout_can_render
     ) -> None:
-        states = [
-            (
-                GaussianState.vacuum(("a", "b"))
-                .squeeze("a", r=float(r))
-                .squeeze("b", r=float(r), theta=np.pi / 2)
-                .beam_splitter("a", "b", eta=0.5)
-            )
-            for r in np.linspace(0.0, 0.8, 5)
-        ]
-        times = np.linspace(0.0, 1.0, len(states))
+        states, times = _tmsv_hamiltonian_evolution()
         figure = plot_multimode_evolution(states, times=times)
 
         assert len(figure.axes) == 3
