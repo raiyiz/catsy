@@ -521,28 +521,22 @@ def photon_addition(state: CVState, modes: Modes, **kwargs: ParameterValue) -> F
 def realistic_photon_subtraction(
     state: CVState, modes: Modes, **kwargs: ParameterValue
 ) -> FockState:
-    fock_kwargs = {k: v for k, v in kwargs.items() if k != "N_cutoff"}
     return _ensure_fock(state, kwargs).realistic_photon_subtraction(
-        tap_reflectivity=cast(float, kwargs["tap_reflectivity"]),
-        detector_efficiency=cast(float, kwargs["detector_efficiency"]),
-        ancilla_cutoff=cast(int, kwargs["ancilla_cutoff"]),
-        # detector_efficiency: float = 0.6,
-        # ancilla_cutoff: int = 6,
         mode=modes[0],
-        **fock_kwargs,
+        tap_reflectivity=cast(float, kwargs.get("tap_reflectivity", 0.05)),
+        detector_efficiency=cast(float, kwargs.get("detector_efficiency", 0.6)),
+        ancilla_cutoff=cast(int, kwargs.get("ancilla_cutoff", 6)),
     )
 
 
 def realistic_photon_addition(
     state: CVState, modes: Modes, **kwargs: ParameterValue
 ) -> FockState:
-    fock_kwargs = {k: v for k, v in kwargs.items() if k != "N_cutoff"}
     return _ensure_fock(state, kwargs).realistic_photon_addition(
-        coupling_strength=cast(float, kwargs["coupling_strength"]),
-        detector_efficiency=cast(float, kwargs["detector_efficiency"]),
-        ancilla_cutoff=cast(int, kwargs["ancilla_cutoff"]),
         mode=modes[0],
-        **fock_kwargs,
+        coupling_strength=cast(float, kwargs.get("coupling_strength", 0.05)),
+        detector_efficiency=cast(float, kwargs.get("detector_efficiency", 0.6)),
+        ancilla_cutoff=cast(int, kwargs.get("ancilla_cutoff", 6)),
     )
 
 
