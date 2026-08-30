@@ -68,7 +68,12 @@ def normalize_probabilities(
     probabilities: np.ndarray | Iterable[float],
 ) -> np.ndarray:
     """Return non-negative probabilities normalized to unit total mass."""
-    values = np.asarray(list(probabilities) if not isinstance(probabilities, np.ndarray) else probabilities, dtype=float)
+    values = np.asarray(
+        list(probabilities)
+        if not isinstance(probabilities, np.ndarray)
+        else probabilities,
+        dtype=float,
+    )
     if values.ndim != 1:
         raise ValueError("probabilities must be a one-dimensional sequence.")
     if not np.all(np.isfinite(values)):

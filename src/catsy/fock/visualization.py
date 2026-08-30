@@ -196,12 +196,13 @@ def plot_wigner(
     *,
     mode_idx: int = 0,
     xlim: tuple[float, float] = (-5.0, 5.0),
-    resolution: int = 180,
+    resolution: int = 140,
+    norm: Normalize | None = None,
     ax: plt.Axes | None = None,
     projection: str = "2d",
     show: bool = False,
     colorbar: bool = True,
-    norm: Normalize | None = None,
+    contour: bool = True,
 ) -> plt.Figure:
     """Plot a single-mode Wigner function using QuTiP's renderer.
 
@@ -252,21 +253,19 @@ def plot_wigner(
         if colorbar:
             add_colorbar(fig, surface, ax=ax3d, label=r"$W(x,p)$")
     else:
-        qt.plot_wigner(
-            state,
-            xvec=grid,
-            yvec=grid,
-            projection=projection,
-            fig=fig,
-            ax=ax,
-            colorbar=False,
+        image = ax.imshow(
+            wigner,
+            extent=(grid[0], grid[-1], grid[0], grid[-1]),
+            origin="lower",
+            cmap="RdBu_r",
+            norm=display_norm,
+            aspect="equal",
+            interpolation="nearest",
         )
-        image = ax.images[-1]
-        image.set_norm(display_norm)
-        image.set_cmap("RdBu_r")
         if colorbar:
             add_colorbar(fig, image, ax=ax, label=r"$W(x,p)$")
 
+    if contour:
         ax.contour(
             grid,
             grid,

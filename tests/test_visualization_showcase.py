@@ -331,26 +331,30 @@ def test_showcase_heralded_cat_processing_gallery(
         qt.wigner(state, np.linspace(-6, 6, 64), np.linspace(-6, 6, 64))
         for _, state in states
     ]
-    norm = color_norm(np.concatenate([wigner.ravel() for wigner in wigners]), symmetric=True)
+    norm = color_norm(
+        np.concatenate([wigner.ravel() for wigner in wigners]), symmetric=True
+    )
+    plot_param = dict(
+        xlim=(-5, 5),
+        resolution=256,
+        norm=norm,
+        contour=False,
+    )
 
     for ax, (title, state) in zip(axes, states, strict=True):
         plot_fock_wigner(
             state,
-            xlim=(-6, 6),
-            resolution=64,
             ax=ax,
-            norm=norm,
             colorbar=False,
+            **plot_param,
         )
         ax.set_title(f"{title}\n{ax.get_title()}")
 
     plot_fock_wigner(
         states[-1][1],
-        xlim=(-6, 6),
-        resolution=64,
         ax=axes[-1],
-        norm=norm,
         colorbar=True,
+        **plot_param,
     )
 
     figure.suptitle(
@@ -402,9 +406,14 @@ def test_showcase_compass_mzi_gallery(assert_no_empty_axes, assert_layout_can_re
     ).unit()
     rho = qt.ket2dm(state)
 
-    phases, probabilities = run_mzi_phase_scan(rho, num_points=120)
-    figure, ax = plt.subplots(figsize=(10.5, 5.5), constrained_layout=True)
-    plot_mzi_scan(phases, probabilities, ax=ax)
-    ax.set_title("Compass-state interferometric readout")
+    results = run_mzi_phase_scan(rho)
+    # TODO: stupid hack, need fix
+    figure, (scan_ax, state_ax) = plt.subplots(
+        2,
+        figsize=(13.5, 5.5),
+        constrained_layout=True,
+    )
+    plot_mzi_scan(results, axes=(scan_ax, state_ax))
+    state_ax.set_title("Compass-state interferometric readout")
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)

@@ -23,17 +23,25 @@ def make_even_cat(*, cutoff: int, alpha: complex) -> qt.Qobj:
 def run_mzi_phase_scan(
     state: qt.Qobj,
     *,
-    cutoff: int,
+    cutoff: int | None = None,
     theta_list: Sequence[float] | None = None,
     kappa: float = 0.0,
     loss_time: float = 1.0,
 ) -> ObservableScanData:
-    """Run a reusable Mach-Zehnder phase scan for an arbitrary Fock state."""
+    """Run an MZI phase scan for a Fock state.
+
+    This is a convenience wrapper around
+    ``MachZehnderInterferometer(...).scan(...)``.
+    """
+    if cutoff is None:
+        cutoff = state.shape[0]
+
     phases = (
         np.linspace(0.0, 2.0 * np.pi, 200)
         if theta_list is None
         else np.asarray(theta_list, dtype=float)
     )
+
     return MachZehnderInterferometer(
         kappa=kappa,
         N_cutoff=cutoff,
