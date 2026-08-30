@@ -119,21 +119,30 @@ class TestEvolutionVisualizations:
             states,
             "a",
             times=np.linspace(0.0, 3.0, len(states)),
-            ellipse_every=4,
+            ellipse_every=1,
         )
         ax = figure.axes[0]
         assert "Time-coded phase-space evolution" in ax.get_title()
         assert len(ax.collections) >= 3
-        assert len(ax.patches) >= 3
+        assert len(ax.patches) == len(states)
         assert figure.axes[1].get_ylabel() == "time"
         assert np.isclose(ax.get_aspect(), 1.0)
 
         for ellipse in ax.patches:
-            ellipse.set_alpha(0.12)
-            ellipse.set_linewidth(1.0)
+            ellipse.set_alpha(0.10)
+            ellipse.set_linewidth(0.8)
 
-        initial_marker = ax.collections[1]
-        final_marker = ax.collections[2]
+        initial_ellipse = ax.patches[0]
+        final_ellipse = ax.patches[-1]
+        initial_ellipse.set_alpha(0.55)
+        initial_ellipse.set_linewidth(2.0)
+        initial_ellipse.set_edgecolor("tab:blue")
+        final_ellipse.set_alpha(0.55)
+        final_ellipse.set_linewidth(2.0)
+        final_ellipse.set_edgecolor("tab:red")
+
+        initial_marker = ax.collections[2]
+        final_marker = ax.collections[3]
         initial_marker.set_facecolor("tab:blue")
         initial_marker.set_edgecolor("white")
         initial_marker.set_sizes([90])
