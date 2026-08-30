@@ -119,7 +119,7 @@ class TestEvolutionVisualizations:
             states,
             "a",
             times=np.linspace(0.0, 3.0, len(states)),
-            ellipse_every=2,
+            ellipse_every=4,
         )
         ax = figure.axes[0]
         assert "Time-coded phase-space evolution" in ax.get_title()

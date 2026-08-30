@@ -139,7 +139,9 @@ def test_showcase_cat_state_evolution_gallery(
 
     indices = [0, 2, 4, 6]
     grid_values = np.linspace(-6.5, 6.5, 96)
-    wigners = [qt.wigner(result.states[index], grid_values, grid_values) for index in indices]
+    wigners = [
+        qt.wigner(result.states[index], grid_values, grid_values) for index in indices
+    ]
     vmax = max(float(np.max(np.abs(wigner))) for wigner in wigners)
     norm = Normalize(vmin=-vmax, vmax=vmax)
 

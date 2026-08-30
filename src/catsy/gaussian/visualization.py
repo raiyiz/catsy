@@ -755,6 +755,17 @@ def plot_phase_space_trajectory_timecoded(
         sm = ScalarMappable(norm=norm, cmap=line_collection.cmap)
         sm.set_array(time_values)
         add_colorbar(fig, sm, ax=ax, label=time_label)
+        ax.scatter(
+            means[:, 0],
+            means[:, 1],
+            c=time_values,
+            cmap=line_collection.cmap,
+            norm=norm,
+            s=28,
+            edgecolors="white",
+            linewidths=0.6,
+            zorder=4,
+        )
     else:
         ax.scatter(means[:, 0], means[:, 1], s=48, zorder=4)
 
