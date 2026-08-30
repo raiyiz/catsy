@@ -26,6 +26,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import qutip as qt
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 
 from catsy import GaussianState
 from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
@@ -135,29 +137,53 @@ def test_showcase_cat_state_evolution_gallery(
         c_ops=[np.sqrt(loss_rate) * a],
     )
 
-    indices = [0, 2, 4, 6, 8]
-    figure = plt.figure(figsize=(17, 7), constrained_layout=True)
-    grid = figure.add_gridspec(1, len(indices), wspace=0.08)
+    indices = [0, 2, 4, 6]
+    grid_values = np.linspace(-6.5, 6.5, 96)
+    wigners = [qt.wigner(result.states[index], grid_values, grid_values) for index in indices]
+    vmax = max(float(np.max(np.abs(wigner))) for wigner in wigners)
+    norm = Normalize(vmin=-vmax, vmax=vmax)
 
-    for column, index in enumerate(indices):
-        ax = figure.add_subplot(grid[0, column])
-        plot_fock_wigner(
-            result.states[index],
-            xlim=(-6.5, 6.5),
-            resolution=96,
-            ax=ax,
+    figure, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
+    for ax, index, wigner in zip(axes.flat, indices, wigners, strict=True):
+        image = ax.imshow(
+            wigner,
+            origin="lower",
+            extent=(grid_values[0], grid_values[-1], grid_values[0], grid_values[-1]),
+            cmap="RdBu_r",
+            norm=norm,
+            interpolation="nearest",
+            aspect="equal",
         )
+        ax.contour(
+            grid_values,
+            grid_values,
+            wigner,
+            levels=[0.0],
+            colors="black",
+            linewidths=0.8,
+            alpha=0.8,
+        )
+        ax.axhline(0, lw=0.6, ls="--", alpha=0.30, zorder=0)
+        ax.axvline(0, lw=0.6, ls="--", alpha=0.30, zorder=0)
+        ax.set_xlabel("x")
+        ax.set_ylabel("p")
         ax.set_title(f"t = {times[index]:.1f}")
 
+    figure.colorbar(
+        ScalarMappable(norm=norm, cmap=image.cmap),
+        ax=axes,
+        fraction=0.046,
+        pad=0.04,
+        label="Wigner function",
+    )
     figure.suptitle(
         "Even cat evolution · Kerr nonlinearity and photon loss",
         fontsize=16,
         fontweight="medium",
     )
 
-    grid = np.linspace(-6.5, 6.5, 96)
-    initial_wigner = qt.wigner(result.states[0], grid, grid)
-    final_wigner = qt.wigner(result.states[-1], grid, grid)
+    initial_wigner = qt.wigner(result.states[0], grid_values, grid_values)
+    final_wigner = qt.wigner(result.states[-1], grid_values, grid_values)
     assert np.min(initial_wigner) < -0.01
     assert np.min(final_wigner) < 0.0
     assert_no_empty_axes(figure)
