@@ -20,6 +20,7 @@ from mpl_toolkits.mplot3d.axes3d import Axes3D
 from catsy.visualization import (
     add_colorbar,
     annotate_box,
+    color_norm,
     figure_and_axes,
     finalize_figure,
     style_phase_axes,
@@ -199,12 +200,18 @@ def plot_wigner(
     ax: plt.Axes | None = None,
     projection: str = "2d",
     show: bool = False,
-    colorbar=True,
+    colorbar: bool = True,
+    norm: Normalize | None = None,
 ) -> plt.Figure:
     """Plot a single-mode Wigner function using QuTiP's renderer.
 
-    ``projection`` can be ``"2d"`` or ``"3d"``. For the 2D view, Catsy adds
-    the zero-negativity contour; all Wigner evaluation and rendering are
+    ``norm`` is optional and is primarily useful for multi-panel comparisons:
+    pass the same normalization to each panel to guarantee a shared color
+    scale. When omitted, each plot retains its own data-driven scale. No
+    physical Wigner values are rescaled.
+
+    ``projection`` can be ``"2d"`` or ``"3d"``. Catsy adds the zero-negativity
+    contour to 2D plots; all Wigner evaluation and rendering are otherwise
     delegated to QuTiP.
     """
     if resolution < 32:
@@ -224,30 +231,26 @@ def plot_wigner(
         projection="3d" if projection == "3d" else None,
     )
 
+    wigner = qt.wigner(state, grid, grid)
+    display_norm = color_norm(wigner, norm=norm, symmetric=True)
+
     if projection == "3d":
-        # Match the 2D branch's convention (delegated to QuTiP below): a
-        # diverging colormap, symmetric about zero, so the sign change that
-        # makes Wigner negativity visible is actually visible -- a sequential
-        # colormap with a data-driven (generally off-center) range would
-        # visually bury negative regions as "a bit darker", not "negative".
-        wigner = qt.wigner(state, grid, grid)
         X, Y = np.meshgrid(grid, grid)
-        wlim = float(np.max(np.abs(wigner)))
-        norm = Normalize(vmin=-wlim, vmax=wlim)
         ax3d = cast(Axes3D, ax)
         surface = ax3d.plot_surface(
             X,
             Y,
             wigner,
             cmap="RdBu_r",
-            norm=norm,
+            norm=display_norm,
             linewidth=0,
             antialiased=True,
         )
         ax3d.set_xlabel(r"$x$")
         ax3d.set_ylabel(r"$p$")
         ax3d.set_zlabel(r"$W(x,p)$")
-        add_colorbar(fig, surface, ax=ax3d, label=r"$W(x,p)$")
+        if colorbar:
+            add_colorbar(fig, surface, ax=ax3d, label=r"$W(x,p)$")
     else:
         qt.plot_wigner(
             state,
@@ -256,10 +259,14 @@ def plot_wigner(
             projection=projection,
             fig=fig,
             ax=ax,
-            colorbar=colorbar,
+            colorbar=False,
         )
+        image = ax.images[-1]
+        image.set_norm(display_norm)
+        image.set_cmap("RdBu_r")
+        if colorbar:
+            add_colorbar(fig, image, ax=ax, label=r"$W(x,p)$")
 
-        wigner = qt.wigner(state, grid, grid)
         ax.contour(
             grid,
             grid,
