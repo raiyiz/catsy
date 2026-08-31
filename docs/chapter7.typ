@@ -8,9 +8,11 @@
 
 Not every interesting operation in CV quantum optics stays within the Gaussian class. Photon subtraction/addition, Kerr nonlinearities, and photon-number-resolving observables generate or require Fock-space structure. The Fock-space operations live in `src/catsy/fock/__init__.py`, while `src/catsy/optics.py` implements concrete, time-resolved hardware models (a driven Kerr cavity and a Mach-Zehnder interferometer). Reusable Gaussian gate layouts (Chapter 8) live on `Circuit` itself.
 
+The representation boundary is explicit: `GaussianState.to_fock()` (Chapter 5) converts a compact Gaussian state into the truncated Fock representation needed here. `FockState` is the domain-level representation of that Fock-space state, while QuTiP supplies the underlying density-matrix/operator machinery. A Fock representation is not synonymous with a non-Gaussian state: Gaussian states can also be represented in Fock space after conversion. What distinguishes this chapter is that these operations require Hilbert-space structure that cannot be retained in the compact $(d, V)$ Gaussian representation.
+
 == Primitive photon operations
 
-The Fock module operates directly on QuTiP density matrices rather than on `GaussianState`. The intended conversion boundary is `GaussianState.to_qutip()` (Chapter 5). The public API is functional: photon operations are exposed as module-level functions, while `FockGates` remains as a backwards-compatible namespace for existing callers.
+The Fock module operates directly on QuTiP density matrices rather than on `GaussianState`. The public API is functional: photon operations are exposed as module-level functions, while `FockGates` remains as a backwards-compatible namespace for existing callers. At the domain level, these functions are the Fock-space operations applied to a `FockState` representation.
 
 === Subtraction and addition
 

@@ -7,6 +7,8 @@
 
 Measurements on continuous variables induce an irreversible conditional state update of the overall quantum state. Since the toolkit operates in the Gaussian phase-space layer, the update can be expressed directly in terms of conditional Gaussian moments rather than explicit infinite-dimensional projection operators. The framework implements this using the covariance-matrix conditioning (Schur-complement) formulas standard in Gaussian quantum measurement theory. See #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
+In the terminology established earlier, these measurement routines are operations on a `GaussianState`: they transform the state and, for conditional measurements, return the measurement outcome together with the conditioned state. They are not `Gate` objects, because a measurement consumes information from the state rather than representing a reusable unitary gate in a `Circuit`.
+
 == Homodyne measurement (`homodyne_measurement`)
 Homodyne detection measures a freely chosen linear combination of the canonical quadrature operators $q$ and $p$ of a target mode. This process is intrinsically stochastic: the idealized measurement projects onto a quadrature eigenstate, while the remaining modes are *conditioned* on the measurement result. In a physical implementation, the conditional update is the relevant operational statement; the phase-space treatment avoids requiring an explicit infinite-energy eigenstate representation.
 
