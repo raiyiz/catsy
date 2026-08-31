@@ -1,9 +1,9 @@
 // Shared helper for linking documentation text back to the exact source on
-// GitHub. `repo-url` and `commit-sha` are injected by the documentation CI
+// GitLab. `repo-url` and `commit-sha` are injected by the documentation CI
 // job via `--input`, so every link resolves to the exact commit this PDF was
-// built from. Falls back to the public GitHub repository's `main` branch when
-// compiled locally without `--input`.
-#let repo-url = sys.inputs.at("repo-url", default: "https://github.com/raiyiz/catsy")
+// built from. Falls back to the private GitLab repository's `main` branch
+// when compiled locally without `--input`.
+#let repo-url = sys.inputs.at("repo-url", default: "https://gitlab.uni-hannover.de/inl/catsy")
 #let commit-sha = sys.inputs.at("commit-sha", default: "main")
 
 // Renders a clickable reference to `path` (optionally anchored to `line`)
@@ -13,7 +13,7 @@
 // trailing-bracket syntax, since a trailing `[...]` after the call binds to
 // the next *positional* parameter, and `src-link` only has one (`path`).
 #let src-link(path, label: none, line: none) = {
-  let url = repo-url + "/blob/" + commit-sha + "/" + path
+  let url = repo-url + "/-/blob/" + commit-sha + "/" + path
   if line != none {
     url = url + "#L" + str(line)
   }
