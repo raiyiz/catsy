@@ -468,7 +468,9 @@ def test_full_cavity_multipanel_plot_demo(assert_no_empty_axes, assert_layout_ca
     alpha = 1.5
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 60)
-    results = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.2).scan(theta_list)
+    results = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.2).scan(
+        theta_list
+    )
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     axes[0].plot(theta_list, results["n1"])
@@ -527,8 +529,12 @@ def test_decoherence_mzi_parity_visibility_drops_with_loss():
     # Loss has a fixed exposure time and is therefore independent of the
     # scanned phase.  Compare the complete phase scan directly.
     theta_list = np.linspace(0, 2 * np.pi, 50)
-    results_clean = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.0).scan(theta_list)
-    results_noisy = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.4).scan(theta_list)
+    results_clean = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.0).scan(
+        theta_list
+    )
+    results_noisy = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.4).scan(
+        theta_list
+    )
 
     tail = slice(len(theta_list) // 2, None)
     visibility_clean = np.ptp(np.array(results_clean["parity1"])[tail])
@@ -544,8 +550,12 @@ def test_mzi_phase_scan_is_independent_of_loss_when_exposure_time_is_zero():
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.array([-0.7, 0.0, 0.9])
 
-    clean = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.0).scan(theta_list)
-    zero_exposure = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=10.0, loss_time=0.0).scan(theta_list)
+    clean = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.0).scan(
+        theta_list
+    )
+    zero_exposure = MachZehnderInterferometer(
+        psi_cat, N_cutoff=N_cutoff, kappa=10.0, loss_time=0.0
+    ).scan(theta_list)
 
     for key in ("n1", "n2", "parity1"):
         np.testing.assert_allclose(zero_exposure[key], clean[key], atol=1e-10, rtol=1e-10)
@@ -616,7 +626,9 @@ def test_lossy_kerr_cat_feeds_directly_into_mzi_scan():
     assert purity < 1.0 - 1e-6  # genuinely mixed, not just represented as a dm
 
     theta_list = np.linspace(0, 2 * np.pi, 40)
-    result = MachZehnderInterferometer(rho_decohered, N_cutoff=N_cutoff, kappa=0.0, loss_time=0.0).scan(theta_list)
+    result = MachZehnderInterferometer(
+        rho_decohered, N_cutoff=N_cutoff, kappa=0.0, loss_time=0.0
+    ).scan(theta_list)
     assert len(result["n1"]) == len(theta_list)
     assert all(np.isfinite(result["n1"]))
     assert all(np.isfinite(result["parity1"]))
@@ -653,7 +665,9 @@ def test_kerr_cavity_decoherence_through_mzi_fringe_visibility_demo():
         purity = (rho_cat * rho_cat).tr().real
         purities.append(purity)
 
-        result = MachZehnderInterferometer(rho_cat, N_cutoff=N_cutoff, kappa=0.0, loss_time=0.0).scan(theta_list)
+        result = MachZehnderInterferometer(
+            rho_cat, N_cutoff=N_cutoff, kappa=0.0, loss_time=0.0
+        ).scan(theta_list)
         ax_fringes.plot(
             theta_list / np.pi, result["parity1"], label=label, color=color, lw=2
         )
@@ -807,7 +821,9 @@ def test_cat_mzi_phase_scan_fringes(assert_no_empty_axes, assert_layout_can_rend
     psi_cat = (qt.coherent(N_cutoff, alpha) + qt.coherent(N_cutoff, -alpha)).unit()
     theta_list = np.linspace(0, 2 * np.pi, 200)
 
-    results = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.0).scan(theta_list)
+    results = MachZehnderInterferometer(psi_cat, N_cutoff=N_cutoff, kappa=0.0).scan(
+        theta_list
+    )
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 

@@ -803,7 +803,12 @@ class MachZehnderInterferometer:
         else:
             rho_after_loss = psi_after_BS1
 
-        results: ObservableScanData = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
+        results: ObservableScanData = {
+            "theta": theta_list,
+            "n1": [],
+            "n2": [],
+            "parity1": [],
+        }
         for theta in theta_list:
             U_phase = (1j * theta * n1_op).expm()
             rho_after_phase = U_phase * rho_after_loss * U_phase.dag()
