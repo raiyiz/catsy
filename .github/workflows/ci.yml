@@ -27,18 +27,6 @@ jobs:
         run: uv sync --group dev --locked
       - name: Run tests
         run: uv run pytest --plot --timings --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml
-      - name: Upload pytest results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-results
-          path: pytest-results.xml
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage/coverage.xml
 
   complex-example:
     name: complex example
@@ -58,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --locked
       - name: Run complex example
-        run: uv run python examples/complex_example.py
+        run: uv run python src/catsy/examples/complex_example.py
       - name: Upload complex example artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -85,7 +73,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --locked
       - name: Run complex circuit example
-        run: uv run python examples/complex_circuit.py
+        run: uv run python src/catsy/examples/complex_circuit.py
       - name: Upload complex circuit example artifacts
         if: always()
         uses: actions/upload-artifact@v4

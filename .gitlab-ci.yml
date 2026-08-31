@@ -1,5 +1,5 @@
-# Avoid running the pipeline twice for the same commit (once as a branch
-# pipeline, once as a merge-request pipeline).
+# CI for catsy: tests, docs, canonical examples, and GitLab Pages explorer.
+
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -39,9 +39,6 @@ pytest:
   script:
     - uv sync --group dev --locked
     - mkdir -p coverage
-    # --plot runs the @pytest.mark.visualize tests too. matplotlib is
-    # headless here (see MPLBACKEND above), so visualization tests render
-    # without opening interactive windows.
     - uv run pytest --plot --timings --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/html
   artifacts:
     when: always
@@ -92,15 +89,6 @@ mypy:
         - uv.lock
         - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-  cache:
-    - key:
-        files:
-          - uv.lock
-      paths:
-        - .cache/uv/
-    - key: mypy-cache
-      paths:
-        - .mypy_cache/
   script:
     - uv sync --group dev --locked
     - uv run mypy
@@ -154,8 +142,8 @@ complex-example:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        - examples/complex_example.py
-        - examples/config.toml
+        - src/catsy/examples/complex_example.py
+        - src/catsy/examples/config.toml
         - scripts/build_complex_report.py
         - src/catsy/**/*
         - pyproject.toml
@@ -165,7 +153,7 @@ complex-example:
   script:
     - uv sync --group dev --locked
     - rm -rf runs/complex_circuit
-    - uv run python examples/complex_example.py
+    - uv run python src/catsy/examples/complex_example.py
     - test -d runs/complex_circuit/plots
   artifacts:
     when: always
@@ -180,8 +168,8 @@ complex-circuit-example:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        - examples/complex_circuit.py
-        - examples/config_circuit.toml
+        - src/catsy/examples/complex_circuit.py
+        - src/catsy/examples/config_circuit.toml
         - scripts/build_complex_report.py
         - src/catsy/**/*
         - pyproject.toml
@@ -191,7 +179,7 @@ complex-circuit-example:
   script:
     - uv sync --group dev --locked
     - rm -rf runs/complex_circuit_basic
-    - uv run python examples/complex_circuit.py
+    - uv run python src/catsy/examples/complex_circuit.py
     - test -d runs/complex_circuit_basic
   artifacts:
     when: always
@@ -200,15 +188,6 @@ complex-circuit-example:
       - runs/complex_circuit_basic/
     expire_in: 30 days
 
-# Deploys one persistent GitLab Pages site: the example-run archive at the
-# root, and the pytest coverage report nested under /coverage/. The generated
-# history is kept in a custom Git ref rather than refs/heads, so GitLab does
-# not treat it as a developer branch or offer the usual merge-request prompt.
-# The ref is migrated automatically from the old `pages-history` branch on its
-# first deployment after this change.
-#
-# The CI job token must be allowed to push to the repository (Settings > CI/CD
-# > Job token permissions, or "Allow the job token to push to this repository").
 pages:
   extends: .uv-job
   stage: deploy
@@ -237,13 +216,9 @@ pages:
         git fetch origin "${PAGES_HISTORY_REF}"
         git worktree add -f _site FETCH_HEAD
       elif git ls-remote --exit-code origin "refs/heads/${PAGES_HISTORY_BRANCH}" >/dev/null 2>&1; then
-        # One-time migration from the old visible branch to the custom ref.
         git fetch origin "refs/heads/${PAGES_HISTORY_BRANCH}"
         git worktree add _site FETCH_HEAD
       else
-        # Older Git versions do not support `git worktree add --orphan`.
-        # Create a detached worktree first, then create the orphan branch
-        # inside it using the long-supported `git checkout --orphan` form.
         git worktree add --detach _site HEAD
         git -C _site checkout --orphan pages-history
         git -C _site rm -rf .
