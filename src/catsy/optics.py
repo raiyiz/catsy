@@ -14,7 +14,7 @@ from typing import Any, Protocol, TypedDict, cast
 import numpy as np
 import qutip as qt
 
-from catsy.fock import FockState
+from catsy.fock import FockState, make_even_cat
 from catsy.gaussian import GaussianState, initial_state
 from catsy.gaussian import beam_splitter as _gaussian_beam_splitter
 from catsy.gaussian import displace as _gaussian_displace
@@ -666,28 +666,101 @@ class ObservableScanData(TypedDict):
 class MachZehnderInterferometer:
     """Two-mode Mach-Zehnder interferometer with a lossy phase-sensing arm.
 
+    The interferometer owns its input state and physical parameters. A phase
+    scan is performed with :meth:`scan`; plotting the resulting observables
+    is a separate concern (see ``catsy.fock.mzi_visualization.plot_mzi_scan``,
+    which takes this object directly) -- like every other physics object in
+    this module (``Circuit``, ``Gate``, ``KerrCavity``), this class has no
+    plotting methods and no matplotlib dependency of its own.
+
     Parameters
     ----------
-    kappa:
-        Photon-loss rate in the lossy arm.
+    state:
+        Input state of the single optical mode entering port 1. May be a ket
+        or density matrix. Port 2 is initialized in vacuum.
     N_cutoff:
         Fock-space Hilbert-space dimension for each optical mode.
+    kappa:
+        Photon-loss rate in the lossy arm.
     loss_time:
         Fixed physical exposure time of the lossy arm. The loss is applied
         before the scanned phase, so its strength is independent of phase.
+
+    Examples
+    --------
+    >>> mzi = MachZehnderInterferometer(rho, N_cutoff=20)
+    >>> results = mzi.scan()
     """
 
-    def __init__(self, kappa: float, N_cutoff: int, *, loss_time: float = 1.0):
+    DEFAULT_NUM_PHASE_POINTS = 200
+
+    def __init__(
+        self,
+        state: qt.Qobj,
+        N_cutoff: int,
+        kappa: float = 0.0,
+        *,
+        loss_time: float = 1.0,
+    ):
         _check_positive_int(N_cutoff, "N_cutoff")
         _check_non_negative(kappa, "kappa")
         _check_non_negative(loss_time, "loss_time")
-        self.kappa = kappa
-        self.N_cutoff = N_cutoff
-        self.loss_time = loss_time
 
-    def scan(self, psi_cat_single: qt.Qobj, theta_list: FloatArray) -> ObservableScanData:
-        """Scan the phase of the lossy arm and return output observables."""
-        theta_list = np.asarray(theta_list, dtype=float)
+        if not isinstance(state, qt.Qobj):
+            raise TypeError("state must be a QuTiP Qobj.")
+        if not (state.isket or state.isoper):
+            raise ValueError("state must be a ket or density matrix.")
+
+        expected_shape = (N_cutoff, 1) if state.isket else (N_cutoff, N_cutoff)
+        if state.shape != expected_shape:
+            raise ValueError(
+                f"state has shape {state.shape}, expected {expected_shape} "
+                f"for N_cutoff={N_cutoff}."
+            )
+
+        self.state = state
+        self.N_cutoff = N_cutoff
+        self.kappa = kappa
+        self.loss_time = loss_time
+        self.results: ObservableScanData | None = None
+
+    @classmethod
+    def even_cat(
+        cls,
+        *,
+        cutoff: int = 22,
+        alpha: complex = 4.0 + 2j,
+        kappa: float = 0.0,
+        loss_time: float = 1.0,
+    ) -> MachZehnderInterferometer:
+        """Build an interferometer with an even cat state entering port 1."""
+        return cls(
+            make_even_cat(cutoff=cutoff, alpha=alpha),
+            N_cutoff=cutoff,
+            kappa=kappa,
+            loss_time=loss_time,
+        )
+
+    def scan(self, theta_list: FloatArray | None = None) -> ObservableScanData:
+        """Scan the phase of the lossy arm and return output observables.
+
+        Parameters
+        ----------
+        theta_list:
+            One-dimensional sequence of phase shifts. If omitted, 200
+            uniformly spaced points between 0 and 2*pi are used.
+
+        Returns
+        -------
+        ObservableScanData
+            Phase values and the corresponding output-port photon numbers
+            and parity. Also stored on ``self.results``.
+        """
+        if theta_list is None:
+            theta_list = np.linspace(0.0, 2.0 * np.pi, self.DEFAULT_NUM_PHASE_POINTS)
+        else:
+            theta_list = np.asarray(theta_list, dtype=float)
+
         if theta_list.ndim != 1 or len(theta_list) < 1:
             raise ValueError("theta_list must be a non-empty 1D array.")
         if not np.all(np.isfinite(theta_list)):
@@ -703,23 +776,24 @@ class MachZehnderInterferometer:
 
         U_BS = ((1j * np.pi / 4) * (a1.dag() * a2 + a1 * a2.dag())).expm()
 
-        # psi_cat_single may be a ket or a density matrix.
-        if psi_cat_single.isket:
-            psi_in = qt.tensor(psi_cat_single, qt.fock(N, 0))
+        # Port 2 is initialized in vacuum.
+        vacuum = qt.fock(N, 0)
+        if self.state.isket:
+            psi_in = qt.tensor(self.state, vacuum)
             psi_after_BS1 = U_BS * psi_in
         else:
-            psi_in = qt.tensor(psi_cat_single, qt.ket2dm(qt.fock(N, 0)))
-            psi_after_BS1 = U_BS * psi_in * U_BS.dag()
+            rho_in = qt.tensor(self.state, qt.ket2dm(vacuum))
+            psi_after_BS1 = U_BS * rho_in * U_BS.dag()
 
+        # Apply loss once, before the scanned phase.
         c_ops = (
-            [np.sqrt(self.kappa) * a1] if self.kappa > 0 and self.loss_time > 0 else []
+            [np.sqrt(self.kappa) * a1]
+            if self.kappa > 0.0 and self.loss_time > 0.0
+            else []
         )
         if c_ops:
             loss_sim = qt.mesolve(
-                0 * n1_op,
-                psi_after_BS1,
-                [0.0, self.loss_time],
-                c_ops=c_ops,
+                0 * n1_op, psi_after_BS1, [0.0, self.loss_time], c_ops=c_ops
             )
             rho_after_loss = loss_sim.states[-1]
             if rho_after_loss.isket:
@@ -729,20 +803,15 @@ class MachZehnderInterferometer:
         else:
             rho_after_loss = psi_after_BS1
 
-        results: ObservableScanData = {
-            "theta": theta_list,
-            "n1": [],
-            "n2": [],
-            "parity1": [],
-        }
-
+        results: ObservableScanData = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
         for theta in theta_list:
             U_phase = (1j * theta * n1_op).expm()
             rho_after_phase = U_phase * rho_after_loss * U_phase.dag()
             rho_out = U_BS * rho_after_phase * U_BS.dag()
 
-            results["n1"].append(qt.expect(n1_op, rho_out))
-            results["n2"].append(qt.expect(n2_op, rho_out))
-            results["parity1"].append(qt.expect(parity1_op, rho_out).real)
+            results["n1"].append(float(qt.expect(n1_op, rho_out)))
+            results["n2"].append(float(qt.expect(n2_op, rho_out)))
+            results["parity1"].append(float(qt.expect(parity1_op, rho_out).real))
 
+        self.results = results
         return results

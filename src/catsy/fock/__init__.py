@@ -388,6 +388,23 @@ def _apply_kraus_operator(
     return _apply_kraus_operators(rho, [kraus_op], label)
 
 
+# ========================================================================
+# State construction
+# ========================================================================
+
+
+def make_even_cat(*, cutoff: int, alpha: complex) -> qt.Qobj:
+    """Return a normalized even cat ket, |alpha> + |-alpha>, in a truncated Fock basis.
+
+    Genuinely non-Gaussian (a Wigner-negative superposition of two coherent
+    states), so unlike the gates above it has no GaussianState origin --
+    there's nothing to call ``GaussianState.to_fock()`` on to get here.
+    """
+    if cutoff <= 0:
+        raise ValueError("cutoff must be positive.")
+    return (qt.coherent(cutoff, alpha) + qt.coherent(cutoff, -alpha)).unit()
+
+
 def photon_subtraction(
     rho: qt.Qobj,
     mode_idx: int = 0,

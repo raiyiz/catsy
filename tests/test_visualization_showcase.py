@@ -31,7 +31,7 @@ from matplotlib.colors import Normalize
 
 from catsy import GaussianState
 from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
-from catsy.fock.mzi_visualization import plot_mzi_scan, run_mzi_phase_scan
+from catsy.fock.mzi_visualization import plot_mzi_scan
 from catsy.fock.visualization import plot_fock_dashboard
 from catsy.fock.visualization import plot_wigner as plot_fock_wigner
 from catsy.gaussian import LossChannels
@@ -42,6 +42,7 @@ from catsy.gaussian.visualization import (
     plot_phase_space,
     plot_wigner,
 )
+from catsy.optics import MachZehnderInterferometer
 from catsy.visualization import color_norm
 
 _TMSV_COUPLING = 0.7  # kappa in H = i*kappa*(a^dagger b^dagger - a b)
@@ -406,14 +407,8 @@ def test_showcase_compass_mzi_gallery(assert_no_empty_axes, assert_layout_can_re
     ).unit()
     rho = qt.ket2dm(state)
 
-    results = run_mzi_phase_scan(rho)
-    # TODO: stupid hack, need fix
-    figure, (scan_ax, state_ax) = plt.subplots(
-        2,
-        figsize=(13.5, 5.5),
-        constrained_layout=True,
-    )
-    plot_mzi_scan(results, axes=(scan_ax, state_ax))
-    state_ax.set_title("Compass-state interferometric readout")
+    mzi = MachZehnderInterferometer(rho, N_cutoff=cutoff)
+    mzi.scan()
+    figure = plot_mzi_scan(mzi, state_title="Compass-state interferometric readout")
     assert_no_empty_axes(figure)
     assert_layout_can_render(figure)

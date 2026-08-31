@@ -10,8 +10,12 @@ import numpy as np
 import qutip as qt
 
 from catsy import Circuit, GaussianMeasurements, GaussianState, SimulationJournal
-from catsy.fock import realistic_photon_addition, realistic_photon_subtraction
-from catsy.fock.mzi_visualization import plot_mzi_scan, run_mzi_phase_scan
+from catsy.fock import (
+    make_even_cat,
+    realistic_photon_addition,
+    realistic_photon_subtraction,
+)
+from catsy.fock.mzi_visualization import plot_mzi_scan
 from catsy.fock.visualization import plot_fock_dashboard, plot_wigner
 from catsy.gaussian.visualization import (
     plot_covariance_matrix,
@@ -19,6 +23,7 @@ from catsy.gaussian.visualization import (
     plot_phase_space,
     plot_phase_space_trajectory,
 )
+from catsy.optics import MachZehnderInterferometer, ObservableScanData
 
 try:
     from .config import RunConfig
@@ -73,12 +78,10 @@ def build_circuit(config: RunConfig, rng: np.random.Generator) -> Circuit:
 
 def make_cat_state(N_cutoff: int, alpha: complex) -> qt.Qobj:
     """Return an even Schrödinger-cat state in a truncated Fock basis."""
-    plus = qt.coherent(N_cutoff, alpha)
-    minus = qt.coherent(N_cutoff, -alpha)
-    return qt.ket2dm((plus + minus).unit())
+    return qt.ket2dm(make_even_cat(cutoff=N_cutoff, alpha=alpha))
 
 
-def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
+def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, MachZehnderInterferometer]:
     """Prepare a cat, herald photon subtraction, then herald photon addition."""
     cat = make_cat_state(N_cutoff=18, alpha=1.1 + 0.15j)
     subtracted = realistic_photon_subtraction(
@@ -91,14 +94,9 @@ def run_fock_chain() -> tuple[qt.Qobj, qt.Qobj, qt.Qobj, dict[str, np.ndarray]]:
         ancilla_cutoff=6,
     )
     theta = np.linspace(0.0, 2.0 * np.pi, 33)
-    scan = run_mzi_phase_scan(
-        added,
-        cutoff=18,
-        theta_list=theta,
-        kappa=0.08,
-        loss_time=0.75,
-    )
-    return cat, subtracted, added, {key: np.asarray(value) for key, value in scan.items()}
+    mzi = MachZehnderInterferometer(added, N_cutoff=18, kappa=0.08, loss_time=0.75)
+    mzi.scan(theta)
+    return cat, subtracted, added, mzi
 
 
 def run_homodyne(
@@ -127,7 +125,7 @@ def execution_stages(
     cat: qt.Qobj,
     subtracted: qt.Qobj,
     added: qt.Qobj,
-    mzi_scan: dict[str, np.ndarray],
+    mzi_scan: ObservableScanData,
     homodyne_state: GaussianState,
     heterodyne_state: GaussianState,
 ) -> list[dict[str, object]]:
@@ -280,7 +278,7 @@ def plot_experiment(
     cat: qt.Qobj,
     subtracted: qt.Qobj,
     added: qt.Qobj,
-    mzi_scan: dict[str, np.ndarray],
+    mzi: MachZehnderInterferometer,
     output_dir: Path,
 ) -> None:
     """Create diagnostics using only Catsy's public plotting helpers."""
@@ -318,10 +316,9 @@ def plot_experiment(
             [homodyne_reordered, heterodyne_reordered], "idler", show=False
         ),
         "11_mach_zehnder_scan": plot_mzi_scan(
-            mzi_scan,
-            state=added,
+            mzi,
             state_title="State entering MZI",
-            phase=float(mzi_scan["theta"][0]),
+            phase=float(mzi.results["theta"][0]),
             show=False,
         ),
     }
@@ -341,7 +338,7 @@ def plot_experiment(
         "Saved %d Catsy diagnostic plots to %s (MZI scan has %d phase points)",
         len(figures),
         output_dir,
-        len(mzi_scan["theta"]),
+        len(mzi.results["theta"]),
     )
 
 
@@ -362,7 +359,8 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
     final_state = circuit.run(initial)
 
     LOGGER.info("Running Gaussian circuit %r on modes %s", circuit.name, circuit.modes)
-    cat, subtracted, added, mzi_scan = run_fock_chain()
+    cat, subtracted, added, mzi = run_fock_chain()
+    mzi_scan = mzi.results
     LOGGER.info(
         "Fock chain complete: even cat -> photon subtraction -> photon addition -> MZI; "
         "max output photon number %.3f",
@@ -385,7 +383,7 @@ def main(config_path: str | Path = _DEFAULT_CONFIG_PATH) -> Path:
         cat,
         subtracted,
         added,
-        mzi_scan,
+        mzi,
         output_dir / "plots",
     )
 
