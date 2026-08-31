@@ -1,4 +1,4 @@
-#import "@preview/physica:0.9.8"
+#import "@preview/physica:0.9.8": *
 #import "links.typ": src-link
 
 // ==========================================

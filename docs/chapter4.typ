@@ -63,7 +63,7 @@ The implementation uses the effective covariance $V_("eff") = V_("MM") + I/2$ fo
 === Why the code does this (physical causality)
 - *`V_eff = V_MM + 0.5 * np.eye(2)`*: the added `0.5 * I` represents the vacuum fluctuations entering the unused input port of the 50:50 heterodyne beam splitter in the package's covariance convention.
 - *`gain = np.linalg.solve(V_eff, V_MR).T`*: solving the linear system for the gain avoids explicitly forming `V_eff`'s inverse and is numerically preferable.
-- *`V_cond = V_RR - gain @ V_MR`*: the added measurement noise makes heterodyne conditioning less informative than the corresponding noiseless joint-quadrature conditioning. It does **not** imply that every eigenvalue of the conditioned remote covariance is bounded below by `0.5`; the conditional state may itself be squeezed. The universal statement is about the measurement noise model, not a vacuum lower bound on the conditioned subsystem.
+- *`V_cond = V_RR - gain @ V_MR`*: the added measurement noise makes heterodyne conditioning less informative than the corresponding noiseless joint-quadrature conditioning. It does *not* imply that every eigenvalue of the conditioned remote covariance is bounded below by `0.5`; the conditional state may itself be squeezed. The universal statement is about the measurement noise model, not a vacuum lower bound on the conditioned subsystem.
 
 ---
 
