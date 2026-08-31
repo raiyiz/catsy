@@ -18,7 +18,9 @@ CVState = GaussianState | FockState
 class GateTransform(Protocol):
     """Callable contract for a state transformation."""
 
-    def __call__(self, state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState: ...
+    def __call__(
+        self, state: CVState, modes: Modes, **kwargs: ParameterValue
+    ) -> CVState: ...
 
 
 @dataclass(frozen=True)
@@ -74,7 +76,9 @@ _GATE_LABEL_ABBREVIATIONS = {
 }
 
 
-def _normalize_gate_kwargs(kwargs: dict[str, ParameterValue]) -> dict[str, ParameterValue]:
+def _normalize_gate_kwargs(
+    kwargs: dict[str, ParameterValue],
+) -> dict[str, ParameterValue]:
     """Make complex coherent amplitudes JSON-safe for serialized gates."""
     if "alpha" not in kwargs:
         return kwargs
@@ -113,14 +117,18 @@ class Circuit:
 
     def __getattr__(self, name: str) -> Any:
         transform = next(
-            (candidate for candidate in _GATE_DESERIALIZERS.values()
-             if getattr(candidate, "__name__", "") == name),
+            (
+                candidate
+                for candidate in _GATE_DESERIALIZERS.values()
+                if getattr(candidate, "__name__", "") == name
+            ),
             None,
         )
         if transform is None:
             raise AttributeError(name)
         gate_name = next(
-            registered for registered, candidate in _GATE_DESERIALIZERS.items()
+            registered
+            for registered, candidate in _GATE_DESERIALIZERS.items()
             if candidate is transform
         )
 
@@ -148,7 +156,11 @@ class Circuit:
     def _resolve_mode(self, mode: str | Mode) -> str:
         if isinstance(mode, Mode):
             if mode.owner is not self:
-                owner_desc = "no circuit (a free/standalone mode)" if mode.owner is None else f"circuit {mode.owner.name!r}"
+                owner_desc = (
+                    "no circuit (a free/standalone mode)"
+                    if mode.owner is None
+                    else f"circuit {mode.owner.name!r}"
+                )
                 raise ValueError(
                     f"Mode {mode.name!r} belongs to {owner_desc}, not to this circuit ({self.name!r})."
                 )
@@ -166,7 +178,9 @@ class Circuit:
         if any(not isinstance(mode, str) or not mode.strip() for mode in modes):
             raise ValueError("All circuit gate modes must be non-empty strings.")
         if len(set(modes)) != len(modes):
-            raise ValueError(f"{gate.name} cannot target the same mode more than once: {modes!r}.")
+            raise ValueError(
+                f"{gate.name} cannot target the same mode more than once: {modes!r}."
+            )
         unknown = [mode for mode in modes if mode not in self._mode_registry]
         if unknown:
             raise ValueError(
@@ -183,7 +197,12 @@ class Circuit:
             raise RuntimeError("No InitialState gate has been registered.")
         resolved = tuple(self._resolve_mode(mode) for mode in modes)
         return self.add_gate(
-            Gate("InitialState", transform, resolved, _normalize_gate_kwargs({"kind": kind, **kwargs}))
+            Gate(
+                "InitialState",
+                transform,
+                resolved,
+                _normalize_gate_kwargs({"kind": kind, **kwargs}),
+            )
         )
 
     def run(self, initial_state: CVState | None = None) -> Any:
@@ -196,7 +215,9 @@ class Circuit:
             current_state = initial_state.reorder_modes(self.modes)
         for idx, gate in enumerate(self._gates):
             if current_state is None and gate.name != "InitialState":
-                raise ValueError(f"Gate #{idx} ({gate.name}) cannot run before an initial_state gate.")
+                raise ValueError(
+                    f"Gate #{idx} ({gate.name}) cannot run before an initial_state gate."
+                )
             current_state = gate.apply(current_state)
         if current_state is None:
             raise ValueError(
@@ -222,7 +243,9 @@ class Circuit:
             try:
                 transform = _GATE_DESERIALIZERS[gate_data["gate"]]
             except KeyError as exc:
-                raise KeyError(f"Unknown gate '{gate_data['gate']}' in serialized circuit.") from exc
+                raise KeyError(
+                    f"Unknown gate '{gate_data['gate']}' in serialized circuit."
+                ) from exc
             circuit.add_gate(
                 Gate(
                     name=gate_data["gate"],
@@ -266,7 +289,13 @@ class Circuit:
                 else:
                     lines[mode] += "─" * (width + 4)
         title = f"─┤ Schematic: {self.name} ├"
-        return "\n".join([f"┌{title:─<78}┐", *(f"│  {lines[m]}── OUT  │" for m in ordered), "└" + "─" * 78 + "┘"])
+        return "\n".join(
+            [
+                f"┌{title:─<78}┐",
+                *(f"│  {lines[m]}── OUT  │" for m in ordered),
+                "└" + "─" * 78 + "┘",
+            ]
+        )
 
     def draw(self, input_states: dict[str, str] | None = None) -> None:
         print("\n" + self.render_schematic(input_states) + "\n")
@@ -277,7 +306,11 @@ def _render_gate_label(gate: Gate) -> tuple[str, int]:
     for key, symbol in (("eta", "η"), ("phi", "φ"), ("r", "r"), ("x", "x"), ("p", "p")):
         if key in gate.kwargs:
             value = gate.kwargs[key]
-            param_str = f" {symbol}={value:.2f}" if isinstance(value, float) else f" {symbol}={value}"
+            param_str = (
+                f" {symbol}={value:.2f}"
+                if isinstance(value, float)
+                else f" {symbol}={value}"
+            )
             break
     type_name = _GATE_LABEL_ABBREVIATIONS.get(gate.name, gate.name[:5])
     label = f" {type_name}{param_str} "

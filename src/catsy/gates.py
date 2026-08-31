@@ -13,13 +13,17 @@ from catsy.gaussian import rotate as _gaussian_rotate
 from catsy.gaussian import squeeze as _gaussian_squeeze
 from catsy.gaussian import thermal_loss as _gaussian_thermal_loss
 
-from .circuits import CVState, Circuit
+from .circuits import Circuit, CVState
 from .types import Modes, ParameterValue
 
 
 def squeeze(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
     if isinstance(state, FockState):
-        return state.squeeze(mode=modes[0], r=cast(float, kwargs["r"]), theta=cast(float, kwargs.get("theta", 0.0)))
+        return state.squeeze(
+            mode=modes[0],
+            r=cast(float, kwargs["r"]),
+            theta=cast(float, kwargs.get("theta", 0.0)),
+        )
     return _gaussian_squeeze(state, modes, **kwargs)
 
 
@@ -42,7 +46,9 @@ def displace(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
 
 def beam_splitter(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
     if isinstance(state, FockState):
-        return state.beam_splitter(mode_a=modes[0], mode_b=modes[1], eta=cast(float, kwargs["eta"]))
+        return state.beam_splitter(
+            mode_a=modes[0], mode_b=modes[1], eta=cast(float, kwargs["eta"])
+        )
     return _gaussian_beam_splitter(state, modes, **kwargs)
 
 
@@ -58,7 +64,9 @@ def thermal_loss(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVSt
             mode=modes[0],
             eta=cast(float, kwargs["eta"]),
             nbar=cast(float, kwargs.get("nbar", 0.0)),
-            ancilla_cutoff=cast(int, kwargs["ancilla_cutoff"]) if "ancilla_cutoff" in kwargs else None,
+            ancilla_cutoff=cast(int, kwargs["ancilla_cutoff"])
+            if "ancilla_cutoff" in kwargs
+            else None,
         )
     return _gaussian_thermal_loss(state, modes, **kwargs)
 
@@ -74,7 +82,9 @@ def _ensure_fock(state: CVState, kwargs: dict[str, ParameterValue]) -> FockState
     return cast(GaussianState, state).to_fock(cast(int, kwargs["N_cutoff"]))
 
 
-def photon_subtraction(state: CVState, modes: Modes, **kwargs: ParameterValue) -> FockState:
+def photon_subtraction(
+    state: CVState, modes: Modes, **kwargs: ParameterValue
+) -> FockState:
     return _ensure_fock(state, kwargs).photon_subtraction(mode=modes[0])
 
 
@@ -82,7 +92,9 @@ def photon_addition(state: CVState, modes: Modes, **kwargs: ParameterValue) -> F
     return _ensure_fock(state, kwargs).photon_addition(mode=modes[0])
 
 
-def realistic_photon_subtraction(state: CVState, modes: Modes, **kwargs: ParameterValue) -> FockState:
+def realistic_photon_subtraction(
+    state: CVState, modes: Modes, **kwargs: ParameterValue
+) -> FockState:
     return _ensure_fock(state, kwargs).realistic_photon_subtraction(
         mode=modes[0],
         tap_reflectivity=cast(float, kwargs.get("tap_reflectivity", 0.05)),
@@ -91,7 +103,9 @@ def realistic_photon_subtraction(state: CVState, modes: Modes, **kwargs: Paramet
     )
 
 
-def realistic_photon_addition(state: CVState, modes: Modes, **kwargs: ParameterValue) -> FockState:
+def realistic_photon_addition(
+    state: CVState, modes: Modes, **kwargs: ParameterValue
+) -> FockState:
     return _ensure_fock(state, kwargs).realistic_photon_addition(
         mode=modes[0],
         coupling_strength=cast(float, kwargs.get("coupling_strength", 0.05)),

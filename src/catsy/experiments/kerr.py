@@ -21,7 +21,9 @@ class KerrCavity:
         self.kappa = kappa
         self.N_cutoff = N_cutoff
 
-    def run(self, rho_init: qt.Qobj, tlist: FloatArray, amp: float, t0: float, sigma: float) -> list[qt.Qobj]:
+    def run(
+        self, rho_init: qt.Qobj, tlist: FloatArray, amp: float, t0: float, sigma: float
+    ) -> list[qt.Qobj]:
         """Evolve ``rho_init`` under the driven Kerr-cavity master equation."""
         tlist = np.asarray(tlist, dtype=float)
         if tlist.ndim != 1 or len(tlist) < 2:
@@ -43,5 +45,11 @@ class KerrCavity:
 
         H_total = [H_kerr, [a + a.dag(), pulse_shape]]
         c_ops = [np.sqrt(self.kappa) * a] if self.kappa > 0 else []
-        result = qt.mesolve(H_total, rho_init, tlist, c_ops=c_ops, args={"amp": amp, "t0": t0, "sigma": sigma})
+        result = qt.mesolve(
+            H_total,
+            rho_init,
+            tlist,
+            c_ops=c_ops,
+            args={"amp": amp, "t0": t0, "sigma": sigma},
+        )
         return list(result.states)

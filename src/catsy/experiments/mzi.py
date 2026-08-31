@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import numpy as np
-import qutip as qt
 from typing import TypedDict
 
+import numpy as np
+import qutip as qt
+
 from catsy.fock import make_even_cat
+
 from ..core import _check_non_negative, _check_positive_int
 from ..types import FloatArray
 
@@ -23,7 +25,9 @@ class MachZehnderInterferometer:
 
     DEFAULT_NUM_PHASE_POINTS = 200
 
-    def __init__(self, state: qt.Qobj, N_cutoff: int, kappa: float = 0.0, *, loss_time: float = 1.0):
+    def __init__(
+        self, state: qt.Qobj, N_cutoff: int, kappa: float = 0.0, *, loss_time: float = 1.0
+    ):
         _check_positive_int(N_cutoff, "N_cutoff")
         _check_non_negative(kappa, "kappa")
         _check_non_negative(loss_time, "loss_time")
@@ -33,7 +37,9 @@ class MachZehnderInterferometer:
             raise ValueError("state must be a ket or density matrix.")
         expected_shape = (N_cutoff, 1) if state.isket else (N_cutoff, N_cutoff)
         if state.shape != expected_shape:
-            raise ValueError(f"state has shape {state.shape}, expected {expected_shape} for N_cutoff={N_cutoff}.")
+            raise ValueError(
+                f"state has shape {state.shape}, expected {expected_shape} for N_cutoff={N_cutoff}."
+            )
         self.state = state
         self.N_cutoff = N_cutoff
         self.kappa = kappa
@@ -41,8 +47,17 @@ class MachZehnderInterferometer:
         self.results: ObservableScanData | None = None
 
     @classmethod
-    def even_cat(cls, *, cutoff: int = 22, alpha: complex = 4.0 + 2j, kappa: float = 0.0, loss_time: float = 1.0) -> MachZehnderInterferometer:
-        return cls(make_even_cat(cutoff=cutoff, alpha=alpha), cutoff, kappa, loss_time=loss_time)
+    def even_cat(
+        cls,
+        *,
+        cutoff: int = 22,
+        alpha: complex = 4.0 + 2j,
+        kappa: float = 0.0,
+        loss_time: float = 1.0,
+    ) -> MachZehnderInterferometer:
+        return cls(
+            make_even_cat(cutoff=cutoff, alpha=alpha), cutoff, kappa, loss_time=loss_time
+        )
 
     def scan(self, theta_list: FloatArray | None = None) -> ObservableScanData:
         if theta_list is None:
@@ -70,7 +85,11 @@ class MachZehnderInterferometer:
             rho_in = qt.tensor(self.state, qt.ket2dm(vacuum))
             after_bs = U_BS * rho_in * U_BS.dag()
 
-        c_ops = [np.sqrt(self.kappa) * a1] if self.kappa > 0.0 and self.loss_time > 0.0 else []
+        c_ops = (
+            [np.sqrt(self.kappa) * a1]
+            if self.kappa > 0.0 and self.loss_time > 0.0
+            else []
+        )
         if c_ops:
             loss_sim = qt.mesolve(0 * n1_op, after_bs, [0.0, self.loss_time], c_ops=c_ops)
             rho_after_loss = loss_sim.states[-1]
@@ -81,7 +100,12 @@ class MachZehnderInterferometer:
         else:
             rho_after_loss = after_bs
 
-        results: ObservableScanData = {"theta": theta_list, "n1": [], "n2": [], "parity1": []}
+        results: ObservableScanData = {
+            "theta": theta_list,
+            "n1": [],
+            "n2": [],
+            "parity1": [],
+        }
         for theta in theta_list:
             U_phase = (1j * theta * n1_op).expm()
             rho_after_phase = U_phase * rho_after_loss * U_phase.dag()

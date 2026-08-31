@@ -48,7 +48,9 @@ def plot_mzi_scan(
         raise ValueError("resolution must be positive.")
 
     if axes is None:
-        _, (scan_ax, state_ax) = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
+        _, (scan_ax, state_ax) = plt.subplots(
+            1, 2, figsize=figsize, constrained_layout=True
+        )
     else:
         scan_ax, state_ax = axes
     fig = cast(plt.Figure, scan_ax.figure)

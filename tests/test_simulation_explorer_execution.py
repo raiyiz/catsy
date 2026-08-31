@@ -3,8 +3,8 @@ import json
 import numpy as np
 import qutip as qt
 
+from catsy.examples.complex_example import PLOT_STEMS, execution_stages
 from catsy.gaussian import GaussianState
-from examples.complex_example import PLOT_STEMS, execution_stages
 from scripts.sync_complex_execution_stages import (
     _load_stages,
     _render_pipeline,
