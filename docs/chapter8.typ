@@ -1,11 +1,11 @@
-#import "@preview/physica:0.9.8": *
+#import "@preview/physica:0.9.8"
 
 // ==========================================
 // CHAPTER 8
 // ==========================================
 = Chapter 8: Reusable Layouts and Circuit Schematics
 
-Chapter 3 introduced `Circuit` as an *ordered gate sequence*. This chapter covers the parts of `Circuit` aimed specifically at building and inspecting reusable hardware-style layouts: the fluent builder API, repeated execution against different input states, save/load, and the plain-text schematic renderer. A `Circuit` is the execution/orchestration abstraction; there is no separate optical-bench or component hierarchy. The mathematical transformations remain ordinary operations, while `Gate` binds an operation to its modes and parameters.
+Chapter 3 introduced `Circuit` as an *ordered gate sequence*. This chapter covers the parts of `Circuit` aimed specifically at building and inspecting reusable hardware-style layouts: the fluent builder API, repeated execution against different input states, save/load, and the plain-text schematic renderer. A `Circuit` is the execution/orchestration abstraction; there is no separate optical-bench or component hierarchy. The public state operations remain ordinary transformations, while a `Gate` binds a *circuit-compatible transform* to its modes and parameters.
 
 == Gates in a circuit
 
@@ -14,13 +14,15 @@ There is no separate component abstraction. A `Gate` already contains everything
 ```python
 Gate(
     name="BeamSplitter",
-    transform=beam_splitter,
+    transform=<circuit transform for beam_splitter>,
     modes=("a", "b"),
     kwargs={"eta": 0.5},
 )
 ```
 
-The `name` is the noun used as the stable gate identity and serialization key. The `transform` is the executable mathematical operation; `modes` identify where it acts; and `kwargs` contain the parameters bound to this particular Gate instance. `Circuit` places no restriction on which registered gate names appear together in one circuit -- a circuit is free to mix `Displacer`, `ThermalLoss`, or an explicit `InitialState` gate alongside the passive/lossy gates below; nothing distinguishes a "physically buildable bench" from any other gate sequence.
+The `name` is the noun used as the stable gate identity and serialization key. The `transform` is the executable mathematical operation with the `GateTransform` calling convention `(state, modes, **kwargs)`; `modes` identify where it acts; and `kwargs` contain the parameters bound to this particular Gate instance. This circuit-transform interface is distinct from the direct state-operation signatures exposed by `catsy.operations`.
+
+For normal application code, prefer the fluent `Circuit` methods. Raw `Gate` construction is mainly useful when working with the circuit registry or serialization layer; the fluent builder automatically supplies the correct circuit transform.
 
 == Declaratively assembling a layout
 
@@ -36,19 +38,7 @@ circuit = (
 )
 ```
 
-Each convenience method constructs one fully bound `Gate` and appends it to the circuit -- see Chapter 3 for how `circuit.squeeze(...)` resolves to the registered `Squeezer` operation. The same Gate can also be constructed explicitly and passed to `add_gate`:
-
-```python
-gate = Gate(
-    name="Squeezer",
-    transform=squeeze,
-    modes=("a",),
-    kwargs={"r": 0.6, "theta": 0.0},
-)
-circuit.add_gate(gate)
-```
-
-No separate component object is required, and the circuit does not maintain a second representation of the transformation. `add_gate` expects the referenced modes to have been registered with the circuit; mode ownership and registration are part of the circuit's validation boundary described in Chapter 3.
+Each convenience method constructs one fully bound `Gate` and appends it to the circuit -- see Chapter 3 for the distinction between the public state-operation API and the circuit `GateTransform` registry. The same Gate can also be constructed explicitly when the appropriate registered circuit transform is supplied to `transform`.
 
 == Execution
 
@@ -65,7 +55,7 @@ An empty circuit (no gates) simply returns whatever state it's given unchanged, 
 
 `Circuit` is JSON-persistent via `to_dict`/`from_dict`/`save`/`load` (Chapter 3). Serialization records the Gate's stable name, target modes, and bound parameters rather than Python function objects. `render_schematic` provides a pure, deterministic text visualization of the circuit -- one mode per line, in the circuit's own mode order, gates shown left to right in execution order -- which `draw` simply passes to `print`.
 
-The resulting separation is intentional: an operation describes *what transformation means mathematically*; a Gate describes *one bound use of that transformation*; a Circuit describes *when and in what order those bound transformations execute*.
+The resulting separation is intentional: a public operation describes *what transformation means mathematically*; a Gate describes *one bound use of a circuit-compatible transform*; a Circuit describes *when and in what order those bound transformations execute*.
 
 ---
 

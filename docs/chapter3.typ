@@ -1,11 +1,11 @@
-#import "@preview/physica:0.9.8": *
+#import "@preview/physica:0.9.8"
 
 // ==========================================
 // CHAPTER 3
 // ==========================================
 = Chapter 3: Circuit Architecture & Gate Serialization
 
-The `Circuit` class is the generic imperative sequencing layer of the toolkit. It stores an ordered sequence of fully bound `Gate` instances over named modes. A `Gate` contains the stable noun-style gate name, its executable `transform`, the target `modes`, and the bound `kwargs`.
+The `Circuit` class is the generic imperative sequencing layer of the toolkit. It stores an ordered sequence of fully bound `Gate` instances over named modes. A `Gate` contains the stable noun-style gate name, its executable *circuit transform*, the target `modes`, and the bound `kwargs`.
 
 == Gate instances and direct execution
 The central abstraction is deliberately small:
@@ -22,28 +22,19 @@ class Gate:
         return self.transform(state, self.modes, **self.kwargs)
 ```
 
-The mathematical transformations remain ordinary verb-named functions such as `squeeze`, `rotate`, `displace`, `beam_splitter`, `loss`, and `thermal_loss`. A concrete Gate instance binds one such transform to its noun-style identity and parameters:
+The public state operations remain ordinary verb-named functions such as `catsy.squeeze`, `catsy.rotate`, `catsy.displace`, `catsy.beam_splitter`, `catsy.loss`, and `catsy.thermal_loss`. A circuit `Gate` binds a circuit-compatible transform to its noun-style identity and parameters. These transform functions have the `GateTransform` calling convention `(state, modes, **kwargs)`; they are distinct from the direct state-operation signatures exposed by `catsy.operations`.
 
-```python
-squeezer = Gate(
-    name="Squeezer",
-    transform=squeeze,
-    modes=("a",),
-    kwargs={"r": 0.5},
-)
-```
-
-The same Gate can be applied directly with `squeezer.apply(state)` or attached to a circuit with `circuit.add_gate(squeezer)`. Construction and attachment never execute the transformation.
+For normal use, prefer the fluent `Circuit` methods or the public state operations. Constructing a raw `Gate` is mainly useful when demonstrating serialization or when working with the circuit registry directly.
 
 == Fluent circuit construction
-Registered transforms are also exposed as fluent Circuit methods. These methods construct the same kind of Gate instance and append it to the circuit:
+Registered transforms are exposed as fluent `Circuit` methods. These methods construct the same kind of `Gate` instance and append it to the circuit:
 
 ```python
 circuit.squeeze("a", r=0.5)
 circuit.displace("a", alpha=0.2)
 ```
 
-The fluent call is therefore equivalent to constructing a Gate explicitly and passing it to `add_gate`. The verb is the transformation/function name; the bound Gate carries the noun-style name.
+The fluent call is therefore equivalent to constructing a circuit `Gate` with the registered transform and passing it to `add_gate`. The verb is the public operation/function name; the bound Gate carries the noun-style name used for serialization.
 
 == Modes are owned, not just named
 A `Circuit`'s modes are registered through `circuit.mode(name)`, which returns a small `Mode` object rather than the plain name:
@@ -77,10 +68,9 @@ Function objects are intentionally kept out of JSON. A serialized gate contains 
 }
 ```
 
-The registry maps serialized Gate names back to their transform functions when loading a circuit. Execution itself uses the transform already stored in each Gate instance.
+The registry maps serialized Gate names back to circuit-compatible transform functions when loading a circuit. Execution itself uses the transform already stored in each Gate instance.
 
-A complex Python number is not JSON-serializable, but the Displacer gate and `InitialState(kind="coherent")` both accept a complex displacement amplitude `alpha` as a convenience. Rather than reject it at serialization time, `Gate.kwargs` canonicalizes `alpha` into its real-valued quadratures `x`, `p` (via `_normalize_phase_vector`,
-$x = sqrt(2) Re(alpha), quad p = sqrt(2) Im(alpha)$) *at gate-construction time* -- before a `Gate` is even built, not only when it later runs:
+A complex Python number is not JSON-serializable, but the Displacer gate and `InitialState(kind="coherent")` both accept a complex displacement amplitude `alpha` as a convenience. Rather than reject it at serialization time, `Gate.kwargs` canonicalizes `alpha` into its real-valued quadratures `x`, `p` (via `_normalize_phase_vector`, $x = sqrt(2) Re(alpha)$, $p = sqrt(2) Im(alpha)$) *at gate-construction time* -- before a `Gate` is even built, not only when it later runs:
 
 ```python
 circuit.displace("a", alpha=0.2 + 0.1j)
@@ -98,10 +88,10 @@ for gate in self._gates:
     current_state = gate.apply(current_state)
 ```
 
-This gives a linear execution path: `Gate` → `transform` → state. The circuit does not need a separate operation record or execution wrapper. Mode registration is validated once, in `add_gate` -- not re-checked here.
+This gives a linear execution path: `Gate` → circuit transform → state. The circuit does not need a separate operation record or execution wrapper. Mode registration is validated once, in `add_gate` -- not re-checked here.
 
 == State storage and roundtrip guarantee
-Circuits remain persistent through `save` and `load`. Serialization stores only the Gate name, modes, and bound parameters; deserialization reconstructs a concrete Gate with the corresponding transform. A circuit can also contain an `InitialState` Gate. When present, `run()` can construct the initial state from that Gate; an explicit state passed to `run()` overrides it.
+Circuits remain persistent through `save` and `load`. Serialization stores only the Gate name, modes, and bound parameters; deserialization reconstructs a concrete Gate with the corresponding circuit transform. A circuit can also contain an `InitialState` Gate. When present, `run()` can construct the initial state from that Gate; an explicit state passed to `run()` overrides it.
 
 
 === Literature

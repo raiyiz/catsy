@@ -1,4 +1,4 @@
-#import "@preview/physica:0.9.8": *
+#import "@preview/physica:0.9.8"
 #import "links.typ": src-link
 
 // ==========================================
@@ -19,11 +19,12 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
   [#src-link("src/catsy/gaussian/__init__.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/operations.py")], [Representation-independent public state transformations; dispatches Gaussian and Fock states to their concrete implementations (Chapters 2, 5, 10).],
   [#src-link("src/catsy/gaussian/visualization.py")], [Gaussian-state plots, composite dashboards (`plot_state_dashboard`, `plot_evolution`, `plot_multimode_evolution`), and animations (Chapter 6).],
   [#src-link("src/catsy/fock/__init__.py")], [`FockState` plus functional Fock-space operations such as photon addition/subtraction; `FockGates` remains only as a backwards-compatible namespace (Chapter 7).],
   [#src-link("src/catsy/fock/visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for Fock-space states backed by QuTiP, including the `plot_fock_dashboard` four-view composite (Chapter 6).],
   [#src-link("src/catsy/visualization.py")], [Plotting primitives (figure lifecycle, phase-space styling, shared annotation and colorbar helpers) shared by the two visualization modules above.],
-  [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
+  [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 
@@ -49,6 +50,8 @@ from catsy import (
 )
 ```
 
+The representation-independent operations are also re-exported from the package root. For one-off transformations use their state-oriented signatures, e.g. `catsy.squeeze(state, "a", r=0.5)`. These public operations should not be passed directly as `Gate.transform`: circuit `Gate` objects require the separate `GateTransform` calling convention `(state, modes, **kwargs)`, which is supplied automatically by the fluent `Circuit` builders and registry.
+
 == Package-wide conventions
 
 All modules share the same underlying physical conventions, regardless of which layer is being used:
@@ -70,18 +73,20 @@ For a single-mode squeezed vacuum state with squeezing strength $r$ and $theta =
 
 == Two typical workflows
 
-*Declarative, via `Circuit` (Chapter 3):* a `Circuit` describes the ordered gate sequence, and `run` executes it against an explicitly supplied initial state.
+*Declarative, via `Circuit` (Chapter 3):* a `Circuit` describes the ordered gate sequence, and `run` executes it against an explicitly supplied initial state. Prefer the fluent circuit API for normal use; it selects the correct circuit transform for each registered gate.
 
 ```python
-from catsy import Circuit, Gate, GaussianState, loss
+from catsy import Circuit, GaussianState
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
 circuit = Circuit()
 a = circuit.mode("a")
 circuit.mode("b")
-circuit.add_gate(Gate(name="Noise", transform=loss, modes=(a.name,), kwargs={"eta": 0.9}))
+circuit.loss(a, eta=0.9)
 final = circuit.run(initial)
 ```
+
+If you need to construct a raw `Gate`, its `transform` must be a circuit-compatible `GateTransform`, not the ordinary state-operation function from `catsy.operations`. This distinction keeps the two public APIs unambiguous.
 
 *Direct, gate by gate (Chapters 2 and 5):* for exploratory use, where every intermediate state should be inspected.
 
