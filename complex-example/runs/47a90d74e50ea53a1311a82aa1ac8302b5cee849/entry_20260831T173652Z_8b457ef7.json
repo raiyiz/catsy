@@ -1,0 +1,427 @@
+{
+  "schema_version": "2.1.0",
+  "metadata": {
+    "entry_id": "20260831T173652Z_8b457ef7",
+    "title": "Three-mode Gaussian preparation, heralded Fock processing, and interferometric readout",
+    "timestamp": "2026-08-31T17:36:52.354890",
+    "tags": [
+      "example",
+      "gaussian",
+      "fock",
+      "interferometer",
+      "measurement",
+      "plotting"
+    ],
+    "notes": "Prepares a three-mode Gaussian state, independently explores an even cat through heralded photon subtraction and addition, scans a lossy Mach-Zehnder interferometer, and compares homodyne with heterodyne conditioning of the Gaussian signal mode.",
+    "custom": {
+      "circuit_name": "Three-mode Gaussian demo",
+      "output_dir": "runs/complex_circuit",
+      "execution_stages": [
+        {
+          "id": "gaussian_state_preparation",
+          "title": "Gaussian preparation",
+          "category": "gaussian",
+          "description": "Run the three-mode Gaussian circuit and obtain its final state.",
+          "plot": "01_final_signal_phase_space",
+          "inspect": "Check the signal phase-space geometry after the recorded circuit execution.",
+          "result": "Gaussian state / signal mode",
+          "run": "gaussian_state_preparation",
+          "insight": "The phase-space ellipse is the state's uncertainty region before anything non-Gaussian happens to it."
+        },
+        {
+          "id": "covariance_structure",
+          "title": "Covariance structure",
+          "category": "gaussian",
+          "description": "Inspect the second-order moments of the final Gaussian circuit state.",
+          "plot": "02_final_covariance_matrix",
+          "inspect": "Look for squeezing, variances, and cross-mode covariance structure.",
+          "result": "Covariance matrix",
+          "run": "gaussian_state_preparation",
+          "insight": "The diagonal reads as single-mode variances; the off-diagonal blocks are the inter-mode covariance the later conditioned measurements draw on."
+        },
+        {
+          "id": "mode_correlations",
+          "title": "Mode correlations",
+          "category": "gaussian",
+          "description": "Visualize the correlations established between signal, idler, and reference.",
+          "plot": "03_final_mode_correlations",
+          "inspect": "Use this as the correlation baseline for the homodyne/heterodyne comparison later.",
+          "result": "Inter-mode correlation map",
+          "run": "gaussian_state_preparation",
+          "insight": "Correlated quadratures here are exactly what the later conditioned measurements exploit."
+        },
+        {
+          "id": "even_cat_preparation",
+          "title": "Even cat preparation",
+          "category": "fock",
+          "description": "Construct the even Schr\u00f6dinger cat in the truncated Fock basis.",
+          "plot": "04_even_cat_wigner",
+          "inspect": "Look for the non-Gaussian two-lobed structure and interference fringes.",
+          "result": "trace = 1.000000",
+          "run": "even_cat_preparation",
+          "insight": "A two-lobed Wigner function with interference fringes is the signature a Gaussian description cannot produce."
+        },
+        {
+          "id": "cat_state_diagnostics",
+          "title": "Cat-state diagnostics",
+          "category": "fock",
+          "description": "Inspect the prepared cat in the complementary state representations.",
+          "plot": "05_even_cat_state",
+          "inspect": "Compare occupation structure and phase-space features before heralding.",
+          "result": "Fock occupation + phase-space diagnostics",
+          "run": "even_cat_preparation",
+          "insight": "Occupation structure in Fock space is the complementary view of the same non-Gaussian state the Wigner function shows."
+        },
+        {
+          "id": "photon_subtraction",
+          "title": "Photon subtraction",
+          "category": "fock",
+          "description": "Apply realistic heralded photon subtraction to the cat state.",
+          "plot": "06_after_photon_subtraction",
+          "inspect": "Compare the conditioned state with the input cat and account for finite detector efficiency.",
+          "result": "trace = 1.000000",
+          "run": "photon_subtraction",
+          "insight": "Finite tap reflectivity and detector efficiency make this a realistic conditional operation, not an ideal one."
+        },
+        {
+          "id": "photon_addition",
+          "title": "Photon addition",
+          "category": "fock",
+          "description": "Apply realistic heralded photon addition to the subtraction output.",
+          "plot": "07_after_photon_addition",
+          "inspect": "Compare against subtraction to see the effect of conditional photon-number engineering.",
+          "result": "trace = 1.000000",
+          "run": "photon_addition",
+          "insight": "Compare directly against subtraction to see how heralded photon-number engineering reshapes the state."
+        },
+        {
+          "id": "mach_zehnder_scan",
+          "title": "Mach\u2013Zehnder scan",
+          "category": "interferometer",
+          "description": "Scan the processed Fock state through the lossy Mach\u2013Zehnder interferometer.",
+          "plot": "11_mach_zehnder_scan",
+          "inspect": "Follow the phase-dependent output response across all 33 scan points.",
+          "result": "33 phase points",
+          "run": "lossy_mach_zehnder_scan",
+          "insight": "The phase scan is the bridge from state preparation to a readout that depends on interferometer phase."
+        },
+        {
+          "id": "homodyne_signal_readout",
+          "title": "Homodyne readout",
+          "category": "measurement",
+          "description": "Condition the Gaussian state on the measured signal quadrature.",
+          "plot": "08_after_homodyne_idler",
+          "inspect": "Inspect the remaining idler state after selecting one quadrature outcome.",
+          "result": "x\u03c6 = -0.1601 state recorded",
+          "run": "homodyne_signal_readout",
+          "insight": "Homodyne selects one quadrature; the conditioned idler state reflects only that partial information."
+        },
+        {
+          "id": "heterodyne_signal_readout",
+          "title": "Heterodyne readout",
+          "category": "measurement",
+          "description": "Condition the Gaussian state on simultaneous x/p detection.",
+          "plot": "09_after_heterodyne_idler",
+          "inspect": "Inspect the conditioned state after a two-quadrature measurement outcome.",
+          "result": "x, p outcome recorded",
+          "run": "heterodyne_signal_readout",
+          "insight": "Heterodyne samples both quadratures at once, trading precision for a genuinely two-dimensional outcome."
+        },
+        {
+          "id": "measurement_comparison",
+          "title": "Measurement comparison",
+          "category": "measurement",
+          "description": "Compare the conditioned states produced by homodyne and heterodyne readout.",
+          "plot": "10_measurement_conditioning",
+          "inspect": "Compare how the measurement model changes the inferred idler state.",
+          "result": "homodyne vs heterodyne",
+          "run": "measurement_comparison",
+          "insight": "Same input state, two measurement models -- the difference is what each scheme lets you infer."
+        }
+      ]
+    }
+  },
+  "runs": [
+    {
+      "run_id": "8ace7f50485e4afe86b23f8b9e2a0e05",
+      "run_name": "gaussian_state_preparation",
+      "timestamp": "2026-08-31T17:36:52.354996",
+      "circuit": {
+        "name": "Three-mode Gaussian demo",
+        "modes": [
+          "signal",
+          "idler",
+          "reference"
+        ],
+        "gates": [
+          {
+            "gate": "Squeezer",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "r": 1.8,
+              "theta": 0.0
+            }
+          },
+          {
+            "gate": "Displacer",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "x": 0.3168053010419105,
+              "p": -0.7302381914284292
+            }
+          },
+          {
+            "gate": "BeamSplitter",
+            "modes": [
+              "signal",
+              "idler"
+            ],
+            "kwargs": {
+              "eta": 0.95
+            }
+          },
+          {
+            "gate": "Rotator",
+            "modes": [
+              "idler"
+            ],
+            "kwargs": {
+              "phi": 0.35
+            }
+          },
+          {
+            "gate": "ThermalLoss",
+            "modes": [
+              "idler"
+            ],
+            "kwargs": {
+              "eta": 0.9,
+              "n_thermal": 0.15
+            }
+          },
+          {
+            "gate": "Squeezer",
+            "modes": [
+              "reference"
+            ],
+            "kwargs": {
+              "r": 0.35,
+              "theta": 0.7853981633974483
+            }
+          },
+          {
+            "gate": "BeamSplitter",
+            "modes": [
+              "idler",
+              "reference"
+            ],
+            "kwargs": {
+              "eta": 0.5
+            }
+          },
+          {
+            "gate": "Noise",
+            "modes": [
+              "signal"
+            ],
+            "kwargs": {
+              "eta": 0.92
+            }
+          }
+        ]
+      },
+      "final_state_cv": {
+        "modes": [
+          "signal",
+          "idler",
+          "reference"
+        ],
+        "displacement_npz_key": "8ace7f50485e4afe86b23f8b9e2a0e05__final_state__displacement",
+        "covariance_npz_key": "8ace7f50485e4afe86b23f8b9e2a0e05__final_state__covariance"
+      },
+      "scalar_results": {
+        "num_modes": 3,
+        "mean_abs_displacement": 0.21940974524570742,
+        "covariance_trace": 19.195612982965507
+      },
+      "data_payloads": {
+        "displacement": {
+          "npz_key": "8ace7f50485e4afe86b23f8b9e2a0e05__displacement",
+          "description": "Final first moments.",
+          "unit": "quadrature",
+          "dimensions": [
+            "quadrature"
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float64"
+        },
+        "covariance": {
+          "npz_key": "8ace7f50485e4afe86b23f8b9e2a0e05__covariance",
+          "description": "Final covariance matrix.",
+          "unit": "quadrature^2",
+          "dimensions": [
+            "quadrature",
+            "quadrature"
+          ],
+          "shape": [
+            6,
+            6
+          ],
+          "dtype": "float64"
+        }
+      }
+    },
+    {
+      "run_id": "29ce6f779f9e492b88330e18c88c47a3",
+      "run_name": "even_cat_preparation",
+      "timestamp": "2026-08-31T17:36:52.355081",
+      "circuit": null,
+      "final_state_cv": null,
+      "scalar_results": {
+        "trace": 1.0000000000000002
+      },
+      "data_payloads": {}
+    },
+    {
+      "run_id": "59fe8e82f687422ba98d95c7b485a1ad",
+      "run_name": "photon_subtraction",
+      "timestamp": "2026-08-31T17:36:52.355113",
+      "circuit": null,
+      "final_state_cv": null,
+      "scalar_results": {
+        "trace": 0.9999999999999998
+      },
+      "data_payloads": {}
+    },
+    {
+      "run_id": "c7e62474253e4d628fe61becbc447f13",
+      "run_name": "photon_addition",
+      "timestamp": "2026-08-31T17:36:52.355129",
+      "circuit": null,
+      "final_state_cv": null,
+      "scalar_results": {
+        "trace": 1.0000000000000007
+      },
+      "data_payloads": {}
+    },
+    {
+      "run_id": "c3d69240e46d44f896f0d72a1adf4c40",
+      "run_name": "lossy_mach_zehnder_scan",
+      "timestamp": "2026-08-31T17:36:52.355189",
+      "circuit": null,
+      "final_state_cv": null,
+      "scalar_results": {
+        "max_output_n1": 2.6221798715929063,
+        "max_output_n2": 2.6221798715929068,
+        "max_parity1": 0.9988207709709404
+      },
+      "data_payloads": {
+        "theta": {
+          "npz_key": "c3d69240e46d44f896f0d72a1adf4c40__theta",
+          "description": "Scanned phase in the lossy MZI arm.",
+          "unit": "radians",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        },
+        "n1": {
+          "npz_key": "c3d69240e46d44f896f0d72a1adf4c40__n1",
+          "description": "Mean photon number at MZI output port 1.",
+          "unit": "photons",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        },
+        "n2": {
+          "npz_key": "c3d69240e46d44f896f0d72a1adf4c40__n2",
+          "description": "Mean photon number at MZI output port 2.",
+          "unit": "photons",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        },
+        "parity1": {
+          "npz_key": "c3d69240e46d44f896f0d72a1adf4c40__parity1",
+          "description": "Parity signal at MZI output port 1.",
+          "unit": "dimensionless",
+          "dimensions": [
+            "phase"
+          ],
+          "shape": [
+            33
+          ],
+          "dtype": "float64"
+        }
+      }
+    },
+    {
+      "run_id": "f072c72ec4b546ed95ef193a762a1fa7",
+      "run_name": "homodyne_signal_readout",
+      "timestamp": "2026-08-31T17:36:52.355272",
+      "circuit": null,
+      "final_state_cv": {
+        "modes": [
+          "idler",
+          "reference"
+        ],
+        "displacement_npz_key": "f072c72ec4b546ed95ef193a762a1fa7__final_state__displacement",
+        "covariance_npz_key": "f072c72ec4b546ed95ef193a762a1fa7__final_state__covariance"
+      },
+      "scalar_results": {
+        "outcome": -0.7403698730409637,
+        "phase": 0.5235987755982988,
+        "remaining_modes": 2
+      },
+      "data_payloads": {}
+    },
+    {
+      "run_id": "4b9df708eb394450b7bb6fc0002b4d18",
+      "run_name": "heterodyne_signal_readout",
+      "timestamp": "2026-08-31T17:36:52.355285",
+      "circuit": null,
+      "final_state_cv": {
+        "modes": [
+          "idler",
+          "reference"
+        ],
+        "displacement_npz_key": "4b9df708eb394450b7bb6fc0002b4d18__final_state__displacement",
+        "covariance_npz_key": "4b9df708eb394450b7bb6fc0002b4d18__final_state__covariance"
+      },
+      "scalar_results": {
+        "outcome_x": 1.2139669435498246,
+        "outcome_p": 0.3609666519389394,
+        "remaining_modes": 2
+      },
+      "data_payloads": {}
+    },
+    {
+      "run_id": "43c67d591bfc4dcb946e1f0abb21640f",
+      "run_name": "measurement_comparison",
+      "timestamp": "2026-08-31T17:36:52.355293",
+      "circuit": null,
+      "final_state_cv": null,
+      "scalar_results": {
+        "homodyne_vs_heterodyne": true
+      },
+      "data_payloads": {}
+    }
+  ]
+}
