@@ -7,50 +7,27 @@ implementations stay in :mod:`catsy.gaussian` and :mod:`catsy.fock`.
 from __future__ import annotations
 
 from functools import singledispatch
+from typing import Any
 
 from catsy.fock import FockState
 from catsy.gaussian import GaussianState
 
-from .fock import (
-    beam_splitter as _fock_beam_splitter,
-)
-from .fock import (
-    displace as _fock_displace,
-)
-from .fock import (
-    loss as _fock_loss,
-)
-from .fock import (
-    rotate as _fock_rotate,
-)
-from .fock import (
-    squeeze as _fock_squeeze,
-)
-from .fock import (
-    thermal_loss as _fock_thermal_loss,
-)
-from .gaussian import (
-    beam_splitter as _gaussian_beam_splitter,
-)
-from .gaussian import (
-    displace as _gaussian_displace,
-)
-from .gaussian import (
-    loss as _gaussian_loss,
-)
-from .gaussian import (
-    rotate as _gaussian_rotate,
-)
-from .gaussian import (
-    squeeze as _gaussian_squeeze,
-)
-from .gaussian import (
-    thermal_loss as _gaussian_thermal_loss,
-)
+from .fock import beam_splitter as _fock_beam_splitter
+from .fock import displace as _fock_displace
+from .fock import loss as _fock_loss
+from .fock import rotate as _fock_rotate
+from .fock import squeeze as _fock_squeeze
+from .fock import thermal_loss as _fock_thermal_loss
+from .gaussian import beam_splitter as _gaussian_beam_splitter
+from .gaussian import displace as _gaussian_displace
+from .gaussian import loss as _gaussian_loss
+from .gaussian import rotate as _gaussian_rotate
+from .gaussian import squeeze as _gaussian_squeeze
+from .gaussian import thermal_loss as _gaussian_thermal_loss
 
 
 @singledispatch
-def squeeze(state, mode: str, r: float, theta: float = 0.0):
+def squeeze(state: Any, mode: str, r: float, theta: float = 0.0) -> Any:
     """Return ``state`` after single-mode squeezing."""
     raise TypeError(f"squeeze does not support {type(state).__name__}.")
 
@@ -68,7 +45,7 @@ def _(state: FockState, mode: str, r: float, theta: float = 0.0) -> FockState:
 
 
 @singledispatch
-def rotate(state, mode: str, phi: float):
+def rotate(state: Any, mode: str, phi: float) -> Any:
     """Return ``state`` after a phase-space rotation."""
     raise TypeError(f"rotate does not support {type(state).__name__}.")
 
@@ -87,13 +64,13 @@ def _(state: FockState, mode: str, phi: float) -> FockState:
 
 @singledispatch
 def displace(
-    state,
+    state: Any,
     mode: str,
     alpha: complex | None = None,
     *,
     x: float | None = None,
     p: float | None = None,
-):
+) -> Any:
     """Return ``state`` after a displacement."""
     raise TypeError(f"displace does not support {type(state).__name__}.")
 
@@ -107,7 +84,14 @@ def _(
     x: float | None = None,
     p: float | None = None,
 ) -> GaussianState:
-    return _gaussian_displace(state, (mode,), alpha=alpha, x=x, p=p)
+    kwargs: dict[str, int | float | complex | str] = {}
+    if alpha is not None:
+        kwargs["alpha"] = alpha
+    if x is not None:
+        kwargs["x"] = x
+    if p is not None:
+        kwargs["p"] = p
+    return _gaussian_displace(state, (mode,), **kwargs)
 
 
 @displace.register
@@ -132,7 +116,7 @@ def _(
 
 
 @singledispatch
-def beam_splitter(state, mode_a: str, mode_b: str, eta: float):
+def beam_splitter(state: Any, mode_a: str, mode_b: str, eta: float) -> Any:
     """Return ``state`` after a two-mode beam splitter."""
     raise TypeError(f"beam_splitter does not support {type(state).__name__}.")
 
@@ -151,21 +135,27 @@ def _(state: FockState, mode_a: str, mode_b: str, eta: float) -> FockState:
 
 
 @singledispatch
-def loss(state, mode: str, eta: float, ancilla_cutoff: int | None = None):
+def loss(state: Any, mode: str, eta: float, ancilla_cutoff: int | None = None) -> Any:
     """Return ``state`` after vacuum loss on one mode."""
     raise TypeError(f"loss does not support {type(state).__name__}.")
 
 
 @loss.register
 def _(
-    state: GaussianState, mode: str, eta: float, ancilla_cutoff: int | None = None
+    state: GaussianState,
+    mode: str,
+    eta: float,
+    ancilla_cutoff: int | None = None,
 ) -> GaussianState:
     return _gaussian_loss(state, (mode,), eta=eta)
 
 
 @loss.register
 def _(
-    state: FockState, mode: str, eta: float, ancilla_cutoff: int | None = None
+    state: FockState,
+    mode: str,
+    eta: float,
+    ancilla_cutoff: int | None = None,
 ) -> FockState:
     idx = state.get_mode_index(mode)
     rho = _fock_loss(
@@ -180,12 +170,12 @@ def _(
 
 @singledispatch
 def thermal_loss(
-    state,
+    state: Any,
     mode: str,
     eta: float,
     n_thermal: float = 0.0,
     ancilla_cutoff: int | None = None,
-):
+) -> Any:
     """Return ``state`` after thermal loss on one mode."""
     raise TypeError(f"thermal_loss does not support {type(state).__name__}.")
 

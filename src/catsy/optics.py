@@ -505,7 +505,7 @@ def _ensure_fock(state: CVState, kwargs: dict[str, ParameterValue]) -> FockState
             "knows what cutoff to embed the current (still-Gaussian) state "
             "into."
         )
-    return cast(GaussianState, state).to_fock(cast(int, kwargs["N_cutoff"]))
+    return state.to_fock(cast(int, kwargs["N_cutoff"]))
 
 
 def photon_subtraction(
@@ -570,7 +570,7 @@ for _name, _transform in (
     ("RealisticPhotonSubtraction", realistic_photon_subtraction),
     ("RealisticPhotonAddition", realistic_photon_addition),
 ):
-    Circuit.register(_name, _transform)
+    Circuit.register(_name, cast(GateTransform, _transform))
 
 
 def _render_gate_label(gate: Gate) -> tuple[str, int]:
