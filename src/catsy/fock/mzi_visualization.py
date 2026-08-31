@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import qutip as qt
 
+from catsy.fock.visualization import plot_wigner
 from catsy.optics import MachZehnderInterferometer
-from catsy.visualization import add_colorbar
 
 
 def plot_mzi_scan(
@@ -77,23 +77,27 @@ def plot_mzi_scan(
         )
         state_ax.set_title("Scan summary")
     else:
-        xvec = np.linspace(state_xlim[0], state_xlim[1], resolution)
-        wigner = qt.wigner(mzi.state, xvec, xvec)
-        # Symmetric-about-zero normalization, matching
-        # catsy.fock.visualization.plot_wigner: with RdBu_r, an
-        # unnormalized (data-driven) range can leave zero off-center, which
-        # visually understates Wigner negativity -- the reason this inset
-        # is here in the first place.
-        wlim = float(np.max(np.abs(wigner)))
-        image = state_ax.contourf(xvec, xvec, wigner, 100, cmap="RdBu_r", vmin=-wlim, vmax=wlim)
-        add_colorbar(fig, image, ax=state_ax, label=r"$W(x,p)$")
-        state_ax.set_xlabel("x")
-        state_ax.set_ylabel("p")
-        state_ax.set_aspect("equal", adjustable="box")
+        # Delegate to the one canonical Wigner renderer instead of a second,
+        # hand-rolled copy of "compute wigner, symmetric norm, colorbar" --
+        # plot_wigner already does exactly that (see its color_norm(...,
+        # symmetric=True) call), including the zero-negativity contour.
+        # plot_wigner requires a density matrix; MachZehnderInterferometer
+        # (correctly) also accepts a ket, so purify it here rather than
+        # pushing that conversion onto every caller.
+        state_rho = mzi.state if mzi.state.isoper else qt.ket2dm(mzi.state)
+        plot_wigner(
+            state_rho,
+            xlim=state_xlim,
+            resolution=resolution,
+            ax=state_ax,
+        )
         title = state_title
         if phase is not None:
             title += rf" · $\theta={phase / np.pi:.2f}\pi$"
-        state_ax.set_title(title)
+        # plot_wigner's own title reports the physically meaningful bits
+        # (mean photon number, parity/g^(2) classification); keep that and
+        # prefix it with what this panel actually is.
+        state_ax.set_title(f"{title}\n{state_ax.get_title()}")
 
     fig.suptitle("Mach–Zehnder interference scan", fontsize=15, fontweight="medium")
     if show:
