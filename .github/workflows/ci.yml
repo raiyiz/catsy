@@ -27,6 +27,18 @@ jobs:
         run: uv sync --group dev --locked
       - name: Run tests
         run: uv run pytest --plot --timings --junitxml=pytest-results.xml --cov=src/catsy --cov-report=term-missing --cov-report=xml:coverage/coverage.xml
+      - name: Upload pytest results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: pytest-results.xml
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/coverage.xml
 
   complex-example:
     name: complex example
@@ -46,13 +58,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --locked
       - name: Run complex example
-        run: uv run python src/catsy/examples/complex_example.py
+        run: uv run python -m simulations.examples.complex_example
       - name: Upload complex example artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: complex-example
-          path: runs/complex_circuit/
+          path: simulations/runs/complex_circuit/
           if-no-files-found: error
 
   complex-circuit-example:
@@ -73,13 +85,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --locked
       - name: Run complex circuit example
-        run: uv run python src/catsy/examples/complex_circuit.py
+        run: uv run python -m simulations.examples.complex_circuit
       - name: Upload complex circuit example artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: complex-circuit-example
-          path: runs/complex_circuit_basic/
+          path: simulations/runs/complex_circuit_basic/
           if-no-files-found: error
 
   ruff:
@@ -150,12 +162,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: complex-example
-          path: runs/complex_circuit
+          path: simulations/runs/complex_circuit
       - name: Download complex circuit example output
         uses: actions/download-artifact@v4
         with:
           name: complex-circuit-example
-          path: runs/complex_circuit_basic
+          path: simulations/runs/complex_circuit_basic
       - name: Restore Pages history
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
@@ -171,11 +183,11 @@ jobs:
           REPORT_RUN_ID: ${{ github.run_id }}
           REPORT_COMMIT_URL: https://github.com/raiyiz/catsy/commit/${{ github.sha }}
           REPORT_CI_URL: https://github.com/raiyiz/catsy/actions/runs/${{ github.run_id }}
-        run: python scripts/build_complex_report.py
+        run: python -m simulations.explorer
       - name: Sync explorer from execution journal
         env:
           REPORT_COMMIT: ${{ github.sha }}
-        run: python scripts/sync_complex_execution_stages.py
+        run: python -m simulations.explorer.sync
       - name: Publish Pages history
         run: |
           git -C _site config user.name "github-actions[bot]"

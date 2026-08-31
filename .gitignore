@@ -4,5 +4,6 @@ __pycache__
 .coverage
 .aux
 runs/
+simulations/runs/
 examples/gallery/
 
