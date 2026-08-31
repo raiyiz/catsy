@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Catsy Three-mode circuit report for 3d39ea0ac30c">
+<title>Three-mode circuit · 3d39ea0ac30c</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../assets/style.css"></head><body>
+
+<header class="topbar"><div class="container topbar-inner"><div class="crumbs"><a href="../../../">catsy · lab</a><span class="sep">/</span><a href="../../">Three-mode circuit</a><span class="sep">/</span><span>3d39ea0ac30c</span></div><nav class="nav"><a href="../../../">all examples</a><a href="../../">this example</a><a href="#circuit">circuit</a><a href="#results">results</a><a href="#journal">journal</a></nav></div></header>
+<main>
+<section class="hero"><div class="container">
+  <div class="eyebrow">Three-mode circuit · 2026-08-31 · 19:30 UTC</div>
+  <h1>The minimal three-mode Gaussian circuit.</h1>
+  <p class="lead">The minimal three-mode Gaussian circuit and journal-persistence example from the docs.</p>
+  <div class="meta">
+    <span class="badge">commit <strong>3d39ea0ac30c</strong></span>
+    <span class="badge">ref <strong>43/merge</strong></span>
+    <span class="badge"><strong>1</strong> journal files</span>
+  </div>
+  <div class="links">
+    <a class="button" href="https://github.com/raiyiz/catsy/commit/3d39ea0ac30cafb59afac72d520c0190933b90ce" target="_blank" rel="noopener">source commit ↗</a>
+    <a class="button" href="https://github.com/raiyiz/catsy/actions/runs/33430825664" target="_blank" rel="noopener">CI run ↗</a>
+    <a class="button" href="../../">this example's runs</a>
+    <a class="button" href="../../../">all examples</a>
+  </div>
+</div></section>
+
+<section class="section alt" id="circuit"><div class="container">
+  <div class="section-head"><div class="eyebrow">Circuit topology</div>
+  <h2>Build, run, persist</h2>
+  <p>The same three-mode circuit as the complex simulation example, without the Fock-space
+  processing or measurement stages that follow it there — it stops after the Gaussian circuit
+  and logs the result to the journal.</p></div>
+  <div class="circuit-card"><svg class="circuit" viewBox="0 0 1122 320" role="img" aria-label="Signal, idler, and reference mode wires through the Gaussian circuit."><line class="c-wire" x1="40" y1="56" x2="1092" y2="56"></line><text class="c-row-label" x="40" y="40">signal</text><text class="c-vac" x="40" y="60">|0⟩</text><line class="c-wire" x1="40" y1="156" x2="1092" y2="156"></line><text class="c-row-label" x="40" y="140">idler</text><text class="c-vac" x="40" y="160">|0⟩</text><line class="c-wire" x1="40" y1="256" x2="1092" y2="256"></line><text class="c-row-label" x="40" y="240">reference</text><text class="c-vac" x="40" y="260">|0⟩</text><rect class="c-box" x="120.0" y="33.0" width="96" height="46" rx="8"></rect><text class="c-label" x="168" y="53" text-anchor="middle">Squeeze</text><text class="c-sub" x="168" y="69" text-anchor="middle">r = 0.90</text><rect class="c-box" x="228.0" y="33.0" width="96" height="46" rx="8"></rect><text class="c-label" x="276" y="53" text-anchor="middle">Displace</text><text class="c-sub" x="276" y="69" text-anchor="middle">α</text><line class="c-wire c-link" x1="384" y1="56" x2="384" y2="156"></line><rect class="c-box" x="336.0" y="83.0" width="96" height="46" rx="8"></rect><text class="c-label" x="384" y="103.0" text-anchor="middle">Beam splitter</text><text class="c-sub" x="384" y="119.0" text-anchor="middle">η = 0.85</text><rect class="c-box" x="444.0" y="133.0" width="96" height="46" rx="8"></rect><text class="c-label" x="492" y="153" text-anchor="middle">Rotate</text><text class="c-sub" x="492" y="169" text-anchor="middle">φ = 0.35</text><rect class="c-box" x="552.0" y="133.0" width="96" height="46" rx="8"></rect><text class="c-label" x="600" y="153" text-anchor="middle">Thermal loss</text><text class="c-sub" x="600" y="169" text-anchor="middle">η = 0.90, n̄ = 0.15</text><rect class="c-box" x="660.0" y="233.0" width="96" height="46" rx="8"></rect><text class="c-label" x="708" y="253" text-anchor="middle">Squeeze</text><text class="c-sub" x="708" y="269" text-anchor="middle">r = 0.35, θ = π/4</text><line class="c-wire c-link" x1="816" y1="156" x2="816" y2="256"></line><rect class="c-box" x="768.0" y="183.0" width="96" height="46" rx="8"></rect><text class="c-label" x="816" y="203.0" text-anchor="middle">Beam splitter</text><text class="c-sub" x="816" y="219.0" text-anchor="middle">η = 0.50</text><rect class="c-box" x="876.0" y="33.0" width="96" height="46" rx="8"></rect><text class="c-label" x="924" y="53" text-anchor="middle">Loss</text><text class="c-sub" x="924" y="69" text-anchor="middle">η = 0.92</text><text class="c-port" x="1022" y="60" text-anchor="end">→ journal</text><text class="c-port" x="1022" y="160" text-anchor="end">→ journal</text><text class="c-port" x="1022" y="260" text-anchor="end">→ journal</text></svg></div>
+  <div class="circuit-legend">
+    <span><span class="sw" style="background:var(--gaussian)"></span>Gaussian operation</span>
+  </div>
+</div></section>
+
+<section class="section" id="results"><div class="container">
+  <div class="section-head"><div class="eyebrow">Logged metrics</div>
+  <h2>Scalar results from this run</h2></div>
+  <div class="metrics-strip"><div class="metric"><div class="value">3</div><div class="label">num modes</div></div><div class="metric"><div class="value">0.2648</div><div class="label">mean abs displacement</div></div><div class="metric"><div class="value">5.218</div><div class="label">covariance trace</div></div></div>
+</div></section>
+
+<section class="section alt" id="journal"><div class="container">
+  <div class="section-head"><div class="eyebrow">Reproducibility</div>
+  <h2>Experiment journal</h2>
+  <p>The circuit, final state, and metrics above are all recorded here.</p></div>
+  <div class="journal"><a class="journal-file" href="entry_20260831T192931Z_be76e301.json" target="_blank" rel="noopener"><span class="file-type">JSON</span><span><strong>entry_20260831T192931Z_be76e301.json</strong><small>3,703 bytes · open raw file ↗</small></span></a></div>
+</div></section>
+</main>
+
+<footer class="footer"><div class="container">
+  Three-mode circuit · commit <span class="mono">3d39ea0ac30cafb59afac72d520c0190933b90ce</span><br>
+  Static report generated by CI.
+</div></footer>
+<script src="../../../assets/viewer.js" defer></script>
+</body></html>
