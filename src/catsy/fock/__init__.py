@@ -281,25 +281,28 @@ def thermal_loss(
     rho: qt.Qobj,
     mode_idx: int = 0,
     eta: float = 1.0,
-    nbar: float = 0.0,
+    n_thermal: float = 0.0,
     N_cutoff: int | None = None,
     ancilla_cutoff: int | None = None,
 ) -> qt.Qobj:
-    """Apply thermal loss with transmissivity ``eta`` and bath occupancy ``nbar``.
+    """Apply thermal loss with transmissivity ``eta`` and bath occupancy ``n_thermal``.
 
     The selected system mode is coupled to a thermal ancilla through the same
     beam-splitter unitary used by :func:`loss`, after which the ancilla is
     traced out.
 
-    ``nbar=0`` reduces exactly to vacuum-coupled loss.  For ``nbar>0`` the
-    channel describes attenuation into a thermal environment.
+    ``n_thermal=0`` reduces exactly to vacuum-coupled loss.  For
+    ``n_thermal>0`` the channel describes attenuation into a thermal
+    environment. This is the same ``n_thermal`` parameter accepted by
+    ``catsy.gaussian.LossChannels.thermal_loss`` and the public
+    ``catsy.thermal_loss`` dispatcher -- there is no separate ``nbar`` name.
 
     ``ancilla_cutoff`` controls the Fock-space truncation of the thermal
-    environment.  It defaults to the system cutoff; for large ``nbar`` it
-    may need to be increased to faithfully represent the thermal state.
+    environment.  It defaults to the system cutoff; for large ``n_thermal``
+    it may need to be increased to faithfully represent the thermal state.
     """
     _check_unit_interval(eta, "eta")
-    _check_non_negative(nbar, "nbar")
+    _check_non_negative(n_thermal, "n_thermal")
 
     n_modes, cutoff = _validate_state(rho, N_cutoff, mode_idx)
 
@@ -325,7 +328,8 @@ def thermal_loss(
     #   a_sys' = sqrt(eta) a_sys + sqrt(1-eta) a_anc
     #
     # For a thermal environment this implements the bosonic thermal-loss
-    # channel with transmissivity eta and environment mean occupation nbar.
+    # channel with transmissivity eta and environment mean occupation
+    # n_thermal.
     t = np.sqrt(eta)
     r_coeff = np.sqrt(1.0 - eta)
 
@@ -339,7 +343,7 @@ def thermal_loss(
     U = _qutip_passive_unitary(O, [a_sys, a_anc])
 
     # Replace the vacuum environment used by loss() with a thermal state.
-    ancilla_thermal = qt.thermal_dm(ancilla_cutoff, nbar)
+    ancilla_thermal = qt.thermal_dm(ancilla_cutoff, n_thermal)
     rho_extended = qt.tensor(rho, ancilla_thermal)
 
     rho_coupled = U * rho_extended * U.dag()
@@ -700,7 +704,7 @@ class FockState:
         self,
         mode: str,
         eta: float,
-        nbar: float = 0.0,
+        n_thermal: float = 0.0,
         ancilla_cutoff: int | None = None,
     ) -> FockState:
         idx = self.get_mode_index(mode)
@@ -708,7 +712,7 @@ class FockState:
             self.rho,
             idx,
             eta,
-            nbar=nbar,
+            n_thermal=n_thermal,
             N_cutoff=self.N_cutoff,
             ancilla_cutoff=ancilla_cutoff,
         )

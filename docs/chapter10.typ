@@ -19,7 +19,7 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
   [#src-link("src/catsy/gaussian/__init__.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
-  [#src-link("src/catsy/operations.py")], [Representation-independent public state transformations; dispatches Gaussian and Fock states to their concrete implementations (Chapters 2, 5, 10).],
+  [#src-link("src/catsy/operations.py")], [Representation-independent public state transformations; dispatches Gaussian and Fock states to their concrete implementations (Chapters 2, 5, 10). The `Circuit` gate transforms in `catsy.optics` adapt onto these same dispatch functions rather than re-implementing the Gaussian/Fock branch.],
   [#src-link("src/catsy/gaussian/visualization.py")], [Gaussian-state plots, composite dashboards (`plot_state_dashboard`, `plot_evolution`, `plot_multimode_evolution`), and animations (Chapter 6).],
   [#src-link("src/catsy/fock/__init__.py")], [`FockState` plus functional Fock-space operations such as photon addition/subtraction; `FockGates` remains only as a backwards-compatible namespace (Chapter 7).],
   [#src-link("src/catsy/fock/visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for Fock-space states backed by QuTiP, including the `plot_fock_dashboard` four-view composite (Chapter 6).],
@@ -67,6 +67,7 @@ All modules share the same underlying physical conventions, regardless of which 
   [Displacement / amplitude], [$alpha = (x + i p) / sqrt(2)$.],
   [Covariance definition], [symmetrized second moments: $V_(i j) = 1/2 chevron.l \{r_i - d_i, r_j - d_j\} chevron.r$.],
   [Beam splitter], [power transmissivity $eta$, see Chapter 2.],
+  [Thermal-loss noise keyword], [`n_thermal` everywhere -- `GaussianState`/`LossChannels`, `FockState`, `catsy.operations`, and `Circuit`'s `thermal_loss` gate all take the same name; there is no separate `nbar` spelling.],
 )
 
 For a single-mode squeezed vacuum state with squeezing strength $r$ and $theta = 0$, this correspondingly gives $"Var"(q) = e^(-2r)/2$ and $"Var"(p) = e^(2r)/2$ — the reference values against which `GaussianState.squeeze` (Chapter 2) and the Wigner diagnostics (Chapter 6) are verified in the test suite.

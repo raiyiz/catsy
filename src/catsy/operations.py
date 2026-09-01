@@ -1,7 +1,14 @@
 """Representation-independent state transformations.
 
-Public transformations dispatch on the incoming state representation. Concrete
-implementations stay in :mod:`catsy.gaussian` and :mod:`catsy.fock`.
+Public transformations dispatch on the incoming state representation. Each
+one dispatches to exactly two implementations -- Gaussian and Fock -- and
+those implementations are the states' own instance methods (`GaussianState`
+and `FockState` in :mod:`catsy.gaussian`/:mod:`catsy.fock`). This module
+adds dispatch, not new physics: it never reimplements mode lookups or calls
+into representation-internal helpers directly.
+
+`thermal_loss` accepts a single noise keyword, `n_thermal`, on both
+branches; there is no separate `nbar` spelling anywhere in the package.
 """
 
 from __future__ import annotations
@@ -12,17 +19,6 @@ from typing import Any
 from catsy.fock import FockState
 from catsy.gaussian import GaussianState
 
-from .fock import beam_splitter as _fock_beam_splitter
-from .fock import displace as _fock_displace
-from .fock import loss as _fock_loss
-from .fock import rotate as _fock_rotate
-from .fock import squeeze as _fock_squeeze
-from .fock import thermal_loss as _fock_thermal_loss
-from .gaussian import beam_splitter as _gaussian_beam_splitter
-from .gaussian import displace as _gaussian_displace
-from .gaussian import loss as _gaussian_loss
-from .gaussian import rotate as _gaussian_rotate
-from .gaussian import squeeze as _gaussian_squeeze
 from .gaussian import thermal_loss as _gaussian_thermal_loss
 
 
@@ -34,14 +30,12 @@ def squeeze(state: Any, mode: str, r: float, theta: float = 0.0) -> Any:
 
 @squeeze.register
 def _(state: GaussianState, mode: str, r: float, theta: float = 0.0) -> GaussianState:
-    return _gaussian_squeeze(state, (mode,), r=r, theta=theta)
+    return state.squeeze(mode, r, theta)
 
 
 @squeeze.register
 def _(state: FockState, mode: str, r: float, theta: float = 0.0) -> FockState:
-    idx = state.get_mode_index(mode)
-    rho = _fock_squeeze(state.rho, idx, r, theta, N_cutoff=state.N_cutoff)
-    return FockState(state.modes, rho, state.N_cutoff)
+    return state.squeeze(mode, r, theta)
 
 
 @singledispatch
@@ -52,14 +46,12 @@ def rotate(state: Any, mode: str, phi: float) -> Any:
 
 @rotate.register
 def _(state: GaussianState, mode: str, phi: float) -> GaussianState:
-    return _gaussian_rotate(state, (mode,), phi=phi)
+    return state.rotate(mode, phi)
 
 
 @rotate.register
 def _(state: FockState, mode: str, phi: float) -> FockState:
-    idx = state.get_mode_index(mode)
-    rho = _fock_rotate(state.rho, idx, phi, N_cutoff=state.N_cutoff)
-    return FockState(state.modes, rho, state.N_cutoff)
+    return state.rotate(mode, phi)
 
 
 @singledispatch
@@ -84,14 +76,7 @@ def _(
     x: float | None = None,
     p: float | None = None,
 ) -> GaussianState:
-    kwargs: dict[str, int | float | complex | str] = {}
-    if alpha is not None:
-        kwargs["alpha"] = alpha
-    if x is not None:
-        kwargs["x"] = x
-    if p is not None:
-        kwargs["p"] = p
-    return _gaussian_displace(state, (mode,), **kwargs)
+    return state.displace(mode, alpha, x=x, p=p)
 
 
 @displace.register
@@ -103,16 +88,7 @@ def _(
     x: float | None = None,
     p: float | None = None,
 ) -> FockState:
-    idx = state.get_mode_index(mode)
-    rho = _fock_displace(
-        state.rho,
-        idx,
-        alpha,
-        x=x,
-        p=p,
-        N_cutoff=state.N_cutoff,
-    )
-    return FockState(state.modes, rho, state.N_cutoff)
+    return state.displace(mode, alpha, x=x, p=p)
 
 
 @singledispatch
@@ -123,15 +99,12 @@ def beam_splitter(state: Any, mode_a: str, mode_b: str, eta: float) -> Any:
 
 @beam_splitter.register
 def _(state: GaussianState, mode_a: str, mode_b: str, eta: float) -> GaussianState:
-    return _gaussian_beam_splitter(state, (mode_a, mode_b), eta=eta)
+    return state.beam_splitter(mode_a, mode_b, eta)
 
 
 @beam_splitter.register
 def _(state: FockState, mode_a: str, mode_b: str, eta: float) -> FockState:
-    idx_a = state.get_mode_index(mode_a)
-    idx_b = state.get_mode_index(mode_b)
-    rho = _fock_beam_splitter(state.rho, idx_a, idx_b, eta, N_cutoff=state.N_cutoff)
-    return FockState(state.modes, rho, state.N_cutoff)
+    return state.beam_splitter(mode_a, mode_b, eta)
 
 
 @singledispatch
@@ -142,30 +115,18 @@ def loss(state: Any, mode: str, eta: float, ancilla_cutoff: int | None = None) -
 
 @loss.register
 def _(
-    state: GaussianState,
-    mode: str,
-    eta: float,
-    ancilla_cutoff: int | None = None,
+    state: GaussianState, mode: str, eta: float, ancilla_cutoff: int | None = None
 ) -> GaussianState:
-    return _gaussian_loss(state, (mode,), eta=eta)
+    # ancilla_cutoff is Fock-only (Gaussian loss has no Fock truncation to
+    # size); accepted here so callers get one signature across both branches.
+    return state.loss(mode, eta)
 
 
 @loss.register
 def _(
-    state: FockState,
-    mode: str,
-    eta: float,
-    ancilla_cutoff: int | None = None,
+    state: FockState, mode: str, eta: float, ancilla_cutoff: int | None = None
 ) -> FockState:
-    idx = state.get_mode_index(mode)
-    rho = _fock_loss(
-        state.rho,
-        idx,
-        eta,
-        N_cutoff=state.N_cutoff,
-        ancilla_cutoff=ancilla_cutoff,
-    )
-    return FockState(state.modes, rho, state.N_cutoff)
+    return state.loss(mode, eta, ancilla_cutoff)
 
 
 @singledispatch
@@ -188,6 +149,10 @@ def _(
     n_thermal: float = 0.0,
     ancilla_cutoff: int | None = None,
 ) -> GaussianState:
+    # ancilla_cutoff is Fock-only; accepted here for the same reason as loss()
+    # above. GaussianState has no thermal_loss instance method (thermal loss
+    # is expressed as a GaussianChannel), so this is the one branch that
+    # still calls into catsy.gaussian rather than a state method.
     return _gaussian_thermal_loss(state, (mode,), eta=eta, n_thermal=n_thermal)
 
 
@@ -199,13 +164,4 @@ def _(
     n_thermal: float = 0.0,
     ancilla_cutoff: int | None = None,
 ) -> FockState:
-    idx = state.get_mode_index(mode)
-    rho = _fock_thermal_loss(
-        state.rho,
-        idx,
-        eta,
-        nbar=n_thermal,
-        N_cutoff=state.N_cutoff,
-        ancilla_cutoff=ancilla_cutoff,
-    )
-    return FockState(state.modes, rho, state.N_cutoff)
+    return state.thermal_loss(mode, eta, n_thermal, ancilla_cutoff)
