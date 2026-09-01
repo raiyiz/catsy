@@ -43,9 +43,49 @@ All Fock operations accept `mode_idx` for multimode states and `N_cutoff` as an 
 
 The module also provides `realistic_photon_subtraction` and `realistic_photon_addition`. These model a weak coupling to an ancilla mode, followed by an imperfect click detector, rather than replacing the laboratory process by the ideal $hat(a)$ or $hat(a)^dagger$ map. The detector efficiency is therefore an explicit parameter. In the weak-coupling, high-efficiency limit these operations converge toward their ideal counterparts.
 
+```python
+def realistic_photon_subtraction(
+    rho: qt.Qobj,
+    mode_idx: int = 0,
+    N_cutoff: int | None = None,
+    tap_reflectivity: float = 0.05,
+    detector_efficiency: float = 0.6,
+    ancilla_cutoff: int = 6,
+) -> qt.Qobj:
+    """Heralded photon subtraction via a beamsplitter tap + click detector."""
+
+
+def realistic_photon_addition(
+    rho: qt.Qobj,
+    mode_idx: int = 0,
+    N_cutoff: int | None = None,
+    coupling_strength: float = 0.05,
+    detector_efficiency: float = 0.6,
+    ancilla_cutoff: int = 6,
+) -> qt.Qobj:
+    """Heralded photon addition via parametric coupling + click detector."""
+```
+
 === Photon-number observables
 
 `mean_photon_number` returns the expectation value of the selected mode's number operator. `photon_number_measurement` performs an ideal photon-number-resolving measurement and returns the selected integer outcome together with the collapsed state. For a multimode input, the measured mode is removed from the returned state by partial trace.
+
+```python
+def mean_photon_number(
+    rho: qt.Qobj, mode_idx: int = 0, N_cutoff: int | None = None,
+) -> float:
+    """Return <n> = tr(rho * a-dagger a) for the selected mode."""
+
+
+def photon_number_measurement(
+    rho: qt.Qobj,
+    mode_idx: int = 0,
+    N_cutoff: int | None = None,
+    outcome: int | None = None,
+    rng: np.random.Generator | None = None,
+) -> tuple[int, qt.Qobj]:
+    """Ideal photon-number-resolving detection on mode_idx."""
+```
 
 For backward compatibility, existing code can continue to call these operations through `FockGates`, for example `FockGates.photon_subtraction(rho)`. New code should prefer the module-level functions directly.
 
@@ -53,6 +93,12 @@ For backward compatibility, existing code can continue to call these operations 
 
 `KerrCavity` (in #src-link("src/catsy/optics.py", line: 612, label: [`optics.py`])) simulates a single optical cavity with Kerr nonlinearity $K$, photon loss rate $kappa$, and a time-dependent classical drive — a standard nonlinear model for generating and evolving non-classical states beyond the Gaussian class. Kerr evolution is closely associated with nonclassical collapse/revival dynamics and multi-component cat-like states; see #link("https://doi.org/10.1038/nature11902")[Kirchmair et al. (2013)]. The Hamiltonian is composed of the Kerr term and a Gaussian-shaped pulsed drive:
 $ hat(H)(t) = K hat(a)^(dagger 2) hat(a)^2 + Omega(t)(hat(a) + hat(a)^dagger), quad Omega(t) = A exp(-(t - t_0)^2 / (2 sigma^2)) $
+
+```python
+def __init__(self, K: float, kappa: float, N_cutoff: int): ...
+```
+
+`K` is the Kerr strength, `kappa` the cavity photon-loss rate, and `N_cutoff` the Fock-space Hilbert-space dimension used throughout the simulation.
 
 Dissipation is modeled via a single Lindblad collapse operator $sqrt(kappa) hat(a)$, and the full master equation is integrated in time with `qutip.mesolve`:
 
@@ -78,7 +124,13 @@ The time-dependent part `[a + a.dag(), pulse_shape]` follows QuTiP's standard co
 
 `MachZehnderInterferometer` (in #src-link("src/catsy/optics.py", line: 680, label: [`optics.py`])) models a two-mode interferometer in which an input state (e.g. a Schrödinger-cat state plus vacuum in the second port) passes through the sequence
 $ "50:50 BS" arrow.r "lossy arm (fixed time)" arrow.r "phase shift" theta arrow.r "50:50 BS" $
-and is then read out in a photon-number- and parity-resolved way. The first beam splitter is constructed as an exact QuTiP unitary operator:
+and is then read out in a photon-number- and parity-resolved way.
+
+```python
+def __init__(self, kappa: float, N_cutoff: int, *, loss_time: float = 1.0): ...
+```
+
+`kappa` is the photon-loss rate in the lossy arm, `N_cutoff` the per-mode Fock-space dimension, and `loss_time` the fixed physical exposure time of the lossy arm (applied before the scanned phase, so its strength stays independent of $theta$). The first beam splitter is constructed as an exact QuTiP unitary operator:
 $ hat(U)_"BS" = exp(i pi/4 (hat(a)_1^dagger hat(a)_2 + hat(a)_1 hat(a)_2^dagger)) $
 
 ```python

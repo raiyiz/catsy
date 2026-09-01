@@ -50,7 +50,18 @@ from catsy import (
 )
 ```
 
-The representation-independent operations are also re-exported from the package root. For one-off transformations use their state-oriented signatures, e.g. `catsy.squeeze(state, "a", r=0.5)`. These public operations should not be passed directly as `Gate.transform`: circuit `Gate` objects require the separate `GateTransform` calling convention `(state, modes, **kwargs)`, which is supplied automatically by the fluent `Circuit` builders and registry.
+The representation-independent operations are also re-exported from the package root. For one-off transformations use their state-oriented signatures, e.g. `catsy.squeeze(state, "a", r=0.5)`. These public operations should not be passed directly as `Gate.transform`: circuit `Gate` objects require the separate `GateTransform` calling convention `(state, modes, **kwargs)`, which is supplied automatically by the fluent `Circuit` builders and registry. Concretely, for the same squeeze operation:
+
+```python
+# catsy.operations -- direct, one-off state operation:
+catsy.squeeze(state, "a", r=0.5, theta=0.0)
+
+# catsy.optics -- GateTransform, as stored on a circuit Gate:
+def squeeze(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState: ...
+# called as squeeze(state, ("a",), r=0.5, theta=0.0)
+```
+
+`optics.squeeze` is a thin adapter onto `operations.squeeze` (`modes[0]` plus the same keywords) -- the Gaussian/Fock dispatch itself lives in exactly one place, `catsy.operations`, not duplicated per calling convention. `Circuit.squeeze(...)`, in turn, builds a `Gate` around `optics.squeeze` for you; direct callers normally reach for `catsy.squeeze` and never touch either `GateTransform` directly.
 
 == Package-wide conventions
 

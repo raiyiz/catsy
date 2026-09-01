@@ -79,7 +79,15 @@ def fetch_history_summary(self) -> list[dict[str, Any]]:
     return sorted(summaries, key=lambda s: s["timestamp"], reverse=True)
 ```
 
-Since only the small `.json` files are opened here, browsing (`find`, filterable by tag and/or title substring) and listing (`list_entries`) stay cheap even with very many or very large entries; the corresponding `.npz` files are only touched by an explicit `load_entry`/`get_entry` call followed by `get_array`/`get_final_state` access. Entry IDs (`_make_entry_id`) are UTC timestamps with a short random suffix — so even a plain directory `ls`/`glob` already sorts in creation order, while concurrent entries never collide.
+Since only the small `.json` files are opened here, browsing (`find`, filterable by tag and/or title substring) and listing (`list_entries`) stay cheap even with very many or very large entries; the corresponding `.npz` files are only touched by an explicit `load_entry`/`get_entry` call followed by `get_array`/`get_final_state` access.
+
+```python
+def list_entries(self) -> list[JsonObject]: ...
+
+def find(self, *, tag: str | None = None, title: str | None = None) -> list[JsonObject]: ...
+```
+
+Entry IDs (`_make_entry_id`) are UTC timestamps with a short random suffix — so even a plain directory `ls`/`glob` already sorts in creation order, while concurrent entries never collide.
 
 == A worked example
 

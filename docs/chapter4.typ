@@ -29,16 +29,19 @@ $x_m "sim" N(d_M, sqrt(V_(M M)))$
 The conditional state of the remaining modes is then computed via the *Schur complement*, which is the classical-looking matrix form taken by Gaussian quantum conditioning. The evolution of the displacement vector $d_("cond")$ and the covariance matrix $V_("cond")$ is implemented in the code exactly as follows:
 
 ```python
-@staticmethod
-def homodyne_measurement(
-    state: GaussianState,
-    measured_mode: str,
-    phi: float,
-    outcome: float | None = None,
-    rng: np.random.Generator | None = None,
-) -> tuple[float, GaussianState]:
-    ...
+class GaussianMeasurements:
+    @staticmethod
+    def homodyne_measurement(
+        state: GaussianState,
+        measured_mode: str,
+        phi: float,
+        outcome: float | None = None,
+        rng: np.random.Generator | None = None,
+    ) -> tuple[float, GaussianState]:
+        ...
 ```
+
+Called as `GaussianMeasurements.homodyne_measurement(state, "a", phi=0.0)`.
 
 === Why the code does this (physical causality)
 - *validating `phi`, `outcome`, and `V_MM` up front*: a non-finite local-oscillator angle, a non-finite forced outcome, or a numerically zero/negative measured-quadrature variance would otherwise propagate silently into a division by (near) zero a few lines later; the code fails fast with a specific `ValueError` instead.
@@ -48,6 +51,19 @@ def homodyne_measurement(
 
 == Heterodyne measurement (`heterodyne_measurement`)
 Heterodyne (or dual-homodyne) detection measures both conjugate quadratures ($q$ and $p$) of a mode simultaneously. Since $[q, p] = i != 0$, the Heisenberg uncertainty principle forbids an exact simultaneous measurement without injecting additional noise.
+
+```python
+@staticmethod
+def heterodyne_measurement(
+    state: GaussianState,
+    measured_mode: str,
+    outcome: FloatArray | None = None,
+    rng: np.random.Generator | None = None,
+) -> tuple[FloatArray, GaussianState]:
+    ...
+```
+
+Called the same way as `homodyne_measurement`, as `GaussianMeasurements.heterodyne_measurement(state, "a")`. Unlike homodyne, the outcome is a 2-vector `(x, p)` rather than a single scalar, and there is no `phi` -- both quadratures are measured at once.
 
 === The mathematical vacuum-port model
 Physically, heterodyne measurement corresponds to splitting the target mode on a 50:50 beam splitter whose second input is populated with an uncorrelated vacuum state. The two outputs are then each homodyne-detected (one measures $q$, the other $p$).

@@ -71,6 +71,12 @@ Both combined quadratures thus lie below the shot-noise limit of $1$ — a neces
 
 The phase-space layer stores a state compactly as $(d, V) in RR^(2n) times RR^(2n times 2n)$. For non-Gaussian operations (photon subtraction, Kerr nonlinearity, …), however, one needs the full density matrix $rho$ in a truncated Fock space. `GaussianState.to_fock()` is the explicit representation boundary: it converts the compact Gaussian state into a finite Fock-space density matrix. QuTiP supplies the underlying operator representation, but the conceptual boundary in catsy is between `GaussianState` and the Fock representation, not between `GaussianState` and QuTiP. The legacy `to_qutip()` name should be treated as a deprecated compatibility alias rather than the canonical API.
 
+```python
+def to_fock(self, N_cutoff: int = 15) -> FockState: ...
+```
+
+The conversion proceeds in three steps, each with its own numerical-stability considerations below.
+
 === Step 1 — Williamson decomposition
 
 Every physical covariance matrix can be symplectically diagonalized:

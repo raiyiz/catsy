@@ -76,9 +76,19 @@ class GaussianChannel:
 == Standard optical noise channels (`LossChannels`)
 The toolkit provides standard physical channels through the factory object `LossChannels`:
 
+```python
+class LossChannels:
+    @staticmethod
+    def thermal_loss(mode: str, eta: float, n_thermal: float) -> GaussianChannel: ...
+
+    @staticmethod
+    def classical_phase_jitter(mode: str, sigma_phi: float) -> GaussianChannel: ...
+```
+
 1. *Thermal loss channel (`thermal_loss`):*
    Models coupling to a thermal bath with mean photon number $n_("thermal")$. With damping $eta$:
    $ X = sqrt(eta) bb(1)_2, quad Y = (1 - eta)(n_("thermal") + 1/2) bb(1)_2 $
+   `n_thermal` is the only valid keyword for this bath-occupancy parameter anywhere in the package -- `FockState`, `catsy.operations`, and `Circuit`'s `thermal_loss` gate all use the same name (Chapter 10).
 
 2. *Classical phase jitter (`classical_phase_jitter`):*
    Simulates a stochastic phase fluctuation in the small-angle approximation. This adds noise *exclusively* to the momentum quadrature $p$, while the position quadrature $q$ is preserved exactly:
