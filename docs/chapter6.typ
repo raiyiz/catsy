@@ -87,7 +87,27 @@ The signs of the cross terms directly mirror the structure of the EPR state: the
 
 == Visualizing states and dynamics
 
-Each analysis function above has a plotting companion in #src-link("src/catsy/gaussian/visualization.py", label: [`gaussian/visualization.py`]) that renders it as a Matplotlib figure. All of them return the figure without calling `plt.show()` unless passed `show=True`, and accept an optional `ax` so they can be composed into a larger layout (see the dashboards below).
+Each analysis function above has a plotting companion in #src-link("src/catsy/gaussian/visualization.py", label: [`gaussian/visualization.py`]) that renders it as a Matplotlib figure. All of them return the figure without calling `plt.show()` unless passed `show=True`, and accept an optional `ax` so they can be composed into a larger layout (see the dashboards below). The two composite dashboards -- one per representation -- are usually the right place to start:
+
+```python
+def plot_state_dashboard(
+    state: GaussianState, *, mode: str | None = None, show: bool = False,
+) -> plt.Figure: ...
+
+def plot_evolution(
+    states: Sequence[GaussianState], mode_name: str, *,
+    times: Sequence[float] | None = None,
+    wigner_indices: Sequence[int] | None = None,
+    n_sigma: float = 2.0, show: bool = False,
+) -> plt.Figure: ...
+
+# Fock-space counterpart, in fock/visualization.py:
+def plot_fock_dashboard(
+    rho: qt.Qobj, *, mode_idx: int = 0,
+    xlim: tuple[float, float] = (-5.0, 5.0), resolution: int = 140,
+    n_max: int | None = None, show: bool = False,
+) -> plt.Figure: ...
+```
 
 *Single-state views* -- `plot_phase_space` (mean and $n_sigma$ uncertainty ellipse), `plot_wigner` (the heatmap described above), `plot_covariance_matrix` (the raw quadrature covariance as a heatmap), and `plot_mode_correlation_map` (the same covariance normalized to $[-1, 1]$, with mode boundaries drawn in, so cross-mode structure is visible independent of each mode's absolute variance).
 

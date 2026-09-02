@@ -16,13 +16,8 @@ import qutip as qt
 
 from catsy.fock import FockState, make_even_cat
 from catsy.gaussian import GaussianState, initial_state
-from catsy.gaussian import beam_splitter as _gaussian_beam_splitter
-from catsy.gaussian import displace as _gaussian_displace
-from catsy.gaussian import loss as _gaussian_loss
-from catsy.gaussian import rotate as _gaussian_rotate
-from catsy.gaussian import squeeze as _gaussian_squeeze
-from catsy.gaussian import thermal_loss as _gaussian_thermal_loss
 
+from . import operations as _operations
 from .core import (
     _check_non_negative,
     _check_positive_int,
@@ -412,53 +407,71 @@ class Circuit:
 # Universal gates: one dispatcher per physical operation, not per
 # representation. Squeezing/rotation/displacement/beam splitters/loss are
 # Gaussian (quadratic-generator) operations with an exact representation in
-# either picture, so each dispatcher below just forwards to the matching
-# GaussianState method (via the `catsy.gaussian` functions) or FockState
-# method depending on what `state` currently is. This is what lets a
-# `Circuit` mix these gates freely regardless of when/whether it has been
-# promoted into Fock space (see the non-Gaussian gates further down).
+# either picture. The Gaussian-vs-Fock branch itself is not decided here:
+# each function below just adapts the `GateTransform` calling convention
+# `(state, modes, **kwargs)` onto the single representation-dispatching
+# function of the same name in `catsy.operations`, which is where the
+# GaussianState/FockState branch actually lives (one place, not duplicated
+# per calling convention). This is what lets a `Circuit` mix these gates
+# freely regardless of when/whether it has been promoted into Fock space
+# (see the non-Gaussian gates further down).
 # ---------------------------------------------------------------------------
 
 
 def squeeze(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
-    if isinstance(state, FockState):
-        return state.squeeze(
-            mode=modes[0],
+    return cast(
+        "CVState",
+        _operations.squeeze(
+            state,
+            modes[0],
             r=cast(float, kwargs["r"]),
             theta=cast(float, kwargs.get("theta", 0.0)),
-        )
-    return _gaussian_squeeze(state, modes, **kwargs)
+        ),
+    )
 
 
 def rotate(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
-    if isinstance(state, FockState):
-        return state.rotate(mode=modes[0], phi=cast(float, kwargs["phi"]))
-    return _gaussian_rotate(state, modes, **kwargs)
+    return cast(
+        "CVState", _operations.rotate(state, modes[0], phi=cast(float, kwargs["phi"]))
+    )
 
 
 def displace(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
-    if isinstance(state, FockState):
-        return state.displace(
-            mode=modes[0],
+    return cast(
+        "CVState",
+        _operations.displace(
+            state,
+            modes[0],
             alpha=cast(complex, kwargs["alpha"]) if "alpha" in kwargs else None,
             x=cast(float, kwargs["x"]) if "x" in kwargs else None,
             p=cast(float, kwargs["p"]) if "p" in kwargs else None,
-        )
-    return _gaussian_displace(state, modes, **kwargs)
+        ),
+    )
 
 
 def beam_splitter(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
-    if isinstance(state, FockState):
-        return state.beam_splitter(
-            mode_a=modes[0], mode_b=modes[1], eta=cast(float, kwargs["eta"])
-        )
-    return _gaussian_beam_splitter(state, modes, **kwargs)
+    return cast(
+        "CVState",
+        _operations.beam_splitter(
+            state, modes[0], modes[1], eta=cast(float, kwargs["eta"])
+        ),
+    )
 
 
 def loss(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState:
-    if isinstance(state, FockState):
-        return state.loss(mode=modes[0], eta=cast(float, kwargs["eta"]))
-    return _gaussian_loss(state, modes, **kwargs)
+    return cast(
+        "CVState",
+        _operations.loss(
+            state,
+            modes[0],
+            eta=cast(float, kwargs["eta"]),
+            ancilla_cutoff=(
+                cast(int, kwargs["ancilla_cutoff"])
+                if "ancilla_cutoff" in kwargs
+                else None
+            ),
+        ),
+    )
 
 
 def thermal_loss(
@@ -466,19 +479,20 @@ def thermal_loss(
     modes: Modes,
     **kwargs: ParameterValue,
 ) -> CVState:
-    if isinstance(state, FockState):
-        return state.thermal_loss(
-            mode=modes[0],
+    return cast(
+        "CVState",
+        _operations.thermal_loss(
+            state,
+            modes[0],
             eta=cast(float, kwargs["eta"]),
-            nbar=cast(float, kwargs.get("nbar", 0.0)),
+            n_thermal=cast(float, kwargs.get("n_thermal", 0.0)),
             ancilla_cutoff=(
                 cast(int, kwargs["ancilla_cutoff"])
                 if "ancilla_cutoff" in kwargs
                 else None
             ),
-        )
-
-    return _gaussian_thermal_loss(state, modes, **kwargs)
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +519,7 @@ def _ensure_fock(state: CVState, kwargs: dict[str, ParameterValue]) -> FockState
             "knows what cutoff to embed the current (still-Gaussian) state "
             "into."
         )
-    return cast(GaussianState, state).to_fock(cast(int, kwargs["N_cutoff"]))
+    return state.to_fock(cast(int, kwargs["N_cutoff"]))
 
 
 def photon_subtraction(
@@ -570,7 +584,7 @@ for _name, _transform in (
     ("RealisticPhotonSubtraction", realistic_photon_subtraction),
     ("RealisticPhotonAddition", realistic_photon_addition),
 ):
-    Circuit.register(_name, _transform)
+    Circuit.register(_name, cast(GateTransform, _transform))
 
 
 def _render_gate_label(gate: Gate) -> tuple[str, int]:

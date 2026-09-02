@@ -19,15 +19,16 @@ This closing chapter summarizes the previous nine chapters into a practical over
   [*Module*], [*Contents*],
   [#src-link("src/catsy/core.py")], [Symplectic form $Omega$, validation helpers, Williamson decomposition, JSON helper functions (Chapters 1, 5).],
   [#src-link("src/catsy/gaussian/__init__.py")], [`GaussianState`, `GaussianChannel`/`LossChannels`, `GaussianMeasurements`, phase-space analysis (Chapters 1–6).],
+  [#src-link("src/catsy/operations.py")], [Representation-independent public state transformations; dispatches Gaussian and Fock states to their concrete implementations (Chapters 2, 5, 10). The `Circuit` gate transforms in `catsy.optics` adapt onto these same dispatch functions rather than re-implementing the Gaussian/Fock branch.],
   [#src-link("src/catsy/gaussian/visualization.py")], [Gaussian-state plots, composite dashboards (`plot_state_dashboard`, `plot_evolution`, `plot_multimode_evolution`), and animations (Chapter 6).],
-  [#src-link("src/catsy/fock/__init__.py")], [`FockGates`: photon addition/subtraction on QuTiP states (Chapter 7).],
-  [#src-link("src/catsy/fock/visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for QuTiP states, including the `plot_fock_dashboard` four-view composite (Chapter 6).],
+  [#src-link("src/catsy/fock/__init__.py")], [`FockState` plus functional Fock-space operations such as photon addition/subtraction; `FockGates` remains only as a backwards-compatible namespace (Chapter 7).],
+  [#src-link("src/catsy/fock/visualization.py")], [Photon-number statistics, Fock-coherence, and Wigner plots for Fock-space states backed by QuTiP, including the `plot_fock_dashboard` four-view composite (Chapter 6).],
   [#src-link("src/catsy/visualization.py")], [Plotting primitives (figure lifecycle, phase-space styling, shared annotation and colorbar helpers) shared by the two visualization modules above.],
-  [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable Gaussian gate layouts live on `Circuit` itself (Chapter 8).],
+  [#src-link("src/catsy/optics.py")], [`Circuit`/`Mode` (generic executable gate sequence, Chapter 3), `KerrCavity`/`MachZehnderInterferometer`: time-resolved QuTiP simulations (Chapter 7). Reusable gate layouts live on `Circuit` itself (Chapter 8).],
   [#src-link("src/catsy/journal.py")], [`JournalEntry`/`SimulationJournal`: experiment persistence (Chapter 9).],
 )
 
-The two visualization modules deliberately separate physics-specific rendering from shared presentation mechanics. Gaussian plots operate on Gaussian-state representations, while Fock plots operate on QuTiP density matrices; both delegate common figure lifecycle and styling tasks to #src-link("src/catsy/visualization.py", label: [`visualization.py`]):
+The two visualization modules deliberately separate physics-specific rendering from shared presentation mechanics. Gaussian plots operate on `GaussianState` representations, while Fock plots operate on Fock-space density matrices; both delegate common figure lifecycle and styling tasks to #src-link("src/catsy/visualization.py", label: [`visualization.py`]):
 
 ```text
 Gaussian visualization ─┐
@@ -44,10 +45,23 @@ from catsy import (
     GaussianState, GaussianChannel, LossChannels,
     Circuit, Mode, GaussianMeasurements,
     compute_wigner_analytically, compute_joint_correlation, compute_duan_inseparability,
-    FockGates, KerrCavity, MachZehnderInterferometer,
+    FockState, FockGates, KerrCavity, MachZehnderInterferometer,
     JournalEntry, SimulationJournal,
 )
 ```
+
+The representation-independent operations are also re-exported from the package root. For one-off transformations use their state-oriented signatures, e.g. `catsy.squeeze(state, "a", r=0.5)`. These public operations should not be passed directly as `Gate.transform`: circuit `Gate` objects require the separate `GateTransform` calling convention `(state, modes, **kwargs)`, which is supplied automatically by the fluent `Circuit` builders and registry. Concretely, for the same squeeze operation:
+
+```python
+# catsy.operations -- direct, one-off state operation:
+catsy.squeeze(state, "a", r=0.5, theta=0.0)
+
+# catsy.optics -- GateTransform, as stored on a circuit Gate:
+def squeeze(state: CVState, modes: Modes, **kwargs: ParameterValue) -> CVState: ...
+# called as squeeze(state, ("a",), r=0.5, theta=0.0)
+```
+
+`optics.squeeze` is a thin adapter onto `operations.squeeze` (`modes[0]` plus the same keywords) -- the Gaussian/Fock dispatch itself lives in exactly one place, `catsy.operations`, not duplicated per calling convention. `Circuit.squeeze(...)`, in turn, builds a `Gate` around `optics.squeeze` for you; direct callers normally reach for `catsy.squeeze` and never touch either `GateTransform` directly.
 
 == Package-wide conventions
 
@@ -64,24 +78,27 @@ All modules share the same underlying physical conventions, regardless of which 
   [Displacement / amplitude], [$alpha = (x + i p) / sqrt(2)$.],
   [Covariance definition], [symmetrized second moments: $V_(i j) = 1/2 chevron.l \{r_i - d_i, r_j - d_j\} chevron.r$.],
   [Beam splitter], [power transmissivity $eta$, see Chapter 2.],
+  [Thermal-loss noise keyword], [`n_thermal` everywhere -- `GaussianState`/`LossChannels`, `FockState`, `catsy.operations`, and `Circuit`'s `thermal_loss` gate all take the same name; there is no separate `nbar` spelling.],
 )
 
 For a single-mode squeezed vacuum state with squeezing strength $r$ and $theta = 0$, this correspondingly gives $"Var"(q) = e^(-2r)/2$ and $"Var"(p) = e^(2r)/2$ — the reference values against which `GaussianState.squeeze` (Chapter 2) and the Wigner diagnostics (Chapter 6) are verified in the test suite.
 
 == Two typical workflows
 
-*Declarative, via `Circuit` (Chapter 3):* a `Circuit` describes the ordered gate sequence, and `run` executes it against an explicitly supplied initial state.
+*Declarative, via `Circuit` (Chapter 3):* a `Circuit` describes the ordered gate sequence, and `run` executes it against an explicitly supplied initial state. Prefer the fluent circuit API for normal use; it selects the correct circuit transform for each registered gate.
 
 ```python
-from catsy import Circuit, Gate, GaussianState, loss
+from catsy import Circuit, GaussianState
 
 initial = GaussianState.tmsv("a", "b", r=0.7)
 circuit = Circuit()
 a = circuit.mode("a")
 circuit.mode("b")
-circuit.add_gate(Gate(name="Noise", transform=loss, modes=(a.name,), kwargs={"eta": 0.9}))
+circuit.loss(a, eta=0.9)
 final = circuit.run(initial)
 ```
+
+If you need to construct a raw `Gate`, its `transform` must be a circuit-compatible `GateTransform`, not the ordinary state-operation function from `catsy.operations`. This distinction keeps the two public APIs unambiguous.
 
 *Direct, gate by gate (Chapters 2 and 5):* for exploratory use, where every intermediate state should be inspected.
 
@@ -92,7 +109,7 @@ state = state.squeeze("a", r=0.5)
 state = state.displace("a", alpha=0.4 + 0.2j)
 ```
 
-Both paths produce identical `GaussianState` objects and can be freely mixed: a directly constructed state can be fed as `initial_state` into `run` (as in the first example), and a compiled final state can subsequently be processed further with `GaussianState` methods directly.
+Both paths produce `GaussianState` objects when the circuit contains Gaussian operations, and can be freely mixed: a directly constructed state can be fed as `initial_state` into `run` (as in the first example), and a compiled final state can subsequently be processed further with `GaussianState` methods directly. If an operation requires Fock-space structure, use `GaussianState.to_fock()` to cross the representation boundary described in Chapter 5; the resulting `FockState` should be treated as the active state representation for subsequent Fock-space work.
 
 == Test suite
 
@@ -119,7 +136,7 @@ uv run pytest --plot --plot-pause 0.5
 
 == Scope and boundaries
 
-`catsy` is deliberately a focused tool, not a full quantum-computing framework. Priority is given to readable CV quantum-optics mathematics, explicit conventions, and small, composable building blocks -- over the broadest possible gate catalog. Where Fock-space physics is required (Chapter 7), the package deliberately delegates to QuTiP rather than maintaining its own, redundant Hilbert-space layer.
+`catsy` is deliberately a focused tool, not a full quantum-computing framework. Priority is given to readable CV quantum-optics mathematics, explicit conventions, and small, composable building blocks -- over the broadest possible gate catalog. Gaussian transformations remain in the compact `GaussianState` representation where possible; where Fock-space physics is required (Chapter 7), the package uses `FockState` and delegates the underlying Hilbert-space machinery to QuTiP rather than maintaining a redundant second quantum-state backend.
 
 ---
 

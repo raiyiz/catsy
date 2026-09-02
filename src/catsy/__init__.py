@@ -6,17 +6,19 @@ from .gaussian import (
     GaussianMeasurements,
     GaussianState,
     LossChannels,
-    beam_splitter,
     compute_duan_inseparability,
     compute_joint_correlation,
     compute_wigner_analytically,
+)
+from .journal import JournalEntry, SimulationJournal
+from .operations import (
+    beam_splitter,
     displace,
     loss,
     rotate,
     squeeze,
     thermal_loss,
 )
-from .journal import JournalEntry, SimulationJournal
 from .optics import Circuit, Gate, KerrCavity, MachZehnderInterferometer, Mode
 
 __all__ = [

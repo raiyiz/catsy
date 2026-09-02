@@ -5,7 +5,7 @@
 // ==========================================
 = Chapter 5: State Preparation & the Gaussian-Fock Bridge
 
-While Chapters 2–4 deal with the transformation of *existing* states, this chapter is devoted to their *creation*: the constructors on `GaussianState` provide standard resources such as vacuum, coherent states, and two-mode squeezed vacuum (TMSV), as well as the central translation routine `GaussianState.to_qutip`, which bridges the efficient phase-space layer into the full (but exponentially more expensive) Fock space of QuTiP.
+While Chapters 2–4 deal with the transformation of *existing* states, this chapter is devoted to their *creation*: the constructors on `GaussianState` provide standard resources such as vacuum, coherent states, and two-mode squeezed vacuum (TMSV). It also introduces the explicit representation boundary `GaussianState.to_fock()`, which bridges the compact Gaussian phase-space representation into the truncated Fock-space representation used for non-Gaussian work.
 
 == Constructors for standard resources (`GaussianState`)
 
@@ -67,9 +67,15 @@ $ "Var"(q_a - q_b) = "Var"(p_a + p_b) = e^(-2r) < 1 $
 
 Both combined quadratures thus lie below the shot-noise limit of $1$ — a necessary signature of EPR correlation, quantitatively verified in Chapter 6 via the Duan-Simon witness. It is important to distinguish this from classically correlated states (e.g. from `LossChannels.correlated_thermal_noise`, Chapter 2): these can look similar in a scatter plot, but never violate the Duan-Simon bound.
 
-== The Gaussian-Fock bridge: `GaussianState.to_qutip`
+== The Gaussian-Fock bridge: `GaussianState.to_fock()`
 
-The phase-space layer stores a state compactly as $(d, V) in RR^(2n) times RR^(2n times 2n)$. For non-Gaussian operations (photon subtraction, Kerr nonlinearity, …), however, one needs the full density matrix $rho$ in the truncated Fock space. `to_qutip` is the only place in the toolkit that performs this transition, and it does so via a three-stage, fully traceable construction.
+The phase-space layer stores a state compactly as $(d, V) in RR^(2n) times RR^(2n times 2n)$. For non-Gaussian operations (photon subtraction, Kerr nonlinearity, …), however, one needs the full density matrix $rho$ in a truncated Fock space. `GaussianState.to_fock()` is the explicit representation boundary: it converts the compact Gaussian state into a finite Fock-space density matrix. QuTiP supplies the underlying operator representation, but the conceptual boundary in catsy is between `GaussianState` and the Fock representation, not between `GaussianState` and QuTiP. The legacy `to_qutip()` name should be treated as a deprecated compatibility alias rather than the canonical API.
+
+```python
+def to_fock(self, N_cutoff: int = 15) -> FockState: ...
+```
+
+The conversion proceeds in three steps, each with its own numerical-stability considerations below.
 
 === Step 1 — Williamson decomposition
 
@@ -119,7 +125,7 @@ rho = D_op * rho * D_op.dag()
 
 === Limits of the conversion
 
-The Williamson decomposition is mathematically exact; the implementation verifies this to floating-point tolerance. The returned density matrix, however, lives in a finite Fock cutoff `N_cutoff`, so the transition from phase space to Hilbert space still introduces a truncation error for strongly squeezed or highly populated states. In practice, `N_cutoff` should be chosen so that the occupation probability at the upper edge of the Fock space is negligible.
+The Williamson decomposition is mathematically exact; the implementation verifies this to floating-point tolerance. The returned Fock-space density matrix, however, lives in a finite Fock cutoff `N_cutoff`, so the transition from phase space to Hilbert space still introduces a truncation error for strongly squeezed or highly populated states. In practice, `N_cutoff` should be chosen so that the occupation probability at the upper edge of the Fock space is negligible.
 
 == Persistence and mode ordering
 

@@ -1,9 +1,8 @@
 // Shared helper for linking documentation text back to the exact source on
-// GitLab. `repo-url` and `commit-sha` are injected by the `typst` CI job via
-// `--input` (using GitLab's own $CI_PROJECT_URL / $CI_COMMIT_SHA), so every
-// link resolves to the exact commit this PDF was built from. Falls back to
-// the `main` branch on the real GitLab host when compiled locally without
-// `--input`.
+// GitLab. `repo-url` and `commit-sha` are injected by the documentation CI
+// job via `--input`, so every link resolves to the exact commit this PDF was
+// built from. Falls back to the private GitLab repository's `main` branch
+// when compiled locally without `--input`.
 #let repo-url = sys.inputs.at("repo-url", default: "https://gitlab.uni-hannover.de/inl/catsy")
 #let commit-sha = sys.inputs.at("commit-sha", default: "main")
 

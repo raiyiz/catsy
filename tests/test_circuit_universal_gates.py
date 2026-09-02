@@ -100,6 +100,43 @@ def test_redundant_n_cutoff_after_promotion_is_ignored_not_an_error():
     assert result.N_cutoff == CUTOFF
 
 
+# -- thermal_loss's n_thermal keyword after promotion to Fock --------------
+
+
+def test_thermal_loss_n_thermal_matches_direct_fock_state_call_after_promotion():
+    """Regression test: `n_thermal` used to be silently dropped once a
+    circuit had already crossed into Fock space, because the Fock branch of
+    `thermal_loss` read a differently-named `nbar` keyword instead. `n_thermal`
+    is now the only valid keyword on both branches, and going through
+    `Circuit` must match calling `FockState.thermal_loss` directly."""
+    circuit = Circuit(name="thermal-loss-after-promotion", modes=("a",))
+    circuit.initial_state("a", kind="coherent", alpha=0.5)
+    circuit.photon_subtraction("a", N_cutoff=CUTOFF)
+    circuit.thermal_loss("a", eta=0.9, n_thermal=0.5)
+    via_circuit = circuit.run()
+    assert isinstance(via_circuit, FockState)
+
+    manual = (
+        GaussianState.coherent(("a",), 0.5)
+        .to_fock(CUTOFF)
+        .photon_subtraction("a")
+        .thermal_loss("a", eta=0.9, n_thermal=0.5)
+    )
+    _assert_rho_equivalent(via_circuit.rho, manual.rho)
+
+    # Guard against both sides coincidentally no-op'ing on n_thermal: it
+    # must measurably reduce purity relative to n_thermal=0.
+    no_noise = (
+        GaussianState.coherent(("a",), 0.5)
+        .to_fock(CUTOFF)
+        .photon_subtraction("a")
+        .thermal_loss("a", eta=0.9, n_thermal=0.0)
+    )
+    purity_with_noise = (via_circuit.rho * via_circuit.rho).tr().real
+    purity_without_noise = (no_noise.rho * no_noise.rho).tr().real
+    assert purity_with_noise < purity_without_noise - 1e-3
+
+
 # -- schematic reflects the Gaussian -> Fock transition -------------------
 
 

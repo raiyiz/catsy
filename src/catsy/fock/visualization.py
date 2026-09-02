@@ -264,17 +264,16 @@ def plot_wigner(
         )
         if colorbar:
             add_colorbar(fig, image, ax=ax, label=r"$W(x,p)$")
-
-    if contour:
-        ax.contour(
-            grid,
-            grid,
-            wigner,
-            levels=[0.0],
-            colors="black",
-            linewidths=0.8,
-            alpha=0.8,
-        )
+        if contour:
+            ax.contour(
+                grid,
+                grid,
+                wigner,
+                levels=[0.0],
+                colors="black",
+                linewidths=0.8,
+                alpha=0.8,
+            )
         style_phase_axes(ax)
 
     ax.set_title(_state_description(state), pad=14, fontweight="medium")

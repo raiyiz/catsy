@@ -26,11 +26,11 @@ A state can also start from a physically meaningful Gaussian construction:
 ```python
 from catsy import GaussianState
 
-state = GaussianState.coherent("signal", alpha=1.2 + 0.4j)
+state = GaussianState.coherent(("signal",), 1.2 + 0.4j)
 state = GaussianState.tmsv("signal", "idler", r=0.7)
 ```
 
-The same `GaussianState` interface is used for both single- and multi-mode states. Internally, the state stores its mode ordering, displacement vector, and covariance matrix. 
+The same `GaussianState` interface is used for both single- and multi-mode states. Internally, the state stores its mode ordering, displacement vector, and covariance matrix.
 
 This phase-space representation is the default because many optical calculations can be performed without introducing a truncated Hilbert space.
 
@@ -95,7 +95,7 @@ States are represented in phase space by their first moments and covariance matr
 * loss and thermal channels
 * homodyne and heterodyne measurements
 
-A circuit therefore does not replace a state, and a state does not have to be embedded in a circuit. You can manipulate a state directly for one-off calculations, or construct a circuit when the sequence of operations itself is something you want to reuse, inspect, serialize, or run with different initial states.
+For one-off state manipulation, use the public operations in `catsy.operations` (also re-exported from `catsy`). For reusable ordered experiments, use `Circuit` and its fluent gate builders.
 
 ## When Gaussian states are not enough
 
@@ -104,8 +104,11 @@ Gaussian states are not a universal representation. Some experiments produce or 
 For these cases, `catsy` can convert a Gaussian state into a **truncated Fock-space representation** backed by [QuTiP](https://qutip.org/):
 
 ```python
-rho = final.to_qutip(N_cutoff=30)
+fock = final.to_fock(N_cutoff=30)
+rho = fock.rho
 ```
+
+`to_fock()` is the canonical representation boundary. `to_qutip()` is retained only as a deprecated compatibility alias returning the underlying density matrix.
 
 The resulting density matrix can then be used with Fock-space operations and observables such as photon-number statistics, parity, or non-Gaussian state transformations.
 
@@ -163,18 +166,17 @@ circuit.squeeze(signal, r=0.5)
 circuit.beam_splitter(signal, idler, eta=0.5)
 ```
 
-
 ## Where to start
 | If you want to...                           | Use                               |
 | ------------------------------------------- | --------------------------------- |
 | Create Gaussian states                      | [`GaussianState`](src/catsy/gaussian/__init__.py#L55) |
-| Apply Gaussian operations                   | [`GaussianState`](src/catsy/gaussian/__init__.py#L55) |
-| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L137), [`Mode`](src/catsy/optics.py#L82) |
+| Apply one-off state operations              | [`catsy.operations`](src/catsy/operations.py) |
+| Build a circuit / define an optical layout  | [`Circuit`](src/catsy/optics.py#L132), [`Mode`](src/catsy/optics.py#L77) |
 | Model loss and thermal noise                | [`LossChannels`](src/catsy/gaussian/__init__.py#L480), [`GaussianChannel`](src/catsy/gaussian/__init__.py#L417) |
 | Perform homodyne or heterodyne measurements | [`GaussianMeasurements`](src/catsy/gaussian/__init__.py#L611) |
 | Inspect a covariance matrix                 | [`GaussianState`](src/catsy/gaussian/__init__.py#L55) |
 | Calculate a Wigner function                 | [`compute_wigner_analytically()`](src/catsy/gaussian/__init__.py#L738) |
-| Convert to Fock space                       | [`GaussianState.to_qutip()`](src/catsy/gaussian/__init__.py#L377) |
+| Convert to Fock space                       | [`GaussianState.to_fock()`](src/catsy/gaussian/__init__.py) |
 | Visualize a state or its evolution          | [`plot_state_dashboard()`](src/catsy/gaussian/visualization.py#L714), [`plot_evolution()`](src/catsy/gaussian/visualization.py#L628) |
 | Visualize a truncated Fock-space state      | [`plot_fock_dashboard()`](src/catsy/fock/visualization.py) |
 | Save states and experiments                 | [`SimulationJournal`](src/catsy/journal.py#L355) |
@@ -258,23 +260,24 @@ uv run pytest --plot
 | Module                                                                                                       | Contents                                                            |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [`core.py`](src/catsy/core.py)         | conventions, validation, numerical helpers                          |
-| [`gaussian/`](src/catsy/gaussian/__init__.py) | states, operations, channels, measurements                   |
+| [`gaussian/`](src/catsy/gaussian/__init__.py) | states, Gaussian operations, channels, measurements                   |
+| [`operations.py`](src/catsy/operations.py) | representation-independent public state transformations; dispatches to Gaussian or Fock implementations |
 | [`gaussian/visualization.py`](src/catsy/gaussian/visualization.py) | Gaussian-state plots, dashboards, and animations |
-| [`fock.py`](src/catsy/fock/__init__.py)         | Fock-space functionality                                             |
-| [`fock/visualization.py`](src/catsy/fock/visualization.py) | photon-statistics, Fock-coherence, and Wigner plots for QuTiP states |
-| [`visualization.py`](src/catsy/visualization.py) | shared plotting primitives (figure lifecycle, phase-space styling, annotation, and colorbar helpers) used by both visualization modules above |
+| [`fock/__init__.py`](src/catsy/fock/__init__.py) | `FockState`, Fock-space operations, and backwards-compatible `FockGates` |
+| [`fock/visualization.py`](src/catsy/fock/visualization.py) | photon-statistics, Fock-coherence, and Wigner plots for Fock-space states |
+| [`visualization.py`](src/catsy/visualization.py) | shared plotting primitives used by both visualization modules |
 | [`optics.py`](src/catsy/optics.py)     | circuits, modes, QuTiP-based cavity/interferometer simulations       |
 | [`journal.py`](src/catsy/journal.py)   | experiment persistence                                               |
+
 ## Documentation
 
-The [documentation](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the more detailed architectural and mathematical specifications.
+The [documentation](https://gitlab.uni-hannover.de/inl/catsy/-/jobs/artifacts/main/raw/architectural_specs.pdf?job=typst) contains the detailed architectural and mathematical specifications generated by CI.
 
 The repository also contains examples and tests that can be useful when exploring particular operations.
 
 ## Status
 
 `catsy` is focused on continuous-variable quantum optics and Fock states, rather than providing a general-purpose quantum-computing framework. The API is evolving, and core conventions and numerical operations are covered in the test suite.
-
 
 ## Test coverage
 
