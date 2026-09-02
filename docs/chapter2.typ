@@ -1,6 +1,6 @@
 #import "@preview/physica:0.9.8": *
 
-= Chapter 2: Gaussian Unitary Transformations & Channels
+= Chapter 2: AAA Gaussian Unitary Transformations & Channels
 
 Gaussian operations are transformations that preserve the Gaussian structure of the Wigner function. In catsy, the mathematical transformations are ordinary functions operating on `GaussianState`; `Gate` and `Circuit` provide the higher-level machinery for binding those transformations to named modes and sequencing them (Chapter 3). Non-unitary processes (decoherence and noise) are modeled as CPTP maps (*Completely Positive Trace-Preserving Maps*) via Gaussian channels. This is the standard Gaussian-operation/channel framework of continuous-variable quantum information; see #link("https://doi.org/10.1103/RevModPhys.84.621")[Weedbrook et al. (2012)] and #link("https://doi.org/10.1103/RevModPhys.77.513")[Braunstein and van Loock (2005)].
 
